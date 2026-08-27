@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "outDir": "./dist-server",
+    "rootDir": "./server"
+  },
+  "include": ["server/index.ts", "server/app.ts", "server/operational/**/*.ts"],
+  "exclude": ["server/marl/**", "server/agentOrchestrator.ts", "server/rlEngine.ts", "server/llm.ts"]
+}

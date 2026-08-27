@@ -1,0 +1,62 @@
+flowchart TB
+  subgraph STATUS[Persistent Status Rail]
+    MODE["LIVE - SEC GAME DAY"]
+    PHASE["ARRIVAL - Kickoff in 2h 14m"]
+    OWNER["Command Owner - Event Mobility Lead"]
+    HEALTH["Sources - 6 healthy - 1 delayed"]
+    CLOCK["Auburn local time - 12:46 PM"]
+  end
+
+  subgraph MAIN[First View - No Scroll Required]
+    direction LR
+    subgraph SITUATION[Situation Brief - 24 percent]
+      TITLE["Arrival congestion - remote-lot approach"]
+      CHANGED["WHAT CHANGED - Travel speed has fallen for 8 minutes while primary-lot capacity is constrained."]
+      MATTERS["WHY IT MATTERS - Continued spillback could restrict the designated emergency-access route before kickoff."]
+      NEXT["NEXT DECISION - Traffic Operations and Parking/Transit must review within 10 minutes."]
+      DOMAINS["Contributors - ATLAS - AQUA - SENTINEL - PHOENIX"]
+    end
+
+    subgraph MAP[Operational Map - 48 percent]
+      INCIDENT["Active incident and queue zone"]
+      EMERGENCY["Protected emergency corridor"]
+      LOT["Approved remote lot - occupancy source"]
+      SHUTTLE["Shuttle location and service status"]
+      TRAFFIC["Traffic flow and source freshness"]
+    end
+
+    subgraph DECISION[Decision Card - 28 percent]
+      BADGES["HIGH - AWAITING APPROVAL - expires 12:56 PM"]
+      ACTION["RECOMMENDED ACTION - Activate the pre-approved remote-lot wayfinding plan and stage the next available shuttle."]
+      EFFECT["EXPECTED EFFECT - Reduce queue risk while preserving emergency access. Outcome is not guaranteed."]
+      CONSTRAINTS["CONSTRAINTS - No signal control - preserve ADA and emergency routes - ALGO delayed 2m"]
+      EVIDENCE["EVIDENCE - TomTom 12:45 - parking 12:44 - transit 12:45"]
+      APPROVERS["REQUIRED APPROVERS - Traffic Operations 0 of 1 - Parking/Transit 0 of 1"]
+      ACTIONS["Review and Approve - Reject - Revise - Escalate"]
+    end
+  end
+
+  subgraph COMMITMENTS[Persistent Agency Commitment Rail]
+    C1["Traffic Ops - requested - due 12:51"]
+    C2["Parking/Transit - acknowledged - 12:47"]
+    C3["Public Safety - emergency corridor verified - 12:45"]
+    C4["Communications - draft pending approval"]
+  end
+
+  STATUS --> MAIN --> COMMITMENTS
+  CHANGED --> INCIDENT
+  MATTERS --> EMERGENCY
+  ACTION --> LOT
+  ACTION --> SHUTTLE
+  EVIDENCE --> TRAFFIC
+
+  classDef status fill:#071426,stroke:#38bdf8,color:#f8fafc,stroke-width:2px;
+  classDef situation fill:#f8fafc,stroke:#64748b,color:#0f172a;
+  classDef map fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e;
+  classDef decision fill:#fff7ed,stroke:#ea580c,color:#431407,stroke-width:2px;
+  classDef commit fill:#ecfdf5,stroke:#059669,color:#022c22;
+  class MODE,PHASE,OWNER,HEALTH,CLOCK status;
+  class TITLE,CHANGED,MATTERS,NEXT,DOMAINS situation;
+  class INCIDENT,EMERGENCY,LOT,SHUTTLE,TRAFFIC map;
+  class BADGES,ACTION,EFFECT,CONSTRAINTS,EVIDENCE,APPROVERS,ACTIONS decision;
+  class C1,C2,C3,C4 commit;

@@ -1,0 +1,10 @@
+# Connector worker. Attach this file only to the worker service.
+# Do not generate a public domain. The worker does not listen on HTTP.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "npm run start:connector-worker"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

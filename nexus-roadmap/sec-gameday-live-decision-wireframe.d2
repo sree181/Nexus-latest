@@ -1,0 +1,72 @@
+direction: down
+
+status: Persistent Status Rail {
+  direction: right
+  mode: "LIVE — SEC GAME DAY" {
+    style.fill: "#071426"
+    style.font-color: "#f8fafc"
+    style.stroke: "#38bdf8"
+  }
+  phase: "ARRIVAL — Kickoff in 2h 14m"
+  owner: "Command Owner — Event Mobility Lead"
+  health: "Sources — 6 healthy · 1 delayed"
+  clock: "Auburn local time — 12:46 PM"
+}
+
+main: First View — No Scroll Required {
+  direction: right
+
+  situation: Situation Brief — 24% {
+    direction: down
+    title: "ARRIVAL CONGESTION\nRemote-lot approach"
+    changed: "WHAT CHANGED\nTravel speed has fallen for 8 minutes while primary-lot capacity is constrained."
+    matters: "WHY IT MATTERS\nContinued spillback could restrict the designated emergency-access route before kickoff."
+    next: "NEXT DECISION\nTraffic Operations and Parking/Transit must review within 10 minutes."
+    domains: "Contributors\nATLAS · AQUA · SENTINEL · PHOENIX"
+    style.fill: "#f8fafc"
+    style.stroke: "#64748b"
+  }
+
+  map: Operational Map — 48% {
+    direction: down
+    incident: "Active incident and queue zone"
+    emergency: "Protected emergency corridor"
+    lot: "Approved remote lot\noccupancy source"
+    shuttle: "Shuttle location\nand service status"
+    traffic: "Traffic flow\nand source freshness"
+    style.fill: "#e0f2fe"
+    style.stroke: "#0284c7"
+  }
+
+  decision: Decision Card — 28% {
+    direction: down
+    badges: "HIGH · AWAITING APPROVAL\nExpires 12:56 PM"
+    action: "RECOMMENDED ACTION\nActivate the pre-approved remote-lot wayfinding plan and stage the next available shuttle."
+    effect: "EXPECTED EFFECT\nReduce queue risk while preserving emergency access. Outcome is not guaranteed."
+    constraints: "CONSTRAINTS\nNo signal control · preserve ADA and emergency routes · ALGO delayed 2m"
+    evidence: "EVIDENCE\nTomTom 12:45 · Parking 12:44 · Transit 12:45"
+    approvers: "REQUIRED APPROVERS\nTraffic Operations 0/1 · Parking/Transit 0/1"
+    actions: "REVIEW & APPROVE   |   REJECT   |   REVISE   |   ESCALATE"
+    style.fill: "#fff7ed"
+    style.stroke: "#ea580c"
+    style.stroke-width: 3
+  }
+}
+
+commitments: Persistent Agency Commitment Rail {
+  direction: right
+  c1: "Traffic Ops\nREQUESTED · due 12:51"
+  c2: "Parking/Transit\nACKNOWLEDGED · 12:47"
+  c3: "Public Safety\nEMERGENCY CORRIDOR VERIFIED · 12:45"
+  c4: "Communications\nDRAFT PENDING APPROVAL"
+  style.fill: "#ecfdf5"
+  style.stroke: "#059669"
+}
+
+status -> main: "current event context"
+main -> commitments: "approved work remains visible"
+situation.changed -> map.incident
+situation.matters -> map.emergency
+decision.action -> map.lot
+decision.action -> map.shuttle
+decision.evidence -> map.traffic

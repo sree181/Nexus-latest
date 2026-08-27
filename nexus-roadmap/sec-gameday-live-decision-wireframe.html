@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexus SEC Game Day Live Decision Wireframe</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #06101f; color: #e6eef8; font-family: Inter, Arial, sans-serif; }
+    .canvas { width: 1920px; min-height: 1080px; background: #081526; display: grid; grid-template-rows: 92px 1fr 174px; }
+    .status { display: grid; grid-template-columns: 250px 330px 1fr 300px 240px; align-items: center; gap: 14px; padding: 14px 22px; border-bottom: 2px solid #1e4b73; background: #07111f; }
+    .status > div { min-height: 58px; display: flex; flex-direction: column; justify-content: center; padding: 8px 14px; border: 1px solid #244867; background: #0c1b2d; }
+    .live { color: #fff; border-color: #ef4444 !important; background: #2a1017 !important; font-size: 21px; font-weight: 800; letter-spacing: 1.2px; }
+    .label { color: #7f9bb8; font-size: 12px; text-transform: uppercase; letter-spacing: 1.3px; margin-bottom: 4px; }
+    .value { font-size: 19px; font-weight: 700; }
+    .healthy { color: #36d399; }
+    .delayed { color: #fbbf24; }
+    .workspace { display: grid; grid-template-columns: 26% 46% 28%; min-height: 0; }
+    .pane { min-height: 0; padding: 24px; border-right: 1px solid #1e3a56; }
+    .pane-title { color: #7da2c7; text-transform: uppercase; letter-spacing: 1.4px; font-size: 13px; font-weight: 800; margin-bottom: 18px; }
+    .incident-title { font-size: 32px; line-height: 1.1; margin: 0 0 22px; }
+    .brief-block { padding: 17px 18px; margin-bottom: 14px; border: 1px solid #244867; background: #0c1c2e; }
+    .brief-block strong { display: block; color: #38bdf8; font-size: 13px; letter-spacing: 1.2px; margin-bottom: 7px; }
+    .brief-block p { margin: 0; font-size: 19px; line-height: 1.38; }
+    .owner { border-color: #f59e0b; background: #211a0f; }
+    .agent-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .chip { padding: 9px 12px; border-radius: 20px; border: 1px solid #2f648a; color: #bae6fd; background: #102940; font-weight: 700; }
+    .map { position: relative; background: linear-gradient(135deg, #0c2530 0%, #17392f 45%, #142632 100%); overflow: hidden; }
+    .map::before { content: ""; position: absolute; inset: 0; opacity: .38; background-image: linear-gradient(#6b8b76 1px, transparent 1px), linear-gradient(90deg, #6b8b76 1px, transparent 1px); background-size: 56px 56px; }
+    .road { position: absolute; height: 26px; background: #475569; border: 2px solid #94a3b8; transform-origin: left center; opacity: .86; }
+    .r1 { width: 760px; left: 20px; top: 320px; transform: rotate(-18deg); }
+    .r2 { width: 620px; left: 190px; top: 90px; transform: rotate(60deg); }
+    .r3 { width: 740px; left: 10px; top: 525px; transform: rotate(7deg); }
+    .zone { position: absolute; border-radius: 50%; border: 4px solid; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; line-height: 1.15; background: rgba(8,21,38,.78); }
+    .incident-zone { width: 180px; height: 180px; left: 290px; top: 220px; border-color: #ef4444; color: #fecaca; box-shadow: 0 0 32px rgba(239,68,68,.45); }
+    .lot-zone { width: 150px; height: 150px; left: 95px; top: 455px; border-color: #22c55e; color: #bbf7d0; }
+    .shuttle-zone { width: 132px; height: 132px; right: 100px; top: 130px; border-color: #38bdf8; color: #bae6fd; }
+    .corridor { position: absolute; width: 620px; height: 16px; left: 70px; top: 600px; transform: rotate(-8deg); background: #facc15; box-shadow: 0 0 22px rgba(250,204,21,.45); }
+    .map-legend { position: absolute; left: 22px; top: 22px; right: 22px; display: flex; justify-content: space-between; padding: 12px 16px; border: 1px solid #326581; background: rgba(5,15,28,.88); font-size: 14px; }
+    .decision { background: #0a1727; border-right: 0; }
+    .card { height: 100%; display: flex; flex-direction: column; border: 2px solid #f97316; background: #101824; box-shadow: 0 0 30px rgba(249,115,22,.16); }
+    .card-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid #7c3d15; background: #22170f; }
+    .severity { color: #fdba74; font-weight: 900; letter-spacing: 1px; }
+    .state { color: #fff; font-size: 14px; font-weight: 800; }
+    .expires { color: #fbbf24; font-size: 14px; }
+    .card-body { padding: 18px; display: grid; gap: 12px; overflow: auto; }
+    .field { border: 1px solid #314a62; background: #0c1b2c; padding: 13px 14px; }
+    .field h3 { margin: 0 0 6px; font-size: 12px; color: #7dd3fc; letter-spacing: 1.2px; }
+    .field p { margin: 0; font-size: 16px; line-height: 1.34; }
+    .action-field { border-color: #f97316; background: #24170f; }
+    .action-field p { font-size: 18px; font-weight: 800; }
+    .warning { border-color: #d97706; background: #241b0f; }
+    .approvers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .approver { padding: 11px; border: 1px solid #365673; background: #102235; }
+    .pending { color: #fbbf24; font-weight: 800; }
+    .actions { margin-top: auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; padding: 16px; border-top: 1px solid #314a62; background: #081421; }
+    button { min-height: 64px; border: 1px solid #3c6584; background: #10263a; color: #fff; font-size: 16px; font-weight: 800; }
+    .approve { background: #0f5f57; border-color: #2dd4bf; }
+    .reject { background: #3a1720; border-color: #fb7185; }
+    .commitments { padding: 18px 22px; border-top: 2px solid #1e4b73; background: #07111f; }
+    .commitments h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 1.2px; color: #7da2c7; }
+    .commit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .commit { min-height: 105px; padding: 14px 16px; border: 1px solid #285b50; background: #0b221f; display: grid; grid-template-columns: 14px 1fr; gap: 12px; align-items: start; }
+    .dot { width: 12px; height: 12px; margin-top: 5px; border-radius: 50%; background: #38bdf8; }
+    .commit strong { display: block; font-size: 17px; margin-bottom: 5px; }
+    .commit span { color: #9fb6ca; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="canvas">
+    <header class="status">
+      <div class="live">● LIVE — SEC GAME DAY</div>
+      <div><span class="label">Event Phase</span><span class="value">ARRIVAL · Kickoff in 2h 14m</span></div>
+      <div><span class="label">Command Owner</span><span class="value">Event Mobility Lead · Auburn</span></div>
+      <div><span class="label">Source Health</span><span class="value"><span class="healthy">6 healthy</span> · <span class="delayed">1 delayed</span></span></div>
+      <div><span class="label">Auburn Local Time</span><span class="value">12:46 PM</span></div>
+    </header>
+
+    <section class="workspace">
+      <aside class="pane">
+        <div class="pane-title">Situation Brief</div>
+        <h1 class="incident-title">Arrival congestion — remote-lot approach</h1>
+        <div class="brief-block"><strong>WHAT CHANGED</strong><p>Travel speed has fallen for eight minutes while primary-lot capacity is constrained.</p></div>
+        <div class="brief-block"><strong>WHY IT MATTERS</strong><p>Continued spillback could restrict the designated emergency-access route before kickoff.</p></div>
+        <div class="brief-block owner"><strong>NEXT DECISION</strong><p>Traffic Operations and Parking/Transit must review within 10 minutes.</p></div>
+        <div class="agent-row"><span class="chip">ATLAS</span><span class="chip">AQUA</span><span class="chip">SENTINEL</span><span class="chip">PHOENIX</span></div>
+      </aside>
+
+      <section class="pane map">
+        <div class="map-legend"><span>Operational map · current incident focus</span><span>Traffic 12:45 · Parking 12:44 · Transit 12:45</span></div>
+        <div class="road r1"></div><div class="road r2"></div><div class="road r3"></div>
+        <div class="zone incident-zone">ACTIVE QUEUE<br/>HIGH RISK</div>
+        <div class="zone lot-zone">REMOTE LOT<br/>CAPACITY</div>
+        <div class="zone shuttle-zone">SHUTTLE<br/>ACTIVE</div>
+        <div class="corridor"></div>
+      </section>
+
+      <aside class="pane decision">
+        <div class="pane-title">Decision Queue · 1 requires your authority</div>
+        <article class="card">
+          <div class="card-head"><span class="severity">HIGH</span><span class="state">AWAITING APPROVAL</span><span class="expires">expires 12:56</span></div>
+          <div class="card-body">
+            <div class="field action-field"><h3>RECOMMENDED ACTION</h3><p>Activate the pre-approved remote-lot wayfinding plan and stage the next available shuttle.</p></div>
+            <div class="field"><h3>EXPECTED EFFECT</h3><p>Reduce queue risk while preserving emergency access. Outcome is not guaranteed.</p></div>
+            <div class="field warning"><h3>CONSTRAINTS</h3><p>No signal control · preserve ADA and emergency routes · ALGO source delayed 2 minutes.</p></div>
+            <div class="field"><h3>EVIDENCE</h3><p>TomTom flow 12:45 · Parking occupancy 12:44 · Transit location 12:45.</p></div>
+            <div class="approvers"><div class="approver"><span class="label">Traffic Operations</span><span class="pending">0 / 1 pending</span></div><div class="approver"><span class="label">Parking / Transit</span><span class="pending">0 / 1 pending</span></div></div>
+          </div>
+          <div class="actions"><button class="approve">Review & Approve</button><button class="reject">Reject</button><button>Revise</button><button>Escalate</button></div>
+        </article>
+      </aside>
+    </section>
+
+    <footer class="commitments">
+      <h2>Persistent Agency Commitment Rail</h2>
+      <div class="commit-grid">
+        <div class="commit"><span class="dot"></span><div><strong>Traffic Operations</strong><span>REQUESTED · due 12:51 · wayfinding review</span></div></div>
+        <div class="commit"><span class="dot" style="background:#fbbf24"></span><div><strong>Parking / Transit</strong><span>ACKNOWLEDGED · 12:47 · shuttle staging review</span></div></div>
+        <div class="commit"><span class="dot" style="background:#34d399"></span><div><strong>Public Safety</strong><span>VERIFIED · 12:45 · emergency corridor available</span></div></div>
+        <div class="commit"><span class="dot" style="background:#a78bfa"></span><div><strong>Communications</strong><span>DRAFT PENDING · approved facts only</span></div></div>
+      </div>
+    </footer>
+  </main>
+</body>
+</html>

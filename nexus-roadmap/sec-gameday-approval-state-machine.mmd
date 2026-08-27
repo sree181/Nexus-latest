@@ -1,0 +1,55 @@
+stateDiagram-v2
+  [*] --> Draft
+  Draft --> AwaitingAcknowledgement: evidence and policy ready
+  AwaitingAcknowledgement --> AwaitingApproval: required agencies acknowledge
+  AwaitingAcknowledgement --> Expired: acknowledgement window elapsed
+
+  AwaitingApproval --> Approved: required human quorum satisfied
+  AwaitingApproval --> Rejected: authorized rejection with reason
+  AwaitingApproval --> RevisionRequested: evidence or plan must change
+  AwaitingApproval --> Delegated: assigned to eligible approver
+  AwaitingApproval --> Escalated: authority conflict or life-safety constraint
+  AwaitingApproval --> Expired: approval window elapsed
+
+  Delegated --> AwaitingApproval: delegate accepts assignment
+  Escalated --> AwaitingApproval: higher authority accepts ownership
+  RevisionRequested --> Draft: new recommendation version
+
+  Approved --> CommitmentsCreated: create bounded agency tasks
+  Approved --> ApprovalWithdrawn: allowed only before execution boundary
+  CommitmentsCreated --> Acknowledged: owning agencies acknowledge
+  Acknowledged --> Executing: agency begins authorized work
+  Executing --> Blocked: constraint or external-system issue
+  Blocked --> Executing: blocker resolved
+  Blocked --> Escalated: owner cannot resolve
+  Executing --> Verified: authoritative source or accountable operator confirms outcome
+  Executing --> Failed: outcome not achieved
+  Verified --> Closed: command owner closes incident decision
+
+  Draft --> Superseded: material evidence or newer plan
+  AwaitingAcknowledgement --> Superseded: material evidence or newer plan
+  AwaitingApproval --> Superseded: material evidence or newer plan
+  Approved --> Superseded: new approved decision replaces scope before execution
+
+  Rejected --> [*]
+  Expired --> [*]
+  Failed --> [*]
+  ApprovalWithdrawn --> [*]
+  Superseded --> [*]
+  Closed --> [*]
+
+  note right of AwaitingApproval
+    A decision binds the exact recommendation version,
+    evidence snapshot, constraints, approver role,
+    expiry, and confirmation text.
+  end note
+
+  note right of Approved
+    Approval creates commitments only.
+    It does not directly invoke an agency connector.
+  end note
+
+  note right of Verified
+    Green/complete is reserved for evidence-backed
+    execution confirmation, not an AI recommendation.
+  end note

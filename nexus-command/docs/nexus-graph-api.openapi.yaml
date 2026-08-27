@@ -1,0 +1,242 @@
+openapi: 3.1.0
+info:
+  title: Nexus Temporal Operational Graph API
+  version: 1.0.0
+  description: Evidence-bound operational graph ingestion and query contracts for Nexus Coordinate.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /events/{eventId}/graph/sources/{sourceId}/batches:
+    post:
+      operationId: ingestGraphBatch
+      summary: Ingest an authoritative graph batch
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/SourceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GraphBatch' }
+      responses:
+        '202':
+          description: Graph batch persisted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /events/{eventId}/graph:
+    get:
+      operationId: getGraphSnapshot
+      summary: Read an effective-time graph snapshot
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - name: mode
+          in: query
+          schema: { type: string, enum: [live, training, replay], default: live }
+        - name: view
+          in: query
+          schema: { type: string, enum: [mobility, decision_lineage, agency_coordination], default: mobility }
+        - name: asOf
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Current graph snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GraphSnapshotEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/graph/nodes/{nodeId}/neighborhood:
+    get:
+      operationId: getGraphNeighborhood
+      summary: Read a bounded graph neighborhood
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - name: nodeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mode
+          in: query
+          schema: { type: string, enum: [live, training, replay], default: live }
+        - name: depth
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 4, default: 1 }
+      responses:
+        '200':
+          description: Bounded neighborhood
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GraphSnapshotEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /graph/entities/{kind}/{entityId}/history:
+    get:
+      operationId: getGraphEntityHistory
+      summary: Read append-only graph entity history
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [node, edge] }
+        - name: entityId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mode
+          in: query
+          schema: { type: string, enum: [live, training, replay], default: live }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        '200': { description: State change history }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /graph/decision-lineage/{recommendationId}:
+    get:
+      operationId: getDecisionLineage
+      summary: Read evidence-to-verification lineage
+      parameters:
+        - name: recommendationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: mode
+          in: query
+          schema: { type: string, enum: [live, training, replay], default: live }
+      responses:
+        '200': { description: Decision lineage }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events/{eventId}/graph/agency-coordination:
+    get:
+      operationId: getAgencyCoordinationGraph
+      summary: Read current agency coordination and blockers
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - name: mode
+          in: query
+          schema: { type: string, enum: [live, training, replay], default: live }
+      responses:
+        '200': { description: Agency coordination graph }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 200 }
+  schemas:
+    JsonObject: { type: object, additionalProperties: true }
+    Endpoint:
+      type: object
+      required: [nodeType, externalKey]
+      properties:
+        nodeType: { type: string, maxLength: 80 }
+        externalKey: { type: string, maxLength: 300 }
+    GraphNodeInput:
+      type: object
+      required: [nodeType, externalKey, label, dataClassification, state, validFrom]
+      properties:
+        nodeType: { type: string, maxLength: 80 }
+        externalKey: { type: string, maxLength: 300 }
+        label: { type: string, maxLength: 300 }
+        ownerAgencyId: { type: string, format: uuid }
+        authorityUri: { type: string, format: uri }
+        dataClassification: { type: string, enum: [live, near_real_time, reference, operational, restricted] }
+        geometryGeojson: { $ref: '#/components/schemas/JsonObject' }
+        state: { $ref: '#/components/schemas/JsonObject' }
+        qualityFlags: { type: array, maxItems: 50, items: { type: string } }
+        validFrom: { type: string, format: date-time }
+        validUntil: { type: [string, 'null'], format: date-time }
+        active: { type: boolean, default: true }
+        evidenceIds: { type: array, maxItems: 100, items: { type: string, format: uuid } }
+    GraphEdgeInput:
+      type: object
+      required: [edgeType, externalKey, from, to, dataClassification, state, validFrom]
+      properties:
+        edgeType: { type: string, maxLength: 80 }
+        externalKey: { type: string, maxLength: 300 }
+        from: { $ref: '#/components/schemas/Endpoint' }
+        to: { $ref: '#/components/schemas/Endpoint' }
+        directed: { type: boolean, default: true }
+        ownerAgencyId: { type: string, format: uuid }
+        authorityUri: { type: string, format: uri }
+        dataClassification: { type: string, enum: [live, near_real_time, reference, operational, restricted] }
+        geometryGeojson: { $ref: '#/components/schemas/JsonObject' }
+        state: { $ref: '#/components/schemas/JsonObject' }
+        qualityFlags: { type: array, maxItems: 50, items: { type: string } }
+        validFrom: { type: string, format: date-time }
+        validUntil: { type: [string, 'null'], format: date-time }
+        active: { type: boolean, default: true }
+        evidenceIds: { type: array, maxItems: 100, items: { type: string, format: uuid } }
+    GraphBatch:
+      type: object
+      required: [mode, schemaVersion, nodes, edges]
+      properties:
+        mode: { type: string, enum: [live, training, replay] }
+        schemaVersion: { type: string, maxLength: 100 }
+        nodes: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/GraphNodeInput' } }
+        edges: { type: array, maxItems: 2000, items: { $ref: '#/components/schemas/GraphEdgeInput' } }
+    IngestionResult:
+      type: object
+      required: [batchId, status, nodeCount, edgeCount, unchangedCount, rejectedCount, requestId]
+      properties:
+        batchId: { type: string, format: uuid }
+        status: { type: string, enum: [succeeded, partial] }
+        nodeCount: { type: integer, minimum: 0 }
+        edgeCount: { type: integer, minimum: 0 }
+        unchangedCount: { type: integer, minimum: 0 }
+        rejectedCount: { type: integer, minimum: 0 }
+        requestId: { type: string }
+    IngestionEnvelope:
+      type: object
+      required: [data, requestId]
+      properties:
+        data: { $ref: '#/components/schemas/IngestionResult' }
+        requestId: { type: string }
+    GraphSnapshotEnvelope:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [eventId, mode, view, asOf, nodes, edges, generatedAt]
+          properties:
+            eventId: { type: string, format: uuid }
+            mode: { type: string, enum: [live, training, replay] }
+            view: { type: string, enum: [mobility, decision_lineage, agency_coordination] }
+            asOf: { type: string, format: date-time }
+            nodes: { type: array, items: { type: object, additionalProperties: true } }
+            edges: { type: array, items: { type: object, additionalProperties: true } }
+            generatedAt: { type: string, format: date-time }
+        requestId: { type: string }
+  responses:
+    Unauthorized:
+      description: Verified operator identity is required
+    Conflict:
+      description: State, mode, or idempotency conflict
+    ValidationError:
+      description: Request validation failed

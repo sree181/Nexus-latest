@@ -1,0 +1,11 @@
+# Nexus API + frontend. Do not attach this file to the connector worker.
+# The worker uses railway.worker.toml so it is not probed on /api/health.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

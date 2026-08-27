@@ -1,0 +1,1269 @@
+openapi: 3.1.0
+info:
+  title: Nexus Coordinate Operational API
+  version: 1.0.0-draft
+  summary: Human-approved multi-agency coordination API
+  description: >-
+    Draft API for SEC Game Day live advisory operations. Recommendations,
+    approvals, commitments, execution requests, and verification are separate
+    resources. Stage 1 does not expose direct operational-technology commands.
+servers:
+  - url: https://nexus.example/api/v1
+    description: Placeholder production base URL
+security:
+  - oidc: []
+tags:
+  - name: Context
+  - name: Operational Events
+  - name: Sources and Evidence
+  - name: Incidents
+  - name: Recommendations
+  - name: Decisions
+  - name: Commitments
+  - name: Execution
+  - name: Realtime
+  - name: Audit and Health
+
+paths:
+  /me:
+    get:
+      tags: [Context]
+      operationId: getCurrentUserContext
+      summary: Get the authenticated user's agencies, roles, scopes, and assignments
+      responses:
+        '200':
+          description: Current authorization context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserContext'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /operational-events:
+    get:
+      tags: [Operational Events]
+      operationId: listOperationalEvents
+      summary: List authorized operational events
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/ModeQuery'
+      responses:
+        '200':
+          description: Operational events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalEventPage'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      tags: [Operational Events]
+      operationId: createOperationalEvent
+      summary: Create a planned operational event from an approved template
+      parameters:
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOperationalEventRequest'
+      responses:
+        '201':
+          description: Created operational event
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalEvent'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /operational-events/{eventId}:
+    get:
+      tags: [Operational Events]
+      operationId: getOperationalEvent
+      summary: Get event plan, phase, command owner, and version
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Operational event
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalEvent'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      tags: [Operational Events]
+      operationId: updateOperationalEvent
+      summary: Update event phase, command owner, or readiness state
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/UpdateOperationalEventRequest'
+      responses:
+        '200':
+          description: Updated operational event
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalEvent'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /sources:
+    get:
+      tags: [Sources and Evidence]
+      operationId: listSources
+      summary: List authorized source metadata and current health
+      parameters:
+        - $ref: '#/components/parameters/EventIdQuery'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/SourceHealthStatus'
+      responses:
+        '200':
+          description: Sources and health
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Source'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /sources/{sourceId}/health:
+    get:
+      tags: [Sources and Evidence]
+      operationId: getSourceHealth
+      summary: Get source freshness, errors, and affected recommendations
+      parameters:
+        - $ref: '#/components/parameters/SourceId'
+      responses:
+        '200':
+          description: Source health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceHealth'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /integrations/{connectorId}/events:
+    post:
+      tags: [Sources and Evidence]
+      operationId: ingestConnectorEvent
+      summary: Receive an authenticated source event
+      security:
+        - connectorHmac: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectorId'
+        - $ref: '#/components/parameters/RequestId'
+        - name: X-Nexus-Source-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: X-Nexus-Source-Nonce
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 16
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorEvent'
+      responses:
+        '202':
+          description: Accepted for validation and normalization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedOperation'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /operational-events/{eventId}/evidence:
+    get:
+      tags: [Sources and Evidence]
+      operationId: listEvidence
+      summary: Query canonical evidence for an operational event
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: sourceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: incidentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: observedAfter
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Evidence page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidencePage'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /operational-events/{eventId}/incidents:
+    get:
+      tags: [Incidents]
+      operationId: listIncidents
+      summary: List incidents for an operational event
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/IncidentStatus'
+        - name: severity
+          in: query
+          schema:
+            $ref: '#/components/schemas/Severity'
+      responses:
+        '200':
+          description: Incident page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      tags: [Incidents]
+      operationId: createIncident
+      summary: Create a human-reported incident using authorized evidence
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIncidentRequest'
+      responses:
+        '201':
+          description: Created incident
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /incidents/{incidentId}:
+    get:
+      tags: [Incidents]
+      operationId: getIncident
+      summary: Get a live incident projection
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      tags: [Incidents]
+      operationId: updateIncident
+      summary: Update command owner, severity, status, or affected services
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/UpdateIncidentRequest'
+      responses:
+        '200':
+          description: Updated incident
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /incidents/{incidentId}/recommendations:generate:
+    post:
+      tags: [Recommendations]
+      operationId: generateRecommendation
+      summary: Generate or retrieve a recommendation for the current incident snapshot
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRecommendationRequest'
+      responses:
+        '202':
+          description: Recommendation generation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedOperation'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /recommendations/{recommendationId}:
+    get:
+      tags: [Recommendations]
+      operationId: getRecommendation
+      summary: Get the current authorized recommendation projection
+      parameters:
+        - $ref: '#/components/parameters/RecommendationId'
+      responses:
+        '200':
+          description: Recommendation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recommendation'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /recommendations/{recommendationId}/decisions:
+    post:
+      tags: [Decisions]
+      operationId: recordRecommendationDecision
+      summary: Approve, reject, revise, delegate, or escalate an exact recommendation version
+      parameters:
+        - $ref: '#/components/parameters/RecommendationId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordDecisionRequest'
+      responses:
+        '201':
+          description: Decision recorded; approval may create commitments but does not invoke a connector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionResult'
+        '412':
+          $ref: '#/components/responses/EvidenceChanged'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /decision-queue:
+    get:
+      tags: [Decisions]
+      operationId: getDecisionQueue
+      summary: List human decisions visible or assigned to the current user
+      parameters:
+        - $ref: '#/components/parameters/EventIdQuery'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: state
+          in: query
+          schema:
+            $ref: '#/components/schemas/RecommendationState'
+      responses:
+        '200':
+          description: Decision queue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationPage'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /commitments/{commitmentId}:
+    get:
+      tags: [Commitments]
+      operationId: getCommitment
+      summary: Get an agency commitment
+      parameters:
+        - $ref: '#/components/parameters/CommitmentId'
+      responses:
+        '200':
+          description: Commitment
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Commitment'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /commitments/{commitmentId}/status-transitions:
+    post:
+      tags: [Commitments]
+      operationId: transitionCommitment
+      summary: Apply an allowed commitment state transition
+      parameters:
+        - $ref: '#/components/parameters/CommitmentId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitmentTransitionRequest'
+      responses:
+        '200':
+          description: Updated commitment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Commitment'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /commitments/{commitmentId}/execution-requests:validate:
+    post:
+      tags: [Execution]
+      operationId: validateExecutionRequest
+      summary: Validate policy, authorization, parameters, and connector readiness without executing
+      parameters:
+        - $ref: '#/components/parameters/CommitmentId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateExecutionRequest'
+      responses:
+        '200':
+          description: Dry-run validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionValidation'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /commitments/{commitmentId}/execution-requests:
+    post:
+      tags: [Execution]
+      operationId: createExecutionRequest
+      summary: Create a bounded execution request after successful validation
+      parameters:
+        - $ref: '#/components/parameters/CommitmentId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExecutionRequest'
+      responses:
+        '201':
+          description: Execution request created. Stage 1 returns a manual or deep-link handoff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /execution-requests/{executionRequestId}:
+    get:
+      tags: [Execution]
+      operationId: getExecutionRequest
+      summary: Get execution status, receipt, and confirmation summary
+      parameters:
+        - $ref: '#/components/parameters/ExecutionRequestId'
+      responses:
+        '200':
+          description: Execution request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /execution-requests/{executionRequestId}/confirmations:
+    post:
+      tags: [Execution]
+      operationId: confirmExecution
+      summary: Record authoritative-system or accountable manual confirmation
+      parameters:
+        - $ref: '#/components/parameters/ExecutionRequestId'
+        - $ref: '#/components/parameters/NexusMode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionConfirmationRequest'
+      responses:
+        '201':
+          description: Confirmation recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionRequest'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /stream:
+    get:
+      tags: [Realtime]
+      operationId: streamOperationalUpdates
+      summary: Stream authorized operational updates using Server-Sent Events
+      parameters:
+        - $ref: '#/components/parameters/EventIdQueryRequired'
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE stream; events contain display-safe summaries and resource identifiers
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /incidents/{incidentId}/audit:
+    get:
+      tags: [Audit and Health]
+      operationId: getIncidentAudit
+      summary: Get the role-filtered immutable audit timeline
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Audit page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /system/status:
+    get:
+      tags: [Audit and Health]
+      operationId: getSystemStatus
+      summary: Get authorized status for the command-center source-health rail
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+        default:
+          $ref: '#/components/responses/Problem'
+
+components:
+  securitySchemes:
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: https://identity.example/.well-known/openid-configuration
+    connectorHmac:
+      type: apiKey
+      in: header
+      name: X-Nexus-Signature
+
+  headers:
+    ETag:
+      description: Current version token for optimistic concurrency
+      schema:
+        type: string
+
+  parameters:
+    RequestId:
+      name: X-Request-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+    NexusMode:
+      name: X-Nexus-Mode
+      in: header
+      required: true
+      schema:
+        $ref: '#/components/schemas/OperationalMode'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    ModeQuery:
+      name: mode
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/OperationalMode'
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EventIdQuery:
+      name: operationalEventId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+    EventIdQueryRequired:
+      name: operationalEventId
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ConnectorId:
+      name: connectorId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IncidentId:
+      name: incidentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RecommendationId:
+      name: recommendationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CommitmentId:
+      name: commitmentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ExecutionRequestId:
+      name: executionRequestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Problem:
+      description: Problem details
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    EvidenceChanged:
+      description: Material evidence or recommendation state changed during review
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    OperationalMode:
+      type: string
+      enum: [live, training, replay]
+    EventPhase:
+      type: string
+      enum: [readiness, arrival, ingress, in_game, egress, after_action, closed]
+    Severity:
+      type: string
+      enum: [critical, high, medium, low, informational]
+    IncidentStatus:
+      type: string
+      enum: [new, triaged, active, monitoring, resolved, closed]
+    SourceHealthStatus:
+      type: string
+      enum: [healthy, delayed, unavailable, unverified, disabled]
+    RecommendationState:
+      type: string
+      enum:
+        - draft
+        - awaiting_acknowledgement
+        - awaiting_approval
+        - approved
+        - rejected
+        - revision_requested
+        - delegated
+        - escalated
+        - expired
+        - superseded
+    DecisionAction:
+      type: string
+      enum: [approve, reject, request_revision, delegate, escalate]
+    CommitmentState:
+      type: string
+      enum: [requested, acknowledged, approved, executing, blocked, verified, failed, expired, cancelled]
+    ExecutionStatus:
+      type: string
+      enum: [validation_required, validated, manual_handoff, requested, accepted, executing, confirmed, failed, cancelled, timed_out]
+    QualityFlag:
+      type: string
+      enum: [fresh, stale, incomplete, conflicting, estimated, unverified]
+
+    UserContext:
+      type: object
+      required: [userId, displayName, agencyIds, roles, scopes, modes]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        agencyIds:
+          type: array
+          items: { type: string, format: uuid }
+        roles:
+          type: array
+          items: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        modes:
+          type: array
+          items: { $ref: '#/components/schemas/OperationalMode' }
+        activeAssignments:
+          type: array
+          items:
+            type: object
+            properties:
+              operationalEventId: { type: string, format: uuid }
+              incidentId: { type: [string, 'null'], format: uuid }
+              role: { type: string }
+
+    OperationalEvent:
+      type: object
+      required: [eventId, mode, eventType, name, phase, startsAt, version]
+      properties:
+        eventId: { type: string, format: uuid }
+        mode: { $ref: '#/components/schemas/OperationalMode' }
+        eventType: { type: string, example: sec_gameday }
+        name: { type: string }
+        phase: { $ref: '#/components/schemas/EventPhase' }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: [string, 'null'], format: date-time }
+        commandOwner:
+          $ref: '#/components/schemas/ActorRef'
+        version: { type: integer, minimum: 1 }
+    CreateOperationalEventRequest:
+      type: object
+      required: [templateId, name, startsAt]
+      properties:
+        templateId: { type: string }
+        name: { type: string }
+        startsAt: { type: string, format: date-time }
+        commandOwnerId: { type: [string, 'null'], format: uuid }
+    UpdateOperationalEventRequest:
+      type: object
+      properties:
+        phase: { $ref: '#/components/schemas/EventPhase' }
+        commandOwnerId: { type: string, format: uuid }
+
+    Source:
+      type: object
+      required: [sourceId, name, ownerAgencyId, schemaVersion, health]
+      properties:
+        sourceId: { type: string, format: uuid }
+        name: { type: string }
+        ownerAgencyId: { type: string, format: uuid }
+        schemaVersion: { type: string }
+        expectedCadenceSeconds: { type: integer, minimum: 1 }
+        staleAfterSeconds: { type: integer, minimum: 1 }
+        permittedUse: { type: string }
+        health: { $ref: '#/components/schemas/SourceHealth' }
+    SourceHealth:
+      type: object
+      required: [sourceId, status, checkedAt]
+      properties:
+        sourceId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/SourceHealthStatus' }
+        checkedAt: { type: string, format: date-time }
+        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        lastEventObservedAt: { type: [string, 'null'], format: date-time }
+        lagSeconds: { type: [integer, 'null'], minimum: 0 }
+        errorCategory: { type: [string, 'null'] }
+        affectedRecommendationIds:
+          type: array
+          items: { type: string, format: uuid }
+    ConnectorEvent:
+      type: object
+      required: [sourceEventId, schemaVersion, observedAt, payload]
+      properties:
+        sourceEventId: { type: string, maxLength: 256 }
+        schemaVersion: { type: string }
+        observedAt: { type: string, format: date-time }
+        payload: { type: object, additionalProperties: true }
+    Evidence:
+      type: object
+      required: [evidenceId, sourceId, sourceEventId, observedAt, receivedAt, qualityFlags, version]
+      properties:
+        evidenceId: { type: string, format: uuid }
+        sourceId: { type: string, format: uuid }
+        sourceEventId: { type: string }
+        observedAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+        summary: { type: string }
+        geometry: { type: [object, 'null'], additionalProperties: true }
+        attributes: { type: object, additionalProperties: true }
+        qualityFlags:
+          type: array
+          items: { $ref: '#/components/schemas/QualityFlag' }
+        version: { type: integer, minimum: 1 }
+
+    Incident:
+      type: object
+      required: [incidentId, operationalEventId, mode, title, status, severity, version, updatedAt]
+      properties:
+        incidentId: { type: string, format: uuid }
+        operationalEventId: { type: string, format: uuid }
+        mode: { $ref: '#/components/schemas/OperationalMode' }
+        title: { type: string }
+        whatChanged: { type: string }
+        whyItMatters: { type: string }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        commandOwner: { $ref: '#/components/schemas/ActorRef' }
+        evidenceIds:
+          type: array
+          items: { type: string, format: uuid }
+        affectedServices:
+          type: array
+          items: { type: string }
+        version: { type: integer, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
+    CreateIncidentRequest:
+      type: object
+      required: [title, severity, whatChanged, whyItMatters]
+      properties:
+        title: { type: string }
+        severity: { $ref: '#/components/schemas/Severity' }
+        whatChanged: { type: string }
+        whyItMatters: { type: string }
+        commandOwnerId: { type: [string, 'null'], format: uuid }
+        evidenceIds:
+          type: array
+          items: { type: string, format: uuid }
+    UpdateIncidentRequest:
+      type: object
+      properties:
+        title: { type: string }
+        severity: { $ref: '#/components/schemas/Severity' }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        commandOwnerId: { type: string, format: uuid }
+        affectedServices:
+          type: array
+          items: { type: string }
+
+    GenerateRecommendationRequest:
+      type: object
+      required: [incidentVersion, evidenceSnapshotVersion, requestedActionClass]
+      properties:
+        incidentVersion: { type: integer, minimum: 1 }
+        evidenceSnapshotVersion: { type: string }
+        requestedActionClass: { type: string, example: mobility_advisory }
+        forceNewVersion: { type: boolean, default: false }
+    Recommendation:
+      type: object
+      required:
+        - recommendationId
+        - incidentId
+        - mode
+        - version
+        - state
+        - whatChanged
+        - whyItMatters
+        - recommendedAction
+        - evidenceSnapshotVersion
+        - requiredApprovals
+        - createdAt
+        - expiresAt
+      properties:
+        recommendationId: { type: string, format: uuid }
+        incidentId: { type: string, format: uuid }
+        mode: { $ref: '#/components/schemas/OperationalMode' }
+        version: { type: integer, minimum: 1 }
+        state: { $ref: '#/components/schemas/RecommendationState' }
+        whatChanged: { type: string }
+        whyItMatters: { type: string }
+        recommendedAction: { type: string }
+        expectedEffect: { type: string }
+        limitations: { type: string }
+        constraints:
+          type: array
+          items: { type: string }
+        evidenceIds:
+          type: array
+          items: { type: string, format: uuid }
+        evidenceSnapshotVersion: { type: string }
+        requiredApprovals:
+          type: array
+          items: { $ref: '#/components/schemas/ApprovalRequirement' }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    ApprovalRequirement:
+      type: object
+      required: [requirementId, agencyId, role, quorum, satisfied]
+      properties:
+        requirementId: { type: string, format: uuid }
+        agencyId: { type: string, format: uuid }
+        role: { type: string }
+        quorum: { type: integer, minimum: 1, default: 1 }
+        satisfied: { type: boolean }
+        delegationAllowed: { type: boolean, default: false }
+
+    RecordDecisionRequest:
+      type: object
+      required:
+        - action
+        - recommendationVersion
+        - expectedState
+        - evidenceSnapshotVersion
+        - reasonCode
+        - confirmationTextHash
+      properties:
+        action: { $ref: '#/components/schemas/DecisionAction' }
+        recommendationVersion: { type: integer, minimum: 1 }
+        expectedState: { $ref: '#/components/schemas/RecommendationState' }
+        evidenceSnapshotVersion: { type: string }
+        reasonCode: { type: string }
+        comment: { type: string, maxLength: 2000 }
+        delegateToUserId: { type: [string, 'null'], format: uuid }
+        escalateToRole: { type: [string, 'null'] }
+        confirmationTextHash: { type: string, minLength: 32 }
+    Decision:
+      type: object
+      required: [decisionId, recommendationId, recommendationVersion, action, actor, decidedAt]
+      properties:
+        decisionId: { type: string, format: uuid }
+        recommendationId: { type: string, format: uuid }
+        recommendationVersion: { type: integer }
+        action: { $ref: '#/components/schemas/DecisionAction' }
+        actor: { $ref: '#/components/schemas/ActorRef' }
+        reasonCode: { type: string }
+        comment: { type: string }
+        decidedAt: { type: string, format: date-time }
+    DecisionResult:
+      type: object
+      required: [decision, recommendation]
+      properties:
+        decision: { $ref: '#/components/schemas/Decision' }
+        recommendation: { $ref: '#/components/schemas/Recommendation' }
+        createdCommitments:
+          type: array
+          items: { $ref: '#/components/schemas/Commitment' }
+
+    Commitment:
+      type: object
+      required: [commitmentId, decisionId, mode, state, ownerAgencyId, requestedOutcome, version]
+      properties:
+        commitmentId: { type: string, format: uuid }
+        decisionId: { type: string, format: uuid }
+        mode: { $ref: '#/components/schemas/OperationalMode' }
+        state: { $ref: '#/components/schemas/CommitmentState' }
+        ownerAgencyId: { type: string, format: uuid }
+        assignee: { $ref: '#/components/schemas/ActorRef' }
+        requestedOutcome: { type: string }
+        dueAt: { type: [string, 'null'], format: date-time }
+        blocker: { type: [string, 'null'] }
+        verificationRule: { type: string }
+        version: { type: integer, minimum: 1 }
+    CommitmentTransitionRequest:
+      type: object
+      required: [expectedVersion, targetState, reasonCode]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        targetState: { $ref: '#/components/schemas/CommitmentState' }
+        reasonCode: { type: string }
+        comment: { type: string, maxLength: 2000 }
+        evidenceIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    ValidateExecutionRequest:
+      type: object
+      required: [commitmentVersion, actionTemplateId, parameters]
+      properties:
+        commitmentVersion: { type: integer, minimum: 1 }
+        actionTemplateId: { type: string }
+        parameters: { type: object, additionalProperties: true }
+    ExecutionValidation:
+      type: object
+      required: [valid, checkedAt]
+      properties:
+        valid: { type: boolean }
+        checkedAt: { type: string, format: date-time }
+        validationToken: { type: [string, 'null'] }
+        mode: { $ref: '#/components/schemas/OperationalMode' }
+        failures:
+          type: array
+          items: { type: string }
+        requiredConfirmations:
+          type: array
+          items: { type: string }
+    CreateExecutionRequest:
+      type: object
+      required: [commitmentVersion, actionTemplateId, parameters, validationToken]
+      properties:
+        commitmentVersion: { type: integer, minimum: 1 }
+        actionTemplateId: { type: string }
+        parameters: { type: object, additionalProperties: true }
+        validationToken: { type: string }
+    ExecutionRequest:
+      type: object
+      required:
+        - executionRequestId
+        - commitmentId
+        - mode
+        - actionTemplateId
+        - status
+        - createdAt
+      properties:
+        executionRequestId: { type: string, format: uuid }
+        commitmentId: { type: string, format: uuid }
+        mode: { $ref: '#/components/schemas/OperationalMode' }
+        actionTemplateId: { type: string }
+        status: { $ref: '#/components/schemas/ExecutionStatus' }
+        handoffType:
+          type: string
+          enum: [manual, deep_link, connector]
+        handoffUrl: { type: [string, 'null'], format: uri }
+        externalReceiptId: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: [string, 'null'], format: date-time }
+    ExecutionConfirmationRequest:
+      type: object
+      required: [confirmationType, confirmedAt, outcome]
+      properties:
+        confirmationType:
+          type: string
+          enum: [authoritative_system, accountable_operator]
+        confirmedAt: { type: string, format: date-time }
+        externalReceiptId: { type: [string, 'null'] }
+        outcome: { type: string }
+        evidenceIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    ActorRef:
+      type: [object, 'null']
+      properties:
+        actorId: { type: string, format: uuid }
+        displayName: { type: string }
+        agencyId: { type: string, format: uuid }
+        role: { type: string }
+    AcceptedOperation:
+      type: object
+      required: [operationId, status]
+      properties:
+        operationId: { type: string, format: uuid }
+        status: { type: string, enum: [accepted, running] }
+        statusUrl: { type: string, format: uri-reference }
+    AuditEvent:
+      type: object
+      required: [auditId, sequence, timestamp, action, objectType, objectId]
+      properties:
+        auditId: { type: string, format: uuid }
+        sequence: { type: integer, minimum: 1 }
+        timestamp: { type: string, format: date-time }
+        actor: { $ref: '#/components/schemas/ActorRef' }
+        action: { type: string }
+        objectType: { type: string }
+        objectId: { type: string }
+        objectVersion: { type: [integer, 'null'] }
+        requestId: { type: string }
+        outcome: { type: string }
+    SystemStatus:
+      type: object
+      required: [status, checkedAt, sourceSummary]
+      properties:
+        status: { type: string, enum: [operational, degraded, major_degradation] }
+        checkedAt: { type: string, format: date-time }
+        sourceSummary:
+          type: object
+          required: [healthy, delayed, unavailable, unverified]
+          properties:
+            healthy: { type: integer, minimum: 0 }
+            delayed: { type: integer, minimum: 0 }
+            unavailable: { type: integer, minimum: 0 }
+            unverified: { type: integer, minimum: 0 }
+
+    OperationalEventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OperationalEvent' }
+        nextCursor: { type: [string, 'null'] }
+    EvidencePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Evidence' }
+        nextCursor: { type: [string, 'null'] }
+    IncidentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Incident' }
+        nextCursor: { type: [string, 'null'] }
+    RecommendationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Recommendation' }
+        nextCursor: { type: [string, 'null'] }
+    AuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        nextCursor: { type: [string, 'null'] }
+
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { type: string }
+        detail: { type: string }
+        requestId: { type: string }
+        objectType: { type: string }
+        objectId: { type: string }
+        currentVersion: { type: integer }

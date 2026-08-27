@@ -1,0 +1,83 @@
+flowchart LR
+  subgraph EXT[Agency and Public Systems]
+    TOM[TomTom / ALDOT / ALGO]
+    ETA[Tiger Transit / Parking]
+    CAD[Public Safety / CAD Status]
+    OT[Signals / Assets / OT]
+    IDP[Agency Identity Provider]
+  end
+
+  subgraph EDGE[Trust Boundary A - Nexus Edge]
+    APIGW[API Gateway - OIDC - RBAC - rate limits]
+    INAD[Inbound Adapters - webhooks - polling - validation]
+    OUTAD[Outbound Execution Gateway - allowlists - dry run - kill switch]
+  end
+
+  subgraph CORE[Trust Boundary B - Nexus Coordination Core]
+    BUS[Durable Event Bus]
+    NORM[Normalization and Quality - schema - lineage - freshness]
+    STATE[Operational State - incidents - map state - source health]
+    AGENTS[Agent Orchestrator - seven bounded agent domains]
+    POLICY[Policy and Playbook Engine]
+    RECS[Recommendation and Conflict Service]
+    APPROVAL[Human Approval Service - roles - versions - expiry]
+    TASKS[Commitment and Task Service]
+    NOTIFY[Notification and Message Draft Service]
+    SSE[Realtime Event Stream - SSE or WebSocket]
+  end
+
+  subgraph DATA[Trust Boundary C - Durable Records]
+    DB[(PostgreSQL and PostGIS - operational state)]
+    AUDIT[(Append-only Audit Ledger)]
+    OBJECT[(Evidence Object Store)]
+    CACHE[(Redis and Queue State)]
+  end
+
+  subgraph UX[Authorized User Experiences]
+    CMD[Incident Command]
+    OPS[Agency Operations]
+    EXEC[Executive Overview]
+    AAR[After-Action Review]
+  end
+
+  TOM --> INAD
+  ETA --> INAD
+  CAD --> INAD
+  OT -. read-only pilot .-> INAD
+  IDP --> APIGW
+  INAD --> BUS --> NORM --> STATE
+  NORM --> DB
+  NORM --> OBJECT
+  STATE --> AGENTS
+  POLICY --> AGENTS
+  AGENTS --> RECS
+  RECS --> APPROVAL
+  APPROVAL --> TASKS
+  APPROVAL --> AUDIT
+  TASKS --> AUDIT
+  TASKS --> NOTIFY
+  TASKS -. approved execution request .-> OUTAD
+  OUTAD -. authoritative-system confirmation .-> BUS
+  APIGW --> STATE
+  APIGW --> APPROVAL
+  APIGW --> TASKS
+  STATE --> SSE
+  APPROVAL --> SSE
+  TASKS --> SSE
+  SSE --> CMD
+  SSE --> OPS
+  SSE --> EXEC
+  DB --> AAR
+  AUDIT --> AAR
+  CACHE --- BUS
+
+  classDef external fill:#fff7ed,stroke:#c2410c,color:#431407;
+  classDef edge fill:#ecfeff,stroke:#0891b2,color:#083344;
+  classDef core fill:#eff6ff,stroke:#2563eb,color:#172554;
+  classDef data fill:#f5f3ff,stroke:#7c3aed,color:#2e1065;
+  classDef ui fill:#ecfdf5,stroke:#059669,color:#022c22;
+  class TOM,ETA,CAD,OT,IDP external;
+  class APIGW,INAD,OUTAD edge;
+  class BUS,NORM,STATE,AGENTS,POLICY,RECS,APPROVAL,TASKS,NOTIFY,SSE core;
+  class DB,AUDIT,OBJECT,CACHE data;
+  class CMD,OPS,EXEC,AAR ui;

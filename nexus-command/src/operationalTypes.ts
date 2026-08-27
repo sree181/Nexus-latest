@@ -1,0 +1,184 @@
+export type OperationalMode = 'live' | 'training' | 'replay';
+export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'informational';
+export type RecommendationState = 'draft' | 'awaiting_acknowledgement' | 'awaiting_approval' | 'approved' | 'rejected' | 'revision_requested' | 'delegated' | 'escalated' | 'expired' | 'superseded';
+export type CommitmentState = 'requested' | 'acknowledged' | 'approved' | 'executing' | 'blocked' | 'verified' | 'failed' | 'expired' | 'cancelled';
+
+export interface ActorRef {
+  principalId: string;
+  displayName: string;
+  agencyId: string;
+  agencyName: string;
+  roleCode: string;
+}
+
+export interface PrincipalContext {
+  principalId: string;
+  externalSubject: string;
+  displayName: string;
+  agencyId: string;
+  agencyName: string;
+  roles: string[];
+  scopes: string[];
+  modes: OperationalMode[];
+}
+
+export interface OperationalEvent {
+  eventId: string;
+  mode: OperationalMode;
+  eventType: string;
+  name: string;
+  phase: 'readiness' | 'arrival' | 'ingress' | 'in_game' | 'egress' | 'after_action' | 'closed';
+  status: 'planned' | 'active' | 'monitoring' | 'closed' | 'cancelled';
+  startsAt: string;
+  endsAt: string | null;
+  locationName: string;
+  commandOwner: ActorRef | null;
+  version: number;
+  updatedAt: string;
+}
+
+export interface SourceHealth {
+  sourceId: string;
+  sourceCode: string;
+  name: string;
+  ownerAgencyName: string;
+  status: 'healthy' | 'delayed' | 'unavailable' | 'unverified' | 'disabled';
+  lastSuccessAt: string | null;
+  lastEventObservedAt: string | null;
+  lagSeconds: number | null;
+  staleAfterSeconds: number;
+  errorCategory: string | null;
+  authorityUri?: string | null;
+  connectorCode?: string | null;
+  dataClassification?: 'live' | 'near_real_time' | 'reference' | 'operational' | 'restricted';
+  connectionStatus?: 'connected' | 'not_connected' | 'configuration_required' | 'permission_required' | 'disabled';
+  partnerApprovalRequired?: boolean;
+  lastAttemptAt?: string | null;
+  consecutiveFailures?: number;
+}
+
+export interface EvidenceSummary {
+  evidenceId: string;
+  sourceId: string;
+  sourceName: string;
+  observedAt: string;
+  receivedAt: string;
+  summary: string;
+  qualityFlags: string[];
+  attributes: Record<string, unknown>;
+}
+
+export interface OperationalObservation extends EvidenceSummary {
+  sourceCode: string;
+  dataClassification: 'live' | 'near_real_time' | 'reference' | 'operational' | 'restricted';
+  geometryGeojson: Record<string, unknown> | null;
+  provenance: {
+    authority: string;
+    authorityUri: string;
+    sourceRecordUri?: string;
+    connectorCode: string;
+    schemaVersion: string;
+    fetchedAt: string;
+    upstreamObservedAt?: string;
+    termsNote?: string;
+  };
+}
+
+export interface Incident {
+  incidentId: string;
+  eventId: string;
+  mode: OperationalMode;
+  title: string;
+  whatChanged: string;
+  whyItMatters: string;
+  severity: Severity;
+  status: 'new' | 'triaged' | 'active' | 'monitoring' | 'resolved' | 'closed';
+  commandOwner: ActorRef | null;
+  locationGeojson: { type?: string; coordinates?: number[] } | null;
+  affectedServices: string[];
+  constraints: string[];
+  detectedAt: string;
+  resolvedAt: string | null;
+  version: number;
+  updatedAt: string;
+}
+
+export interface ApprovalRequirement {
+  requirementId: string;
+  agencyId: string;
+  agencyName: string;
+  roleCode: string;
+  sequence: number;
+  quorum: number;
+  status: 'pending' | 'satisfied' | 'waived' | 'expired';
+  satisfiedAt: string | null;
+  delegationAllowed: boolean;
+}
+
+export interface Recommendation {
+  recommendationId: string;
+  incidentId: string;
+  mode: OperationalMode;
+  version: number;
+  state: RecommendationState;
+  priority: Severity;
+  whatChanged: string;
+  whyItMatters: string;
+  recommendedAction: string;
+  expectedEffect: string;
+  limitations: string;
+  constraints: string[];
+  evidenceSnapshotHash: string;
+  evidence: EvidenceSummary[];
+  approvalRequirements: ApprovalRequirement[];
+  generatedBy: { model: string; version: string };
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Commitment {
+  commitmentId: string;
+  incidentId: string;
+  recommendationId: string;
+  decisionId: string;
+  mode: OperationalMode;
+  ownerAgencyId: string;
+  ownerAgencyName: string;
+  assignee: ActorRef | null;
+  requestedOutcome: string;
+  state: CommitmentState;
+  dueAt: string | null;
+  blocker: string | null;
+  verificationRule: string;
+  version: number;
+  updatedAt: string;
+}
+
+export interface OperationalSnapshot {
+  event: OperationalEvent;
+  incidents: Incident[];
+  decisionQueue: Recommendation[];
+  commitments: Commitment[];
+  sources: SourceHealth[];
+  observations: OperationalObservation[];
+}
+
+export interface SystemStatus {
+  status: 'operational' | 'degraded' | 'major_degradation' | 'configuration_required';
+  mode: OperationalMode | null;
+  checkedAt: string;
+  database: 'connected' | 'unavailable' | 'not_configured' | 'review_repository';
+  sourceSummary: { healthy: number; delayed: number; unavailable: number; unverified: number };
+  message: string;
+}
+
+export interface ApiEnvelope<T> {
+  data: T;
+  requestId: string;
+}
+
+export interface ApiError {
+  error: { code: string; message: string; details?: Record<string, unknown> };
+  requestId?: string;
+}
