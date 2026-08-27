@@ -63,7 +63,7 @@ Open `http://localhost:4001`. The UI displays a persistent `LOCAL REVIEW DATA` b
 | `CONNECTOR_WORKER_TICK_MS` | Optional | Worker wake interval; connector-specific cadence still controls idempotent run buckets |
 | `CONNECTOR_RUN_TIMEOUT_MS` | Optional | Overall connector-run deadline; defaults to 65 seconds |
 | `PGSSL=true` | Provider-dependent | Enables PostgreSQL TLS |
-| `PGSSL_REJECT_UNAUTHORIZED` | Recommended | Keep `true` unless the database provider explicitly requires otherwise |
+| `PGSSL_REJECT_UNAUTHORIZED` | Recommended | Keep `true` unless the database provider uses a platform/self-signed certificate. Railway requires `false`. |
 | `PORT` | Platform supplied | HTTP listening port |
 
 Production startup fails into an explicit `configuration_required` API/UI state if PostgreSQL is unavailable. It never displays review records as live operations.
@@ -113,7 +113,7 @@ Set these on **both** `nexus-api` and `nexus-worker` unless noted.
 | `DATABASE_URL` | API + worker | `${{Postgres.DATABASE_URL}}` |
 | `NEXUS_REPOSITORY` | API + worker | `postgres` |
 | `PGSSL` | API + worker | `true` |
-| `PGSSL_REJECT_UNAUTHORIZED` | API + worker | `true` unless Railway support says the cert requires otherwise |
+| `PGSSL_REJECT_UNAUTHORIZED` | API + worker | `false` |
 | `NEXUS_AUTH_MODE` | API | `oidc` |
 | `NEXUS_OIDC_ISSUER` | API | Identity-provider issuer URL |
 | `NEXUS_OIDC_AUDIENCE` | API | API audience / client ID |

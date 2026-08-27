@@ -11,21 +11,31 @@ export function hasDatabaseConfiguration(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+function postgresSslOptions(): { rejectUnauthorized: boolean } | undefined {
+  if (process.env.PGSSL !== 'true') return undefined;
+
+  if (process.env.PGSSL_REJECT_UNAUTHORIZED === 'false') return { rejectUnauthorized: false };
+  if (process.env.PGSSL_REJECT_UNAUTHORIZED === 'true') return { rejectUnauthorized: true };
+
+  // Railway Postgres terminates TLS with a platform certificate that Node
+  // reports as SELF_SIGNED_CERT_IN_CHAIN. Keep encryption; skip CA verification.
+  if (process.env.RAILWAY_ENVIRONMENT) return { rejectUnauthorized: false };
+
+  return { rejectUnauthorized: true };
+}
+
 export function getDatabasePool(): pg.Pool {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is required for persistent Nexus operational workflows');
   }
 
   if (!pool) {
-    const sslEnabled = process.env.PGSSL === 'true';
-    const rejectUnauthorized = process.env.PGSSL_REJECT_UNAUTHORIZED !== 'false';
-
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       max: Number(process.env.DB_POOL_MAX || 10),
       idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS || 30_000),
       connectionTimeoutMillis: Number(process.env.DB_CONNECT_TIMEOUT_MS || 5_000),
-      ssl: sslEnabled ? { rejectUnauthorized } : undefined,
+      ssl: postgresSslOptions(),
       application_name: 'nexus-coordinate',
     });
 
