@@ -61,6 +61,23 @@ export function createOperationalRouter(repository: OperationalRepository, conne
     req.requestId = req.header('x-request-id')?.trim() || randomUUID();
     next();
   });
+  router.get('/auth/config', (_req, res) => {
+    const issuer = process.env.NEXUS_OIDC_ISSUER ?? process.env.OIDC_ISSUER ?? null;
+    const clientId = process.env.NEXUS_OIDC_CLIENT_ID ?? process.env.OIDC_CLIENT_ID ?? null;
+    const audience = process.env.NEXUS_OIDC_AUDIENCE ?? process.env.OIDC_AUDIENCE ?? null;
+    const authMode = process.env.NEXUS_AUTH_MODE || (process.env.NODE_ENV === 'production' ? 'oidc_jwt' : 'review');
+    res.json({
+      data: {
+        configured: Boolean(issuer && clientId && audience),
+        loginRequired: authMode !== 'review',
+        issuer,
+        clientId,
+        audience,
+        scopes: 'openid profile email',
+      },
+      requestId: _req.requestId,
+    });
+  });
   router.use(authenticateRequest);
   router.use((_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');

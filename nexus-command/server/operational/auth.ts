@@ -46,6 +46,13 @@ function getReviewModePrincipal(req: Request): PrincipalContext {
   return displayName ? { ...reviewPrincipal, displayName } : reviewPrincipal;
 }
 
+const NEXUS_CLAIM_NAMESPACE = 'https://nexus.auburn.edu';
+
+function claim(payload: Record<string, unknown>, key: string): unknown {
+  if (payload[key] !== undefined) return payload[key];
+  return payload[`${NEXUS_CLAIM_NAMESPACE}/${key}`];
+}
+
 function asStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter(item => typeof item === 'string') as string[];
   if (typeof value === 'string') return value.split(' ').filter(Boolean);
@@ -79,23 +86,25 @@ export async function authenticateRequest(req: Request, _res: Response, next: Ne
 
     if (!jwks) jwks = createRemoteJWKSet(new URL(jwksUrl));
     const { payload } = await jwtVerify(authorization.slice(7), jwks, { issuer, audience });
+    const claims = payload as Record<string, unknown>;
 
-    const principalId = payload.nexus_principal_id;
-    const agencyId = payload.nexus_agency_id;
-    const agencyName = payload.nexus_agency_name;
+    const principalId = claim(claims, 'nexus_principal_id');
+    const agencyId = claim(claims, 'nexus_agency_id');
+    const agencyName = claim(claims, 'nexus_agency_name');
     if (typeof payload.sub !== 'string' || typeof principalId !== 'string' || typeof agencyId !== 'string' || typeof agencyName !== 'string') {
       throw new OperationalError(403, 'IDENTITY_CLAIMS_INCOMPLETE', 'Token is missing required Nexus principal and agency claims');
     }
 
-    const modes = asStringArray(payload.nexus_modes).filter(mode => ['live', 'training', 'replay'].includes(mode)) as OperationalMode[];
+    const modes = asStringArray(claim(claims, 'nexus_modes')).filter(mode => ['live', 'training', 'replay'].includes(mode)) as OperationalMode[];
+    const displayName = claim(claims, 'name');
     req.principal = {
       principalId,
       externalSubject: payload.sub,
-      displayName: typeof payload.name === 'string' ? payload.name : payload.sub,
+      displayName: typeof displayName === 'string' ? displayName : payload.sub,
       agencyId,
       agencyName,
-      roles: asStringArray(payload.nexus_roles),
-      scopes: asStringArray(payload.nexus_scopes),
+      roles: asStringArray(claim(claims, 'nexus_roles')),
+      scopes: asStringArray(claim(claims, 'nexus_scopes')),
       modes,
     };
     next();

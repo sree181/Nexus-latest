@@ -504,6 +504,10 @@ export function OperationalCommandCenter() {
       const nextSnapshot = await operationalApi.snapshot(event.eventId);
       setStatus(nextStatus); setPrincipal(nextPrincipal); setSnapshot(nextSnapshot); setError(null);
     } catch (reason) {
+      if (reason instanceof OperationalApiError && reason.status === 401) {
+        window.location.assign('/');
+        return;
+      }
       const message = reason instanceof OperationalApiError ? reason.message : 'Unable to open the operational command center.';
       setError(message);
     } finally {
@@ -515,11 +519,7 @@ export function OperationalCommandCenter() {
   useEffect(() => {
     if (!snapshot?.event.eventId) return;
     const timer = window.setInterval(() => void load(true), 15_000);
-    const stream = new EventSource(`/api/v1/events/${snapshot.event.eventId}/stream`);
-    stream.onmessage = () => void load(true);
-    stream.addEventListener('recommendation.approve', () => void load(true));
-    stream.addEventListener('commitment.transition', () => void load(true));
-    return () => { window.clearInterval(timer); stream.close(); };
+    return () => { window.clearInterval(timer); };
   }, [load, snapshot?.event.eventId]);
 
   const primaryIncident = useMemo(() => snapshot?.incidents.find(item => ['active', 'triaged', 'new'].includes(item.status)) || snapshot?.incidents[0] || null, [snapshot]);

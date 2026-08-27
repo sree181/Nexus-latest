@@ -118,6 +118,7 @@ Set these on **both** `nexus-api` and `nexus-worker` unless noted.
 | `NEXUS_OIDC_ISSUER` | API | Identity-provider issuer URL |
 | `NEXUS_OIDC_AUDIENCE` | API | API audience / client ID |
 | `NEXUS_OIDC_JWKS_URI` | API | JWKS URL |
+| `NEXUS_OIDC_CLIENT_ID` | API | Public SPA client ID used by the browser sign-in |
 | `NEXUS_ALLOWED_ORIGINS` | API | Public Railway URL, for example `https://nexus-api-production.up.railway.app` |
 | `ETA_SPOT_PRODUCTION_APPROVED` | API + worker | `true` only after Auburn transit use is reviewed |
 | `TOMTOM_API_KEY` | API + worker | Optional; omit until a production key exists |
@@ -128,7 +129,9 @@ Set these on **both** `nexus-api` and `nexus-worker` unless noted.
 
 Without a configured OIDC provider, `/api/health` can still pass and the UI will load, but every authenticated `/api/v1` route returns `OIDC_NOT_CONFIGURED` or `AUTHENTICATION_REQUIRED`. Auth0, Clerk, Keycloak, or another OIDC IdP must issue tokens with `nexus_principal_id`, `nexus_agency_id`, `nexus_agency_name`, `nexus_roles`, `nexus_scopes`, and `nexus_modes`.
 
-The worker pauses until PostgreSQL contains an active or monitoring `live` operational event. Migrations create schema only; they do not insert agencies, principals, or a game-day event.
+The worker pauses until PostgreSQL contains an active or monitoring `live` operational event. Migration `004_live_command_window.sql` inserts the named command owner, agencies, and the SEC Game Day live event. It does not insert simulated incidents or recommendations.
+
+A client demonstration still requires Auth0 (or another OIDC provider) and browser sign-in. Follow `docs/auth0-client-demo.md`.
 
 ### Validation
 

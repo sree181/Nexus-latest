@@ -59,4 +59,14 @@ describe('Nexus operational API', () => {
     expect(response.body).toEqual(expect.objectContaining({ status: 'degraded', database: 'review_repository' }));
     expect(response.body).not.toHaveProperty('sources');
   });
+
+  it('exposes public identity configuration without a bearer token', async () => {
+    const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
+    const response = await request(app).get('/api/v1/auth/config').expect(200);
+    expect(response.body.data.loginRequired).toBe(false);
+    expect(response.body.data).toEqual(expect.objectContaining({
+      configured: false,
+      scopes: 'openid profile email',
+    }));
+  });
 });

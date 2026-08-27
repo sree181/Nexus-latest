@@ -27,13 +27,20 @@ export function createApp(
   app.use(cors({ credentials: true, origin: allowedOrigins.length > 0 ? allowedOrigins : false }));
   app.use(express.json({ limit: '256kb', strict: true }));
   app.use((_req, res, next) => {
+    let issuerOrigin = '';
+    try {
+      issuerOrigin = process.env.NEXUS_OIDC_ISSUER ? new URL(process.env.NEXUS_OIDC_ISSUER).origin : '';
+    } catch {
+      issuerOrigin = '';
+    }
+    const connectSrc = ["'self'", 'https://server.arcgisonline.com', issuerOrigin].filter(Boolean).join(' ');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https://server.arcgisonline.com; worker-src 'self' blob:; font-src 'self' https: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src ${connectSrc}; worker-src 'self' blob:; font-src 'self' https: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
     );
     next();
   });
