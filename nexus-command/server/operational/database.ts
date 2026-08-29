@@ -62,6 +62,26 @@ export async function withTransaction<T>(operation: (client: pg.PoolClient) => P
   }
 }
 
+/**
+ * Runs an operation while holding a session advisory lock, or returns `null` without running it
+ * when another process already holds that lock. Postgres releases the lock if the connection
+ * dies, so a crashed holder cannot block the next cycle.
+ */
+export async function withAdvisoryLock<T>(key: string, operation: () => Promise<T>): Promise<T | null> {
+  const client = await getDatabasePool().connect();
+  try {
+    const acquired = await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock(hashtext($1)) AS locked', [key]);
+    if (!acquired.rows[0]?.locked) return null;
+    try {
+      return await operation();
+    } finally {
+      await client.query('SELECT pg_advisory_unlock(hashtext($1))', [key]);
+    }
+  } finally {
+    client.release();
+  }
+}
+
 export async function closeDatabasePool(): Promise<void> {
   if (pool) {
     await pool.end();

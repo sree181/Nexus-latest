@@ -135,7 +135,11 @@ export class PostgresConnectorStore implements ConnectorStore {
       let acceptedCount = 0;
       let duplicateCount = 0;
       let rejectedCount = 0;
-      for (const observation of batch.observations) {
+      // Upstream ordering is not guaranteed stable between fetches. Locking evidence rows in a
+      // fixed order means two runs of the same source queue behind each other instead of
+      // deadlocking on rows they each hold half of.
+      const ordered = [...batch.observations].sort((left, right) => left.sourceEventId.localeCompare(right.sourceEventId));
+      for (const observation of ordered) {
         try {
           const existing = await client.query(
             'SELECT evidence_id, content_hash FROM evidence_events WHERE source_id = $1 AND source_event_id = $2 FOR UPDATE',
