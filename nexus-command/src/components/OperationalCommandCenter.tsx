@@ -504,7 +504,7 @@ export function OperationalCommandCenter() {
       const nextSnapshot = await operationalApi.snapshot(event.eventId);
       setStatus(nextStatus); setPrincipal(nextPrincipal); setSnapshot(nextSnapshot); setError(null);
     } catch (reason) {
-      if (reason instanceof OperationalApiError && reason.status === 401) {
+      if (reason instanceof OperationalApiError && (reason.status === 401 || reason.code === 'IDENTITY_CLAIMS_INCOMPLETE')) {
         window.location.assign('/');
         return;
       }

@@ -62,9 +62,9 @@ export function createOperationalRouter(repository: OperationalRepository, conne
     next();
   });
   router.get('/auth/config', (_req, res) => {
-    const issuer = process.env.NEXUS_OIDC_ISSUER ?? process.env.OIDC_ISSUER ?? null;
-    const clientId = process.env.NEXUS_OIDC_CLIENT_ID ?? process.env.OIDC_CLIENT_ID ?? null;
-    const audience = process.env.NEXUS_OIDC_AUDIENCE ?? process.env.OIDC_AUDIENCE ?? null;
+    const issuer = (process.env.NEXUS_OIDC_ISSUER ?? process.env.OIDC_ISSUER ?? '').trim() || null;
+    const clientId = (process.env.NEXUS_OIDC_CLIENT_ID ?? process.env.OIDC_CLIENT_ID ?? '').trim() || null;
+    const audience = (process.env.NEXUS_OIDC_AUDIENCE ?? process.env.OIDC_AUDIENCE ?? '').trim() || null;
     const authMode = process.env.NEXUS_AUTH_MODE || (process.env.NODE_ENV === 'production' ? 'oidc_jwt' : 'review');
     res.json({
       data: {

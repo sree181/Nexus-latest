@@ -38,7 +38,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const payload = await response.json() as ApiEnvelope<T> | ApiError;
   if (!response.ok || 'error' in payload) {
     const error = 'error' in payload ? payload.error : { code: 'REQUEST_FAILED', message: 'Request failed' };
-    if (response.status === 401) {
+    if (response.status === 401 || error.code === 'IDENTITY_CLAIMS_INCOMPLETE') {
       clearSession();
     }
     throw new OperationalApiError(response.status, error.code, error.message, error.details);

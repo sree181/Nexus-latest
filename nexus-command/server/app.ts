@@ -29,7 +29,7 @@ export function createApp(
   app.use((_req, res, next) => {
     let issuerOrigin = '';
     try {
-      issuerOrigin = process.env.NEXUS_OIDC_ISSUER ? new URL(process.env.NEXUS_OIDC_ISSUER).origin : '';
+      issuerOrigin = process.env.NEXUS_OIDC_ISSUER ? new URL(process.env.NEXUS_OIDC_ISSUER.trim()).origin : '';
     } catch {
       issuerOrigin = '';
     }

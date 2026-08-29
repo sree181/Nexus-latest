@@ -25,15 +25,15 @@ function issuerOrigin(issuer: string): string {
 }
 
 function authorizationEndpoint(issuer: string): string {
-  return `${issuer.replace(/\/+$/, '')}/authorize`;
+  return `${issuer.trim().replace(/\/+$/, '')}/authorize`;
 }
 
 function tokenEndpoint(issuer: string): string {
-  return `${issuer.replace(/\/+$/, '')}/oauth/token`;
+  return `${issuer.trim().replace(/\/+$/, '')}/oauth/token`;
 }
 
 function logoutEndpoint(issuer: string): string {
-  return `${issuer.replace(/\/+$/, '')}/v2/logout`;
+  return `${issuer.trim().replace(/\/+$/, '')}/v2/logout`;
 }
 
 export async function loadAuthConfig(): Promise<AuthConfig> {

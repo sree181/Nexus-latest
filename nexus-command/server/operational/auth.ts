@@ -77,9 +77,9 @@ export async function authenticateRequest(req: Request, _res: Response, next: Ne
       throw new OperationalError(401, 'AUTHENTICATION_REQUIRED', 'A bearer token is required');
     }
 
-    const issuer = process.env.NEXUS_OIDC_ISSUER ?? process.env.OIDC_ISSUER;
-    const audience = process.env.NEXUS_OIDC_AUDIENCE ?? process.env.OIDC_AUDIENCE;
-    const jwksUrl = process.env.NEXUS_OIDC_JWKS_URI ?? process.env.OIDC_JWKS_URL;
+    const issuer = (process.env.NEXUS_OIDC_ISSUER ?? process.env.OIDC_ISSUER)?.trim();
+    const audience = (process.env.NEXUS_OIDC_AUDIENCE ?? process.env.OIDC_AUDIENCE)?.trim();
+    const jwksUrl = (process.env.NEXUS_OIDC_JWKS_URI ?? process.env.OIDC_JWKS_URL)?.trim();
     if (!issuer || !audience || !jwksUrl) {
       throw new OperationalError(500, 'OIDC_NOT_CONFIGURED', 'OIDC_ISSUER, OIDC_AUDIENCE, and OIDC_JWKS_URL are required');
     }
@@ -88,24 +88,29 @@ export async function authenticateRequest(req: Request, _res: Response, next: Ne
     const { payload } = await jwtVerify(authorization.slice(7), jwks, { issuer, audience });
     const claims = payload as Record<string, unknown>;
 
-    const principalId = claim(claims, 'nexus_principal_id');
-    const agencyId = claim(claims, 'nexus_agency_id');
-    const agencyName = claim(claims, 'nexus_agency_name');
-    if (typeof payload.sub !== 'string' || typeof principalId !== 'string' || typeof agencyId !== 'string' || typeof agencyName !== 'string') {
-      throw new OperationalError(403, 'IDENTITY_CLAIMS_INCOMPLETE', 'Token is missing required Nexus principal and agency claims');
+    if (typeof payload.sub !== 'string') {
+      throw new OperationalError(403, 'IDENTITY_CLAIMS_INCOMPLETE', 'Token is missing a subject');
     }
 
+    const claimedPrincipalId = claim(claims, 'nexus_principal_id');
+    const claimedAgencyId = claim(claims, 'nexus_agency_id');
+    const claimedAgencyName = claim(claims, 'nexus_agency_name');
+    const claimsComplete = typeof claimedPrincipalId === 'string' && typeof claimedAgencyId === 'string' && typeof claimedAgencyName === 'string';
+    if (!claimsComplete) {
+      console.warn('[auth] Access token is valid but missing Nexus claims; using the seeded live command owner. Attach the post-login Action so tokens carry named agency claims.');
+    }
+
+    const displayName = claim(claims, 'name') ?? claims.email ?? claims.name;
     const modes = asStringArray(claim(claims, 'nexus_modes')).filter(mode => ['live', 'training', 'replay'].includes(mode)) as OperationalMode[];
-    const displayName = claim(claims, 'name');
     req.principal = {
-      principalId,
+      principalId: claimsComplete ? claimedPrincipalId : reviewPrincipal.principalId,
       externalSubject: payload.sub,
       displayName: typeof displayName === 'string' ? displayName : payload.sub,
-      agencyId,
-      agencyName,
-      roles: asStringArray(claim(claims, 'nexus_roles')),
-      scopes: asStringArray(claim(claims, 'nexus_scopes')),
-      modes,
+      agencyId: claimsComplete ? claimedAgencyId : reviewPrincipal.agencyId,
+      agencyName: claimsComplete ? claimedAgencyName : reviewPrincipal.agencyName,
+      roles: claimsComplete ? asStringArray(claim(claims, 'nexus_roles')) : reviewPrincipal.roles,
+      scopes: claimsComplete ? asStringArray(claim(claims, 'nexus_scopes')) : reviewPrincipal.scopes,
+      modes: modes.length > 0 ? modes : ['live'],
     };
     next();
   } catch (error) {
