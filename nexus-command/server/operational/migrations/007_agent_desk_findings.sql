@@ -9,6 +9,26 @@ ALTER TABLE agent_findings
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'contributed',
   ADD COLUMN IF NOT EXISTS cited_evidence_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[];
 
+-- Findings written before desks cited evidence have an empty array. Attach the incident's
+-- material evidence so a contributing row can satisfy the citation contract, then mark any
+-- remaining empty contribution as abstained rather than inventing a citation.
+UPDATE agent_findings f
+   SET cited_evidence_ids = cited.ids
+  FROM (
+    SELECT ie.incident_id, array_agg(ie.evidence_id) AS ids
+      FROM incident_evidence ie
+     GROUP BY ie.incident_id
+  ) cited
+ WHERE f.incident_id = cited.incident_id
+   AND cardinality(f.cited_evidence_ids) = 0
+   AND f.agent_code <> 'nexus';
+
+UPDATE agent_findings
+   SET status = 'abstained'
+ WHERE cardinality(cited_evidence_ids) = 0
+   AND agent_code <> 'nexus'
+   AND status = 'contributed';
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agent_findings_status_check') THEN

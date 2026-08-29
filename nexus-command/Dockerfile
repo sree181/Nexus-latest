@@ -24,4 +24,4 @@ EXPOSE 3000
 
 # Live operations require DATABASE_URL. Without it, Nexus starts in an explicit
 # configuration-required state; it never falls back to review data in production.
-CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then node dist-server/operational/migrate.js; fi; exec node dist-server/index.js"]
+CMD ["sh", "-c", "set -e; if [ -n \"$DATABASE_URL\" ]; then node dist-server/operational/migrate.js; fi; exec node dist-server/index.js"]
