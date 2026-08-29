@@ -1,5 +1,9 @@
 # Connector worker. Attach this file only to the worker service.
-# Do not generate a public domain. The worker does not listen on HTTP.
+# Do not generate a public domain.
+#
+# Attaching this file is optional. Setting NEXUS_SERVICE_ROLE=connector-worker on the service
+# runs the same loop under the image default command, which is the safer option because it does
+# not depend on a per-service dashboard setting that is easy to leave unset.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"

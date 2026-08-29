@@ -81,7 +81,7 @@ Nexus is meant to run as **three Railway services** from `nexus-command/`: a pub
 |---|---|---|---|---|
 | `nexus-api` | Yes | `railway.toml` (default) | Image default: migrate, then `node dist-server/index.js` | Frontend, `/api/v1`, SSE, health check at `/api/health` |
 | `Postgres` | No | Railway plugin | Railway managed | Operational, connector, graph, audit, and outbox state |
-| `nexus-worker` | No | `railway.worker.toml` | `npm run start:connector-worker` | Always-on ingestion; shares `DATABASE_URL` with the API |
+| `nexus-worker` | No | Image default | `NEXUS_SERVICE_ROLE=connector-worker` | Always-on ingestion; shares `DATABASE_URL` with the API |
 
 ### One-time setup
 
@@ -99,7 +99,7 @@ In the Railway dashboard:
 
 1. Attach **both** application services to the Postgres plugin, or set `DATABASE_URL=${{Postgres.DATABASE_URL}}` on each.
 2. On `nexus-api`, generate a public domain. Leave `nexus-worker` and Postgres private.
-3. On `nexus-worker`, set the config-as-code file to `railway.worker.toml` (or override the start command to `npm run start:connector-worker` and disable HTTP health checks). The worker does not listen on a port; probing `/api/health` on it will fail the deploy.
+3. On `nexus-worker`, set `NEXUS_SERVICE_ROLE=connector-worker`. The image default command then runs the ingestion loop instead of the API and answers `/api/health` with the loop's own liveness, so the platform health check still passes. Prefer this to overriding the start command: a service left on the default silently becomes a second API and ingestion stops between deploys.
 4. Deploy `nexus-api` first so migrations apply, then deploy `nexus-worker`.
 
 ```bash
@@ -128,6 +128,7 @@ Set these on **both** `nexus-api` and `nexus-worker` unless noted.
 | `ETA_SPOT_PRODUCTION_APPROVED` | API + worker | `true` to ingest Tiger Transit ETA Spot public vehicle locations |
 | `NEXUS_ENABLE_PUBLIC_FEEDS` | API + worker | Optional alias that also enables ETA Spot |
 | `TOMTOM_API_KEY` | API + worker | Optional; omit until a production key exists |
+| `NEXUS_SERVICE_ROLE` | Worker | `connector-worker`; leave unset on the API |
 | `CONNECTOR_WORKER_TICK_MS` | Worker | `15000` |
 | `CONNECTOR_RUN_TIMEOUT_MS` | Worker | `65000` |
 
@@ -163,7 +164,8 @@ A client demonstration still requires Auth0 (or another OIDC provider) and brows
 | Check | Pass condition |
 |---|---|
 | API health | `GET https://<api-domain>/api/health` returns `200` with `database: "connected"` |
-| Worker logs | Startup lists configured connectors and does not bind a public port |
+| Worker role | Worker log: `[connector-worker] Authoritative ingestion worker started` listing configured connectors. If it logs `Operational server listening` instead, `NEXUS_SERVICE_ROLE` is unset and the service is a second API |
+| Worker health | `GET http://nexus-worker.railway.internal:8080/api/health` returns `role: "connector-worker"` with a recent `lastTickAt` |
 | Empty live window | Worker log: `No active live operational event; ingestion paused` until a live event exists |
 | City connector | After a live event exists, `GET /api/v1/connectors` shows City of Auburn closures as connected |
 
@@ -187,7 +189,7 @@ A client demonstration still requires Auth0 (or another OIDC provider) and brows
 
 These are asset inventories, not live status. Signals carry no state, timing plan, or preemption, and Nexus cannot control one. Parking spaces carry no occupancy. They are served as map reference and are never ingested as evidence, so nothing here can open an incident.
 
-Deploy the connector worker as a **separate Railway service** using the same image and shared `DATABASE_URL`. Override its start command with `npm run start:connector-worker`. Do not run the worker inside the API process; separate services provide independent scaling and failure isolation.
+Deploy the connector worker as a **separate Railway service** using the same image and shared `DATABASE_URL`, with `NEXUS_SERVICE_ROLE=connector-worker` set on it. Do not run the worker inside the API process; separate services provide independent scaling and failure isolation.
 
 ## Database migration
 
