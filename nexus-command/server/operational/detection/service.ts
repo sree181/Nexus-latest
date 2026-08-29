@@ -1,4 +1,5 @@
 import { getDatabasePool, withTransaction } from '../database.js';
+import { composeDeskFindings } from '../agents/orchestrator.js';
 import {
   evaluateRules,
   hasPredicate,
@@ -68,6 +69,7 @@ interface EventRow {
 interface PackRow {
   pack_code: string;
   connector_codes: string[];
+  agent_codes: string[];
 }
 
 interface RuleRow {
@@ -129,7 +131,7 @@ async function resolvePack(store: DetectionStore, eventId: string): Promise<{ ev
   if (!event) return null;
 
   const packResult = await store.query<PackRow>(
-    `SELECT pack_code, connector_codes FROM scenario_packs
+    `SELECT pack_code, connector_codes, agent_codes FROM scenario_packs
       WHERE active AND (pack_code = $1 OR ($1 IS NULL AND event_type = $2))
       ORDER BY (pack_code = $1) DESC
       LIMIT 1`,
@@ -164,6 +166,10 @@ async function projectMatch(
   match: DetectionMatch,
   agencies: Map<string, string>,
   summary: DetectionSummary,
+  /** Every observation in the window. The desks review the same snapshot, not just the match. */
+  snapshot: DetectionEvidence[],
+  staffedAgents: string[],
+  liveConnectors: string[],
 ): Promise<string | null> {
   const { rule } = match;
   const playbook = rule.playbook;
@@ -231,19 +237,33 @@ async function projectMatch(
     );
   }
 
-  const findingExists = await client.query(
-    'SELECT 1 FROM agent_findings WHERE incident_id = $1 AND agent_code = $2 AND evidence_snapshot_hash = $3 LIMIT 1',
-    [incidentId, rule.agentCode, match.evidenceHash],
-  );
-  if (!findingExists.rowCount) {
+  const composition = composeDeskFindings({
+    staffedAgentCodes: staffedAgents,
+    match,
+    snapshot,
+    liveConnectors,
+  });
+  for (const finding of composition.findings) {
     await client.query(
       `INSERT INTO agent_findings (
          incident_id, agent_code, model_name, model_version, incident_snapshot_version,
-         evidence_snapshot_hash, observation, interpretation, candidate_action, confidence, limitations
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+         evidence_snapshot_hash, observation, interpretation, candidate_action, confidence,
+         limitations, status, cited_evidence_ids, conflicts
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::uuid[],$14::jsonb)
+       ON CONFLICT (incident_id, agent_code, evidence_snapshot_hash) DO UPDATE SET
+         incident_snapshot_version = EXCLUDED.incident_snapshot_version,
+         observation = EXCLUDED.observation,
+         interpretation = EXCLUDED.interpretation,
+         candidate_action = EXCLUDED.candidate_action,
+         confidence = EXCLUDED.confidence,
+         limitations = EXCLUDED.limitations,
+         status = EXCLUDED.status,
+         cited_evidence_ids = EXCLUDED.cited_evidence_ids,
+         conflicts = EXCLUDED.conflicts`,
       [
-        incidentId, rule.agentCode, MODEL_NAME, MODEL_VERSION, incidentVersion, match.evidenceHash,
-        match.whatChanged, rule.whyItMatters, playbook.recommendedAction, 0.62, playbook.limitations,
+        incidentId, finding.agentCode, MODEL_NAME, MODEL_VERSION, incidentVersion, match.evidenceHash,
+        finding.observation, finding.interpretation, finding.candidateAction, finding.confidence,
+        finding.limitations, finding.status, finding.citedEvidenceIds, JSON.stringify(finding.conflicts),
       ],
     );
   }
@@ -437,7 +457,7 @@ export async function runDetection(eventId: string, store: DetectionStore = data
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`nexus-detection:${eventId}`]);
     const agencies = await agencyIdsByCode(client);
     for (const match of matches) {
-      await projectMatch(client, event, pack.pack_code, match, agencies, summary);
+      await projectMatch(client, event, pack.pack_code, match, agencies, summary, evidence, pack.agent_codes ?? [], observedConnectors);
     }
     await resolveClearedIncidents(client, eventId, observedConnectors, matchedKeys, summary);
   });

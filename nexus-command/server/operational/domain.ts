@@ -190,6 +190,30 @@ export interface ApprovalRequirement {
   delegationAllowed: boolean;
 }
 
+export interface AgentConflict {
+  withAgentCode: string;
+  concern: string;
+  basis: string;
+}
+
+/**
+ * What one agent desk made of the evidence. An abstained finding is not missing data; it is the
+ * desk stating which part of the picture Nexus cannot see.
+ */
+export interface AgentFinding {
+  agentCode: string;
+  agentName: string;
+  status: 'contributed' | 'abstained';
+  observation: string;
+  interpretation: string;
+  candidateAction: string;
+  confidence: number | null;
+  limitations: string;
+  citedEvidenceIds: string[];
+  conflicts: AgentConflict[];
+  createdAt: string;
+}
+
 export interface Recommendation {
   recommendationId: string;
   incidentId: string;
@@ -206,6 +230,7 @@ export interface Recommendation {
   evidenceSnapshotHash: string;
   evidence: EvidenceSummary[];
   approvalRequirements: ApprovalRequirement[];
+  agentFindings: AgentFinding[];
   generatedBy: {
     model: string;
     version: string;

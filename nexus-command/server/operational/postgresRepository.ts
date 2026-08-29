@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import type {
   ActorRef,
+  AgentFinding,
   ApprovalRequirement,
   Commitment,
   CommitmentTransitionCommand,
@@ -159,7 +160,7 @@ async function loadRecommendation(queryable: Queryable, recommendationId: string
   if (!result.rowCount) throw notFound('Recommendation', recommendationId);
   const row = result.rows[0];
 
-  const [evidenceResult, requirementResult] = await Promise.all([
+  const [evidenceResult, requirementResult, findingResult] = await Promise.all([
     queryable.query(
       `SELECT e.evidence_id, e.source_id, s.name AS source_name, e.observed_at, e.received_at,
               e.summary, e.quality_flags, e.normalized_attributes
@@ -178,6 +179,16 @@ async function loadRecommendation(queryable: Queryable, recommendationId: string
         WHERE ar.recommendation_id = $1
         ORDER BY ar.sequence, a.name`,
       [recommendationId],
+    ),
+    // Findings are bound to the same evidence snapshot the recommendation was composed from, so a
+    // stale desk assessment can never be shown beside a newer recommendation.
+    queryable.query(
+      `SELECT f.agent_code, f.status, f.observation, f.interpretation, f.candidate_action,
+              f.confidence, f.limitations, f.cited_evidence_ids, f.conflicts, f.created_at
+         FROM agent_findings f
+        WHERE f.incident_id = $1 AND f.evidence_snapshot_hash = $2
+        ORDER BY (f.agent_code = 'nexus') DESC, (f.status = 'contributed') DESC, f.agent_code`,
+      [row.incident_id, row.evidence_snapshot_hash],
     ),
   ]);
 
@@ -204,6 +215,20 @@ async function loadRecommendation(queryable: Queryable, recommendationId: string
     delegationAllowed: item.delegation_allowed,
   }));
 
+  const agentFindings: AgentFinding[] = findingResult.rows.map(item => ({
+    agentCode: item.agent_code,
+    agentName: String(item.agent_code).toUpperCase(),
+    status: item.status,
+    observation: item.observation,
+    interpretation: item.interpretation,
+    candidateAction: item.candidate_action,
+    confidence: item.confidence === null ? null : Number(item.confidence),
+    limitations: item.limitations,
+    citedEvidenceIds: item.cited_evidence_ids ?? [],
+    conflicts: Array.isArray(item.conflicts) ? item.conflicts : [],
+    createdAt: item.created_at.toISOString(),
+  }));
+
   return {
     recommendationId: row.recommendation_id,
     incidentId: row.incident_id,
@@ -220,6 +245,7 @@ async function loadRecommendation(queryable: Queryable, recommendationId: string
     evidenceSnapshotHash: row.evidence_snapshot_hash,
     evidence,
     approvalRequirements,
+    agentFindings,
     generatedBy: { model: row.generated_by_model, version: row.generated_by_model_version },
     expiresAt: row.expires_at.toISOString(),
     createdAt: row.created_at.toISOString(),

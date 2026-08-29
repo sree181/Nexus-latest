@@ -24,6 +24,7 @@ function recommendation(overrides: Partial<Recommendation> = {}): Recommendation
     evidenceSnapshotHash: 'evidence-snapshot-v3',
     evidence: [],
     approvalRequirements: [],
+    agentFindings: [],
     generatedBy: { model: 'policy', version: '1' },
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     createdAt: new Date().toISOString(),
