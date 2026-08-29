@@ -8,6 +8,8 @@ import type {
   PrincipalContext,
   Recommendation,
   RecommendationState,
+  ReferenceLayer,
+  ReferenceLayerDefinition,
   ScenarioPack,
   SystemStatus,
 } from './operationalTypes';
@@ -59,6 +61,12 @@ export const operationalApi = {
   },
   scenarioPacks(): Promise<ScenarioPack[]> {
     return request('/scenario-packs');
+  },
+  referenceLayers(): Promise<ReferenceLayerDefinition[]> {
+    return request('/reference-layers');
+  },
+  referenceLayer(code: string): Promise<ReferenceLayer> {
+    return request(`/reference-layers/${code}`);
   },
   openOperatingWindow(input: {
     packCode: string;

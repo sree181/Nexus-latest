@@ -8,6 +8,8 @@ import type {
   OperationalSnapshot,
   PrincipalContext,
   Recommendation,
+  ReferenceLayer,
+  ReferenceLayerDefinition,
   ScenarioPack,
   SourceHealth,
   SystemStatus,
@@ -154,7 +156,11 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<MapLibreMarker | null>(null);
   const observationMarkersRef = useRef<MapLibreMarker[]>([]);
+  const referenceCacheRef = useRef(new Map<string, ReferenceLayer>());
   const [mapReady, setMapReady] = useState(false);
+  const [referenceCatalog, setReferenceCatalog] = useState<ReferenceLayerDefinition[]>([]);
+  const [activeReference, setActiveReference] = useState<string[]>([]);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -267,6 +273,62 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
     return () => { cancelled = true; };
   }, [mapReady, observations]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void operationalApi.referenceLayers()
+      .then(catalog => { if (!cancelled) setReferenceCatalog(catalog); })
+      .catch(() => { if (!cancelled) setReferenceCatalog([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    let cancelled = false;
+
+    for (const definition of referenceCatalog) {
+      if (activeReference.includes(definition.code)) continue;
+      const sourceId = `reference-${definition.code}`;
+      for (const suffix of ['point', 'fill', 'line']) {
+        if (map.getLayer(`${sourceId}-${suffix}`)) map.removeLayer(`${sourceId}-${suffix}`);
+      }
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
+
+    void (async () => {
+      for (const code of activeReference) {
+        const definition = referenceCatalog.find(item => item.code === code);
+        const sourceId = `reference-${code}`;
+        if (!definition || map.getSource(sourceId)) continue;
+        try {
+          const layer = referenceCacheRef.current.get(code) ?? await operationalApi.referenceLayer(code);
+          referenceCacheRef.current.set(code, layer);
+          if (cancelled || map.getSource(sourceId)) continue;
+          map.addSource(sourceId, { type: 'geojson', data: layer.featureCollection as never });
+          if (definition.geometryType === 'point') {
+            map.addLayer({
+              id: `${sourceId}-point`, type: 'circle', source: sourceId,
+              paint: { 'circle-radius': 4, 'circle-color': '#54d6ff', 'circle-opacity': 0.75, 'circle-stroke-width': 1, 'circle-stroke-color': '#04222c' },
+            });
+          } else {
+            map.addLayer({
+              id: `${sourceId}-fill`, type: 'fill', source: sourceId,
+              paint: { 'fill-color': '#8fd6a0', 'fill-opacity': 0.35 },
+            });
+            map.addLayer({
+              id: `${sourceId}-line`, type: 'line', source: sourceId,
+              paint: { 'line-color': '#b7f0c4', 'line-width': 1, 'line-opacity': 0.7 },
+            });
+          }
+        } catch {
+          if (!cancelled) setReferenceError(`${definition.name} is unavailable from City GIS`);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [mapReady, activeReference, referenceCatalog]);
+
   const delayed = sources.filter(source => source.status !== 'healthy' || source.connectionStatus !== 'connected');
   const liveObservations = observations.filter(item => item.dataClassification !== 'reference' && !item.qualityFlags.includes('stale'));
   const closureCount = liveObservations.filter(item => item.sourceCode.includes('closure')).length;
@@ -290,6 +352,32 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
         <span><i className="legend-line" /> Official closure / detour</span>
         <span><i className="legend-dot legend-dot--capacity" /> Live transit / flow observation</span>
       </div>
+      {referenceCatalog.length > 0 && (
+        <div className="map-reference" role="group" aria-label="City reference layers">
+          <span>City asset reference</span>
+          {referenceCatalog.map(definition => {
+            const active = activeReference.includes(definition.code);
+            return (
+              <button
+                key={definition.code}
+                type="button"
+                className={active ? 'map-reference__toggle map-reference__toggle--on' : 'map-reference__toggle'}
+                aria-pressed={active}
+                title={definition.limitations}
+                onClick={() => {
+                  setReferenceError(null);
+                  setActiveReference(current => active
+                    ? current.filter(code => code !== definition.code)
+                    : [...current, definition.code]);
+                }}
+              >
+                {definition.name}
+              </button>
+            );
+          })}
+          {referenceError && <small>{referenceError}</small>}
+        </div>
+      )}
       {delayed.length > 0 && (
         <button className="source-warning" type="button" aria-label="Open source health">
           <strong>{delayed.length} source{delayed.length === 1 ? '' : 's'} require connection or attention</strong>

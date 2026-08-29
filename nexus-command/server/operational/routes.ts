@@ -9,6 +9,7 @@ import { ConnectorError } from '../connectors/types.js';
 import type { ConnectorService } from '../connectors/service.js';
 import { createGraphRouter } from '../graph/routes.js';
 import type { GraphRepository } from '../graph/repository.js';
+import { cityReferenceLayers, loadCityReferenceLayer, referenceLayerByCode } from '../reference/cityLayers.js';
 
 const decisionSchema = z.object({
   action: z.enum(['approve', 'reject', 'request_revision', 'delegate', 'escalate', 'acknowledge', 'withdraw']),
@@ -124,6 +125,21 @@ export function createOperationalRouter(repository: OperationalRepository, conne
       const connectorCode = z.string().regex(/^[a-z0-9-]{3,100}$/).parse(req.params.connectorCode);
       const statuses = await connectorService.run(connectorCode, eventId, 'manual', idempotencyKey(req));
       res.json({ data: statuses, requestId: req.requestId });
+    } catch (error) {
+      next(error instanceof ConnectorError ? asOperationalConnectorError(error) : error);
+    }
+  });
+
+  router.get('/reference-layers', requireScope('event:read'), (req, res) => {
+    res.json({ data: cityReferenceLayers, requestId: req.requestId });
+  });
+
+  router.get('/reference-layers/:layerCode', requireScope('event:read'), async (req, res, next) => {
+    try {
+      const definition = referenceLayerByCode(z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.layerCode));
+      if (!definition) throw new OperationalError(404, 'REFERENCE_LAYER_NOT_FOUND', 'No such City reference layer');
+      const layer = await loadCityReferenceLayer(definition);
+      res.json({ data: layer, requestId: req.requestId });
     } catch (error) {
       next(error instanceof ConnectorError ? asOperationalConnectorError(error) : error);
     }

@@ -53,6 +53,21 @@ export interface ScenarioPack {
   ruleCount: number;
 }
 
+export interface ReferenceLayerDefinition {
+  code: string;
+  name: string;
+  description: string;
+  geometryType: 'point' | 'polygon';
+  limitations: string;
+}
+
+export interface ReferenceLayer {
+  definition: ReferenceLayerDefinition;
+  featureCollection: { type: 'FeatureCollection'; features: unknown[] };
+  retrievedAt: string;
+  attribution: string;
+}
+
 export interface SourceHealth {
   sourceId: string;
   sourceCode: string;

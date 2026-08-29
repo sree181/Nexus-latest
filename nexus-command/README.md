@@ -135,7 +135,7 @@ Set these on **both** `nexus-api` and `nexus-worker` unless noted.
 
 Without a configured OIDC provider, `/api/health` can still pass and the UI will load, but every authenticated `/api/v1` route returns `OIDC_NOT_CONFIGURED` or `AUTHENTICATION_REQUIRED`. Auth0, Clerk, Keycloak, or another OIDC IdP must issue tokens with `nexus_principal_id`, `nexus_agency_id`, `nexus_agency_name`, `nexus_roles`, `nexus_scopes`, and `nexus_modes`.
 
-The worker pauses until PostgreSQL contains an active or monitoring `live` operational event. Migration `004_live_command_window.sql` inserts the named command owner, agencies, and the SEC Game Day window; `005_scenario_packs_and_detection.sql` binds that window to the `sec_gameday` scenario pack and seeds the detection rules. Neither inserts simulated incidents or recommendations. After ingestion, detection opens one incident per qualifying upstream record and one recommendation per incident. If nothing qualifies, the decision queue stays empty. Approval creates agency commitments only; it does not invent observations or control signals.
+The worker pauses until PostgreSQL contains an active or monitoring `live` operational event. Migration `004_live_command_window.sql` inserts the named command owner, agencies, and the SEC Game Day window; `005_scenario_packs_and_detection.sql` binds that window to the `sec_gameday` scenario pack and seeds the detection rules; `006_public_hazard_sources.sql` adds the free National Weather Service and USGS hazard sources to the packs that need them. None of them insert simulated incidents or recommendations. After ingestion, detection opens one incident per qualifying upstream record and one recommendation per incident. If nothing qualifies, the decision queue stays empty. Approval creates agency commitments only; it does not invent observations or control signals.
 
 ### Scenario packs
 
@@ -143,9 +143,9 @@ A pack binds an operating window to the feeds it reads, the agent desks it staff
 
 | Pack | Opens for | Reads |
 |---|---|---|
-| `road_closure` | Everyday mobility operations | City closures, ALDOT ALGO traveler events and travel times, licensed road flow, traffic counts |
-| `sec_gameday` | Event day | The everyday feeds plus transit, parking occupancy, and emergency access |
-| `severe_weather` | Watches, warnings, and hazard impacts | Weather alerts plus closures, ALGO, and transit |
+| `road_closure` | Everyday mobility operations | City closures, ALDOT ALGO traveler events and travel times, licensed road flow, traffic counts, NWS alerts, USGS stream gauges |
+| `sec_gameday` | Event day | The everyday feeds plus transit, parking occupancy, emergency access, and NWS alerts |
+| `severe_weather` | Watches, warnings, and hazard impacts | NWS alerts and USGS gauges and seismicity, plus closures, ALGO, and transit |
 | `cyber_incident` | Communications and OT disruption | Security alerts plus closures |
 
 A command lead opens and closes windows from the header, or through `GET /api/v1/scenario-packs`, `POST /api/v1/events`, and `POST /api/v1/events/:eventId/close`. Both write operations require the `event:manage` scope. Rules whose connector is not yet built stay dormant rather than producing anything.
@@ -176,8 +176,16 @@ A client demonstration still requires Auth0 (or another OIDC provider) and brows
 | Auburn Tiger Transit ETA Spot | Live vehicle/route observations | Public connector implemented; explicit production approval flag required |
 | ALDOT TDM `TDMPublic` | Auburn/Opelika station counts | Connected as **reference**, not live traffic flow |
 | TomTom Traffic Flow | Live road-flow observations | Connector implemented; API key required |
+| NOAA National Weather Service (`api.weather.gov`) | Lee County watches, warnings, advisories, and 12-hour gridded forecast | Public connector implemented; no key or agreement |
+| USGS stream gauges and earthquake catalog | Lee County stage and discharge, regional seismicity | Public connector implemented; provisional readings, no flood-stage determination |
 | Auburn University / FoPark parking occupancy | Restricted lot capacity | Partner interface and data-sharing agreement required |
 | Event Command emergency-access state | Restricted corridor status | Approved webhook contract and secret required |
+
+### City asset reference layers
+
+`GET /api/v1/reference-layers` lists the City of Auburn GIS asset geometry the map can overlay, and `GET /api/v1/reference-layers/:code` returns it as GeoJSON, cached server-side for 12 hours and clipped to the operating extent. Two layers ship: `traffic-signals` (93 signalised intersections) and `parking-spaces` (957 inventoried public spaces).
+
+These are asset inventories, not live status. Signals carry no state, timing plan, or preemption, and Nexus cannot control one. Parking spaces carry no occupancy. They are served as map reference and are never ingested as evidence, so nothing here can open an incident.
 
 Deploy the connector worker as a **separate Railway service** using the same image and shared `DATABASE_URL`. Override its start command with `npm run start:connector-worker`. Do not run the worker inside the API process; separate services provide independent scaling and failure isolation.
 

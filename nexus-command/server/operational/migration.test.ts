@@ -25,6 +25,7 @@ describe('operational, connector, and temporal graph migrations', () => {
       '003_temporal_operational_graph.sql',
       '004_live_command_window.sql',
       '005_scenario_packs_and_detection.sql',
+      '006_public_hazard_sources.sql',
     ];
     const migrations = await Promise.all(files.map(file => readFile(
       path.resolve(process.cwd(), 'server/operational/migrations', file),

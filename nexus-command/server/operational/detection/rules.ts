@@ -82,6 +82,14 @@ type Predicate = (evidence: DetectionEvidence, now: number) => RuleHit | null;
 export const FLOW_REVIEW_RATIO = 0.6;
 /** Probe speed below this confidence is not trustworthy enough to open an incident. */
 export const FLOW_MIN_CONFIDENCE = 0.7;
+/**
+ * Stage change over the gauge's reporting window that warrants checking flood-prone crossings.
+ * USGS publishes no flood stage for the Lee County creeks, so this is a movement threshold for
+ * when to ask a human, never a statement that a road is flooded.
+ */
+export const STREAM_RAPID_RISE_FT = 2;
+/** Below this magnitude a regional earthquake has no bearing on Auburn mobility. */
+export const QUAKE_REVIEW_MAGNITUDE = 4;
 
 function text(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
@@ -196,6 +204,38 @@ const predicates: Record<string, Predicate> = {
         text(attributes.headline) ? `: ${text(attributes.headline)}` : ''
       }`,
       severityOverride: text(attributes.severity) === 'Extreme' ? 'critical' : undefined,
+    };
+  },
+
+  'usgs-stream-rapid-rise': evidence => {
+    const attributes = evidence.attributes;
+    if (text(attributes.layer) !== 'stream_gauge') return null;
+    const rise = numeric(attributes.riseFt);
+    if (rise === null || rise < STREAM_RAPID_RISE_FT) return null;
+    const site = text(attributes.siteName) || text(attributes.siteCode);
+    const window = numeric(attributes.riseWindowHours) ?? 3;
+    return {
+      externalKey: `usgs-gauge:${text(attributes.siteCode)}`,
+      title: `Stream stage rising fast at ${site}`,
+      whatChanged: `USGS gauge ${text(attributes.siteCode)} rose ${rise} ft in ${window} hours to ${
+        text(attributes.gageHeightFt) || 'an unreported'
+      } ft. Readings are provisional and carry no flood-stage determination.`,
+    };
+  },
+
+  'usgs-earthquake-felt': evidence => {
+    const attributes = evidence.attributes;
+    if (text(attributes.layer) !== 'earthquake') return null;
+    const magnitude = numeric(attributes.magnitude);
+    if (magnitude === null || magnitude < QUAKE_REVIEW_MAGNITUDE) return null;
+    const distance = numeric(attributes.distanceKm);
+    return {
+      externalKey: `usgs-quake:${text(attributes.quakeId)}`,
+      title: `M ${magnitude} earthquake ${distance === null ? 'in the region' : `${distance} km from Auburn`}`,
+      whatChanged: `USGS recorded a magnitude ${magnitude} earthquake near ${
+        text(attributes.place) || 'the region'
+      }. Structural and bridge condition is not reported by this feed and must be inspected.`,
+      severityOverride: magnitude >= 5.5 ? 'critical' : undefined,
     };
   },
 

@@ -235,6 +235,92 @@ describe('detection rules', () => {
     expect(revised[0].evidenceHash).not.toBe(repeated[0].evidenceHash);
   });
 
+  it('opens a weather incident once per warning, not once per reissue', () => {
+    const weatherRule = rule({ ruleCode: 'nws-alert-active', connectorCode: 'nws-weather-alerts-v1', severity: 'high' });
+    const matches = evaluateRules([weatherRule], [
+      evidence({
+        evidenceId: 'issued',
+        connectorCode: 'nws-weather-alerts-v1',
+        observedAt: new Date(NOW - HOUR).toISOString(),
+        attributes: {
+          layer: 'weather_alert', alertId: 'KBMX.TO.A.0231.26', eventName: 'Tornado Watch',
+          headline: 'Tornado Watch until 6 PM CDT', severity: 'Severe', expiresAt: new Date(NOW + 3 * HOUR).toISOString(),
+        },
+      }),
+      evidence({
+        evidenceId: 'continued',
+        connectorCode: 'nws-weather-alerts-v1',
+        attributes: {
+          layer: 'weather_alert', alertId: 'KBMX.TO.A.0231.26', eventName: 'Tornado Watch',
+          headline: 'Tornado Watch remains in effect', severity: 'Severe', expiresAt: new Date(NOW + 3 * HOUR).toISOString(),
+        },
+      }),
+    ], NOW);
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].externalKey).toBe('nws-alert:KBMX.TO.A.0231.26');
+    expect(matches[0].whatChanged).toContain('remains in effect');
+  });
+
+  it('drops a weather product that has already expired', () => {
+    const weatherRule = rule({ ruleCode: 'nws-alert-active', connectorCode: 'nws-weather-alerts-v1' });
+    const matches = evaluateRules([weatherRule], [
+      evidence({
+        evidenceId: 'stale',
+        connectorCode: 'nws-weather-alerts-v1',
+        attributes: {
+          layer: 'weather_alert', alertId: 'KBMX.SV.W.0044.26', eventName: 'Severe Thunderstorm Warning',
+          severity: 'Severe', expiresAt: new Date(NOW - HOUR).toISOString(),
+        },
+      }),
+    ], NOW);
+    expect(matches).toEqual([]);
+  });
+
+  it('asks for a crossing inspection only when the gauge actually rose', () => {
+    const gaugeRule = rule({ ruleCode: 'usgs-stream-rapid-rise', connectorCode: 'usgs-natural-hazards-v1' });
+    const rising = evidence({
+      evidenceId: 'gauge-rise',
+      connectorCode: 'usgs-natural-hazards-v1',
+      attributes: {
+        layer: 'stream_gauge', siteCode: '02418760', siteName: 'CHEWACLA CREEK NR AUBURN',
+        gageHeightFt: 6.4, riseFt: 3.1, riseWindowHours: 3,
+      },
+    });
+    const falling = evidence({
+      evidenceId: 'gauge-fall',
+      connectorCode: 'usgs-natural-hazards-v1',
+      attributes: {
+        layer: 'stream_gauge', siteCode: '02418230', siteName: 'SOUGAHATCHEE CREEK NR LOACHAPOKA',
+        gageHeightFt: 1.73, riseFt: -0.27, riseWindowHours: 3,
+      },
+    });
+
+    const matches = evaluateRules([gaugeRule], [rising, falling], NOW);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].externalKey).toBe('usgs-gauge:02418760');
+    expect(matches[0].whatChanged).toContain('provisional');
+  });
+
+  it('ignores the small regional earthquakes that reach Auburn every month', () => {
+    const quakeRule = rule({ ruleCode: 'usgs-earthquake-felt', connectorCode: 'usgs-natural-hazards-v1' });
+    const minor = evidence({
+      evidenceId: 'quake-minor',
+      connectorCode: 'usgs-natural-hazards-v1',
+      attributes: { layer: 'earthquake', quakeId: 'se60123', magnitude: 2.4, place: 'Resaca, Georgia', distanceKm: 260 },
+    });
+    const significant = evidence({
+      evidenceId: 'quake-major',
+      connectorCode: 'usgs-natural-hazards-v1',
+      attributes: { layer: 'earthquake', quakeId: 'se60999', magnitude: 5.8, place: 'east Alabama', distanceKm: 140 },
+    });
+
+    const matches = evaluateRules([quakeRule], [minor, significant], NOW);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].externalKey).toBe('usgs-quake:se60999');
+    expect(matches[0].severity).toBe('critical');
+  });
+
   it('skips rules whose predicate is not implemented yet', () => {
     expect(hasPredicate('nws-alert-active')).toBe(true);
     expect(hasPredicate('rule-that-does-not-exist')).toBe(false);

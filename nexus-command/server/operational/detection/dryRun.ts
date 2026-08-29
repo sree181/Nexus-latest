@@ -7,10 +7,11 @@
 import { authoritativeConnectors } from '../../connectors/registry.js';
 import { evaluateRules, hasPredicate, type DetectionEvidence, type DetectionRuleDefinition, type Playbook, type Severity } from './rules.js';
 
+/** Mirrors the pack bindings seeded by the migrations. Keep both in step when a pack changes. */
 const PACK_CONNECTORS: Record<string, string[]> = {
-  road_closure: ['coa-road-closures-v1', 'aldot-algo-traffic-v1', 'tomtom-traffic-flow-v1', 'aldot-traffic-counts-v1'],
-  sec_gameday: ['coa-road-closures-v1', 'aldot-algo-traffic-v1', 'tomtom-traffic-flow-v1', 'auburn-eta-spot-v1', 'auburn-parking-occupancy-v1', 'auburn-emergency-access-v1'],
-  severe_weather: ['nws-weather-alerts-v1', 'coa-road-closures-v1', 'aldot-algo-traffic-v1', 'auburn-eta-spot-v1'],
+  road_closure: ['coa-road-closures-v1', 'aldot-algo-traffic-v1', 'tomtom-traffic-flow-v1', 'aldot-traffic-counts-v1', 'nws-weather-alerts-v1', 'usgs-natural-hazards-v1'],
+  sec_gameday: ['coa-road-closures-v1', 'aldot-algo-traffic-v1', 'tomtom-traffic-flow-v1', 'auburn-eta-spot-v1', 'auburn-parking-occupancy-v1', 'auburn-emergency-access-v1', 'nws-weather-alerts-v1'],
+  severe_weather: ['nws-weather-alerts-v1', 'usgs-natural-hazards-v1', 'coa-road-closures-v1', 'aldot-algo-traffic-v1', 'auburn-eta-spot-v1'],
   cyber_incident: ['nexus-siem-alerts-v1', 'coa-road-closures-v1'],
 };
 
@@ -21,6 +22,8 @@ const PACK_RULES: Record<string, Array<{ ruleCode: string; connectorCode: string
     { ruleCode: 'algo-corridor-congestion', connectorCode: 'aldot-algo-traffic-v1', severity: 'medium' },
     { ruleCode: 'city-restriction-in-effect', connectorCode: 'coa-road-closures-v1', severity: 'medium' },
     { ruleCode: 'tomtom-corridor-degraded', connectorCode: 'tomtom-traffic-flow-v1', severity: 'medium' },
+    { ruleCode: 'nws-alert-active', connectorCode: 'nws-weather-alerts-v1', severity: 'high' },
+    { ruleCode: 'usgs-stream-rapid-rise', connectorCode: 'usgs-natural-hazards-v1', severity: 'medium' },
   ],
   sec_gameday: [
     { ruleCode: 'algo-crash', connectorCode: 'aldot-algo-traffic-v1', severity: 'high' },
@@ -28,8 +31,13 @@ const PACK_RULES: Record<string, Array<{ ruleCode: string; connectorCode: string
     { ruleCode: 'algo-corridor-congestion', connectorCode: 'aldot-algo-traffic-v1', severity: 'medium' },
     { ruleCode: 'city-restriction-in-effect', connectorCode: 'coa-road-closures-v1', severity: 'medium' },
     { ruleCode: 'tomtom-corridor-degraded', connectorCode: 'tomtom-traffic-flow-v1', severity: 'medium' },
+    { ruleCode: 'nws-alert-active', connectorCode: 'nws-weather-alerts-v1', severity: 'critical' },
   ],
-  severe_weather: [{ ruleCode: 'nws-alert-active', connectorCode: 'nws-weather-alerts-v1', severity: 'high' }],
+  severe_weather: [
+    { ruleCode: 'nws-alert-active', connectorCode: 'nws-weather-alerts-v1', severity: 'high' },
+    { ruleCode: 'usgs-stream-rapid-rise', connectorCode: 'usgs-natural-hazards-v1', severity: 'high' },
+    { ruleCode: 'usgs-earthquake-felt', connectorCode: 'usgs-natural-hazards-v1', severity: 'high' },
+  ],
   cyber_incident: [{ ruleCode: 'siem-critical-alert', connectorCode: 'nexus-siem-alerts-v1', severity: 'high' }],
 };
 
