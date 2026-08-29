@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
     "db:migrate": "tsx server/operational/migrate.ts",
-    "connectors:smoke": "ETA_SPOT_PRODUCTION_APPROVED=true tsx server/connectors/smoke.ts"
+    "connectors:smoke": "ETA_SPOT_PRODUCTION_APPROVED=true tsx server/connectors/smoke.ts",
+    "detection:dry-run": "tsx server/operational/detection/dryRun.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

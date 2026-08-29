@@ -8,9 +8,11 @@ import type {
   OperationalSnapshot,
   PrincipalContext,
   Recommendation,
+  ScenarioPack,
   SourceHealth,
   SystemStatus,
 } from '../operationalTypes';
+import { NoOperatingWindowScreen, OperatingWindowChip, OperatingWindowDialog } from './OperatingWindow';
 
 type DecisionAction = 'approve' | 'reject' | 'request_revision' | 'escalate';
 
@@ -45,7 +47,17 @@ function StatusDot({ status }: { status: SourceHealth['status'] }) {
   return <span className={`status-dot status-dot--${status}`} aria-hidden="true" />;
 }
 
-function Header({ status, snapshot, principal }: { status: SystemStatus; snapshot: OperationalSnapshot; principal: PrincipalContext }) {
+function Header({
+  status, snapshot, principal, pack, canManage, onChangeWindow, onCloseWindow,
+}: {
+  status: SystemStatus;
+  snapshot: OperationalSnapshot;
+  principal: PrincipalContext;
+  pack: ScenarioPack | null;
+  canManage: boolean;
+  onChangeWindow: () => void;
+  onCloseWindow: () => void;
+}) {
   const isReview = status.database === 'review_repository';
   const event = snapshot.event;
   const connectedSources = snapshot.sources.filter(source => source.connectionStatus === 'connected').length;
@@ -60,11 +72,18 @@ function Header({ status, snapshot, principal }: { status: SystemStatus; snapsho
         <img src="/harbert-logo.jpg" alt="Auburn University Harbert College of Business" />
         <div>
           <strong>Nexus Coordinate</strong>
-          <span>SEC Game Day Mobility Command</span>
+          <span>{event.name}</span>
         </div>
       </div>
+      <OperatingWindowChip
+        event={event}
+        pack={pack}
+        canManage={canManage}
+        onChange={onChangeWindow}
+        onClose={onCloseWindow}
+      />
       <div className="header-field">
-        <span>Event phase</span>
+        <span>Phase</span>
         <strong>{titleCase(event.phase)}</strong>
       </div>
       <div className="header-field header-field--wide">
@@ -494,15 +513,35 @@ export function OperationalCommandCenter() {
   const [dialog, setDialog] = useState<DecisionDialogState | null>(null);
   const [mutationBusy, setMutationBusy] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [packs, setPacks] = useState<ScenarioPack[]>([]);
+  const [noActiveWindow, setNoActiveWindow] = useState(false);
+  const [windowDialogOpen, setWindowDialogOpen] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const [nextStatus, nextPrincipal, event] = await Promise.all([
-        operationalApi.status(), operationalApi.principal(), operationalApi.activeEvent(),
-      ]);
+      const [nextStatus, nextPrincipal] = await Promise.all([operationalApi.status(), operationalApi.principal()]);
+      setStatus(nextStatus);
+      setPrincipal(nextPrincipal);
+      operationalApi.scenarioPacks().then(setPacks).catch(() => setPacks([]));
+
+      let event;
+      try {
+        event = await operationalApi.activeEvent();
+      } catch (reason) {
+        if (reason instanceof OperationalApiError && reason.code === 'NO_ACTIVE_EVENT') {
+          setNoActiveWindow(true);
+          setSnapshot(null);
+          setError(null);
+          return;
+        }
+        throw reason;
+      }
+
       const nextSnapshot = await operationalApi.snapshot(event.eventId);
-      setStatus(nextStatus); setPrincipal(nextPrincipal); setSnapshot(nextSnapshot); setError(null);
+      setNoActiveWindow(false);
+      setSnapshot(nextSnapshot);
+      setError(null);
     } catch (reason) {
       if (reason instanceof OperationalApiError && (reason.status === 401 || reason.code === 'IDENTITY_CLAIMS_INCOMPLETE')) {
         window.location.assign('/');
@@ -548,13 +587,74 @@ export function OperationalCommandCenter() {
     }
   };
 
+  const canManageWindow = Boolean(principal?.scopes.includes('event:manage'));
+
+  const openWindow = async (input: { packCode: string; name: string; locationName: string }) => {
+    setMutationBusy(true); setMutationError(null);
+    try {
+      await operationalApi.openOperatingWindow(input);
+      setWindowDialogOpen(false);
+      await load();
+    } catch (reason) {
+      setMutationError(reason instanceof OperationalApiError ? reason.message : 'The operating window could not be opened.');
+    } finally {
+      setMutationBusy(false);
+    }
+  };
+
+  const closeWindow = async () => {
+    if (!snapshot) return;
+    const confirmed = window.confirm(
+      'Close this operating window? Detection stops, open incidents are closed, and pending recommendations expire.',
+    );
+    if (!confirmed) return;
+    try {
+      await operationalApi.closeOperatingWindow(snapshot.event.eventId);
+      await load();
+    } catch (reason) {
+      setError(reason instanceof OperationalApiError ? reason.message : 'The operating window could not be closed.');
+    }
+  };
+
+  const windowDialog = windowDialogOpen && (
+    <OperatingWindowDialog
+      packs={packs}
+      busy={mutationBusy}
+      error={mutationError}
+      onClose={() => { setWindowDialogOpen(false); setMutationError(null); }}
+      onOpen={input => void openWindow(input)}
+    />
+  );
+
   if (loading && !snapshot) return <LoadingScreen />;
+  if (noActiveWindow && !snapshot) {
+    return (
+      <>
+        <NoOperatingWindowScreen
+          canManage={canManageWindow}
+          onOpenWindow={() => setWindowDialogOpen(true)}
+          onRetry={() => void load()}
+        />
+        {windowDialog}
+      </>
+    );
+  }
   if (error && !snapshot) return <FailureScreen title="Operational services are not ready" message={error} onRetry={() => void load()} />;
   if (!status || !principal || !snapshot) return <FailureScreen title="No live event is available" message="A named operational event, persistent database, and agency identity are required." onRetry={() => void load()} />;
 
+  const activePack = packs.find(pack => pack.packCode === snapshot.event.scenarioPackCode) ?? null;
+
   return (
     <div className="command-shell">
-      <Header status={status} snapshot={snapshot} principal={principal} />
+      <Header
+        status={status}
+        snapshot={snapshot}
+        principal={principal}
+        pack={activePack}
+        canManage={canManageWindow}
+        onChangeWindow={() => { setMutationError(null); setWindowDialogOpen(true); }}
+        onCloseWindow={() => void closeWindow()}
+      />
       {status.database === 'review_repository' && <div className="review-banner">LOCAL REVIEW DATA · NO LIVE AGENCY SYSTEM IS CONNECTED OR CONTROLLED</div>}
       <main className="command-grid">
         <SituationBrief incident={primaryIncident} recommendation={primaryRecommendation} />
@@ -565,6 +665,7 @@ export function OperationalCommandCenter() {
       <CommitmentRail commitments={snapshot.commitments} onTransition={transitionCommitment} />
       {error && <button className="global-alert" type="button" onClick={() => setError(null)}>{error}<span>Dismiss</span></button>}
       {dialog && <DecisionDialog state={dialog} busy={mutationBusy} error={mutationError} onClose={() => setDialog(null)} onSubmit={submitDecision} />}
+      {windowDialog}
     </div>
   );
 }

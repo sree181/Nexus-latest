@@ -1,5 +1,15 @@
 export type OperationalMode = 'live' | 'training' | 'replay';
-export type EventPhase = 'readiness' | 'arrival' | 'ingress' | 'in_game' | 'egress' | 'after_action' | 'closed';
+export type EventPhase =
+  | 'readiness'
+  | 'arrival'
+  | 'ingress'
+  | 'in_game'
+  | 'egress'
+  | 'after_action'
+  | 'closed'
+  | 'steady_state'
+  | 'response'
+  | 'recovery';
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'informational';
 export type IncidentStatus = 'new' | 'triaged' | 'active' | 'monitoring' | 'resolved' | 'closed';
 export type SourceHealthStatus = 'healthy' | 'delayed' | 'unavailable' | 'unverified' | 'disabled';
@@ -43,8 +53,34 @@ export interface OperationalEvent {
   endsAt: string | null;
   locationName: string;
   commandOwner: ActorRef | null;
+  scenarioPackCode: string | null;
   version: number;
   updatedAt: string;
+}
+
+/**
+ * A scenario pack is the configuration that makes one operating window behave differently from
+ * another: which authoritative feeds are read, which agent desks are staffed, and which detection
+ * rules may open an incident. Game Day is one pack among several, not the built-in assumption.
+ */
+export interface ScenarioPack {
+  packCode: string;
+  name: string;
+  eventType: string;
+  description: string;
+  defaultPhase: EventPhase;
+  connectorCodes: string[];
+  agentCodes: string[];
+  ruleCount: number;
+}
+
+export interface OpenOperatingWindowCommand {
+  packCode: string;
+  name: string;
+  locationName: string;
+  mode: OperationalMode;
+  startsAt?: string;
+  endsAt?: string | null;
 }
 
 export interface SourceHealth {

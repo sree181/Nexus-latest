@@ -3,10 +3,12 @@ import type {
   CommitmentTransitionCommand,
   DecisionCommand,
   DecisionResult,
+  OpenOperatingWindowCommand,
   OperationalEvent,
   OperationalMode,
   PrincipalContext,
   Recommendation,
+  ScenarioPack,
   SystemStatus,
 } from './domain.js';
 import { hasDatabaseConfiguration } from './database.js';
@@ -31,7 +33,19 @@ class ConfigurationRequiredRepository implements OperationalRepository {
     throw new OperationalError(503, 'OPERATIONAL_STORAGE_NOT_CONFIGURED', 'Persistent operational storage is not configured');
   }
 
+  async scenarioPacks(): Promise<ScenarioPack[]> { return this.unavailable(); }
   async activeEvent(_mode: OperationalMode): Promise<OperationalEvent | null> { return this.unavailable(); }
+  async openOperatingWindow(
+    _command: OpenOperatingWindowCommand,
+    _principal: PrincipalContext,
+    _idempotencyKey: string,
+    _requestId: string,
+  ): Promise<OperationalEvent> { return this.unavailable(); }
+  async closeOperatingWindow(
+    _eventId: string,
+    _principal: PrincipalContext,
+    _requestId: string,
+  ): Promise<OperationalEvent> { return this.unavailable(); }
   async snapshot(_eventId: string, _principal: PrincipalContext): Promise<OperationalSnapshot> { return this.unavailable(); }
   async recommendation(_recommendationId: string, _principal: PrincipalContext): Promise<Recommendation> { return this.unavailable(); }
   async decide(

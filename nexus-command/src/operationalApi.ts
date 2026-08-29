@@ -8,6 +8,7 @@ import type {
   PrincipalContext,
   Recommendation,
   RecommendationState,
+  ScenarioPack,
   SystemStatus,
 } from './operationalTypes';
 
@@ -55,6 +56,24 @@ export const operationalApi = {
   },
   activeEvent(): Promise<OperationalEvent> {
     return request('/events/active?mode=live');
+  },
+  scenarioPacks(): Promise<ScenarioPack[]> {
+    return request('/scenario-packs');
+  },
+  openOperatingWindow(input: {
+    packCode: string;
+    name: string;
+    locationName: string;
+    endsAt?: string | null;
+  }): Promise<OperationalEvent> {
+    return request('/events', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify({ ...input, mode: 'live' }),
+    });
+  },
+  closeOperatingWindow(eventId: string): Promise<OperationalEvent> {
+    return request(`/events/${eventId}/close`, { method: 'POST' });
   },
   snapshot(eventId: string): Promise<OperationalSnapshot> {
     return request(`/events/${eventId}/snapshot`);

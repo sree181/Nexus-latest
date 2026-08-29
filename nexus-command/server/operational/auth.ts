@@ -21,6 +21,7 @@ const reviewPrincipal: PrincipalContext = {
   roles: ['event_mobility_lead', 'traffic_approver'],
   scopes: [
     'event:read',
+    'event:manage',
     'incident:read',
     'recommendation:read',
     'recommendation:approve',

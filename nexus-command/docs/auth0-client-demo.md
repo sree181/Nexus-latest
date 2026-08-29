@@ -59,6 +59,7 @@ Copy the **Client ID**. That is `NEXUS_OIDC_CLIENT_ID`.
   "nexus_roles": ["event_mobility_lead", "traffic_approver"],
   "nexus_scopes": [
     "event:read",
+    "event:manage",
     "incident:read",
     "recommendation:read",
     "recommendation:approve",
@@ -78,7 +79,7 @@ Copy the **Client ID**. That is `NEXUS_OIDC_CLIENT_ID`.
 }
 ```
 
-Those IDs match the live command-window seed in `004_live_command_window.sql`.
+Those IDs match the live command-window seed in `004_live_command_window.sql`. `event:manage` lets the command lead open and close operating windows; omit it for operators who should only decide within an existing window.
 
 ## 5. Add the access-token Action
 
@@ -125,5 +126,7 @@ Redeploy `nexus-api` after saving. The worker does not need OIDC variables.
 3. Sign in as the named operator.
 4. Confirm the header shows `LIVE OPERATIONS`, not `LOCAL REVIEW DATA`.
 5. Confirm City of Auburn closures is connected and shows recent observations, not `No observations`.
-6. Open the pending recommendation, cite the City records, then **Review & approve**. Approval should create traffic and parking commitments.
-7. Explain that parking occupancy, emergency-access, and TomTom stay gated until real partner credentials exist. Do not invent those feeds.
+6. Point at the **Scenario** field in the header. Explain that the pack decides which feeds are read, which agent desks are staffed, and which detection rules may open an incident, and that Game Day is one pack among several.
+7. Open a pending recommendation, cite the upstream record it names, then **Review & approve**. Approval creates the commitments the rule's playbook assigns.
+8. If the decision queue is empty, say so plainly: no authoritative record crossed a detection rule in the current window. Nexus does not manufacture an incident to fill the screen.
+9. Explain that parking occupancy, emergency-access, and TomTom stay gated until real partner credentials exist. Do not invent those feeds.

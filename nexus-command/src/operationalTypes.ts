@@ -22,19 +22,35 @@ export interface PrincipalContext {
   modes: OperationalMode[];
 }
 
+export type EventPhase =
+  | 'readiness' | 'arrival' | 'ingress' | 'in_game' | 'egress' | 'after_action' | 'closed'
+  | 'steady_state' | 'response' | 'recovery';
+
 export interface OperationalEvent {
   eventId: string;
   mode: OperationalMode;
   eventType: string;
   name: string;
-  phase: 'readiness' | 'arrival' | 'ingress' | 'in_game' | 'egress' | 'after_action' | 'closed';
+  phase: EventPhase;
   status: 'planned' | 'active' | 'monitoring' | 'closed' | 'cancelled';
   startsAt: string;
   endsAt: string | null;
   locationName: string;
   commandOwner: ActorRef | null;
+  scenarioPackCode: string | null;
   version: number;
   updatedAt: string;
+}
+
+export interface ScenarioPack {
+  packCode: string;
+  name: string;
+  eventType: string;
+  description: string;
+  defaultPhase: EventPhase;
+  connectorCodes: string[];
+  agentCodes: string[];
+  ruleCount: number;
 }
 
 export interface SourceHealth {

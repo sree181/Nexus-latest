@@ -9,9 +9,10 @@ import type {
   OperationalMode,
   PrincipalContext,
   Recommendation,
+  ScenarioPack,
   SystemStatus,
 } from './domain.js';
-import { conflict, notFound } from './errors.js';
+import { conflict, notFound, OperationalError } from './errors.js';
 import type { AuditRecord, EventStreamRecord, OperationalRepository, OperationalSnapshot } from './repository.js';
 import {
   applyRecommendationDecision,
@@ -127,6 +128,31 @@ export class ReviewOperationalRepository implements OperationalRepository {
     };
   }
 
+  async scenarioPacks(): Promise<ScenarioPack[]> {
+    return [
+      {
+        packCode: 'road_closure',
+        name: 'Everyday road and mobility operations',
+        eventType: 'road_closure',
+        description: 'Continuous weekday operating window for published restrictions and corridor flow.',
+        defaultPhase: 'steady_state',
+        connectorCodes: ['coa-road-closures-v1', 'aldot-algo-traffic-v1', 'tomtom-traffic-flow-v1'],
+        agentCodes: ['atlas', 'forge', 'nexus'],
+        ruleCount: 5,
+      },
+      {
+        packCode: 'sec_gameday',
+        name: 'SEC Game Day mobility operations',
+        eventType: 'sec_gameday',
+        description: 'Event-day window adding transit, parking, and public-safety desks.',
+        defaultPhase: 'readiness',
+        connectorCodes: ['coa-road-closures-v1', 'aldot-algo-traffic-v1', 'auburn-eta-spot-v1'],
+        agentCodes: ['atlas', 'aqua', 'sentinel', 'phoenix', 'echo', 'nexus'],
+        ruleCount: 5,
+      },
+    ];
+  }
+
   async activeEvent(mode: OperationalMode): Promise<OperationalEvent | null> {
     if (mode !== 'live') return null;
     return {
@@ -146,9 +172,26 @@ export class ReviewOperationalRepository implements OperationalRepository {
         agencyName: 'Auburn Event Mobility Command',
         roleCode: 'event_mobility_lead',
       },
+      scenarioPackCode: 'sec_gameday',
       version: 7,
       updatedAt: iso(-1),
     };
+  }
+
+  async openOperatingWindow(): Promise<OperationalEvent> {
+    throw new OperationalError(
+      503,
+      'OPERATIONAL_STORAGE_NOT_CONFIGURED',
+      'Opening an operating window requires persistent operational storage',
+    );
+  }
+
+  async closeOperatingWindow(): Promise<OperationalEvent> {
+    throw new OperationalError(
+      503,
+      'OPERATIONAL_STORAGE_NOT_CONFIGURED',
+      'Closing an operating window requires persistent operational storage',
+    );
   }
 
   async snapshot(eventId: string, _principal: PrincipalContext): Promise<OperationalSnapshot> {

@@ -82,7 +82,7 @@ export class CityRoadClosuresConnector implements AuthoritativeConnector {
       const observedAt = asIsoDate(property(properties, ['EditDate', 'last_edited_date', 'UpdatedAt', 'StartDate']), new Date());
       const startsAt = property(properties, ['starttime', 'StartTime']);
       const endsAt = property(properties, ['endtime', 'EndTime']);
-      const normalized = { layerId: layer.id, kind: layer.kind, road, description, startsAt, properties };
+      const normalized = { layerId: layer.id, kind: layer.kind, road, description, startsAt, endsAt, properties };
       return {
         sourceEventId: `${layer.kind}:${recordId}`,
         observedAt,

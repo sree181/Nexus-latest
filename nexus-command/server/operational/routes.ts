@@ -33,6 +33,15 @@ const commitmentTransitionSchema = z.object({
   evidenceIds: z.array(z.string().uuid()).max(50).optional(),
 });
 
+const openOperatingWindowSchema = z.object({
+  packCode: z.string().regex(/^[a-z0-9_]{3,60}$/),
+  name: z.string().min(3).max(200),
+  locationName: z.string().min(2).max(200),
+  mode: z.enum(['live', 'training', 'replay']).default('live'),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime().nullable().optional(),
+});
+
 function requirePrincipal(req: Request) {
   if (!req.principal) throw new OperationalError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required');
   return req.principal;
@@ -117,6 +126,41 @@ export function createOperationalRouter(repository: OperationalRepository, conne
       res.json({ data: statuses, requestId: req.requestId });
     } catch (error) {
       next(error instanceof ConnectorError ? asOperationalConnectorError(error) : error);
+    }
+  });
+
+  router.get('/scenario-packs', requireScope('event:read'), async (req, res, next) => {
+    try {
+      res.json({ data: await repository.scenarioPacks(), requestId: req.requestId });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/events', requireScope('event:manage'), async (req, res, next) => {
+    try {
+      const event = await repository.openOperatingWindow(
+        openOperatingWindowSchema.parse(req.body),
+        requirePrincipal(req),
+        idempotencyKey(req),
+        req.requestId || randomUUID(),
+      );
+      res.status(201).json({ data: event, requestId: req.requestId });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/events/:eventId/close', requireScope('event:manage'), async (req, res, next) => {
+    try {
+      const event = await repository.closeOperatingWindow(
+        z.string().uuid().parse(req.params.eventId),
+        requirePrincipal(req),
+        req.requestId || randomUUID(),
+      );
+      res.json({ data: event, requestId: req.requestId });
+    } catch (error) {
+      next(error);
     }
   });
 

@@ -1,4 +1,4 @@
-import { projectLiveAdvisory } from '../operational/evidenceAdvisory.js';
+import { runDetection } from '../operational/detection/service.js';
 import type { ConnectorService } from './service.js';
 import type { AuthoritativeConnector } from './types.js';
 
@@ -23,8 +23,8 @@ export async function ingestConfiguredFeeds(
   }
 
   try {
-    await projectLiveAdvisory(eventId);
+    await runDetection(eventId);
   } catch (error) {
-    console.error('[connectors] Advisory projection failed', error);
+    console.error('[connectors] Detection pass failed', error);
   }
 }

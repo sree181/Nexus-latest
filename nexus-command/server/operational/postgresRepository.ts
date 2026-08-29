@@ -10,11 +10,13 @@ import type {
   DecisionResult,
   EvidenceSummary,
   Incident,
+  OpenOperatingWindowCommand,
   OperationalEvent,
   OperationalMode,
   OperationalObservation,
   PrincipalContext,
   Recommendation,
+  ScenarioPack,
   SourceHealth,
   SystemStatus,
 } from './domain.js';
@@ -60,6 +62,7 @@ function mapEvent(row: Record<string, any>): OperationalEvent {
     endsAt: row.ends_at?.toISOString() ?? null,
     locationName: row.location_name,
     commandOwner: actorFromRow(row, 'owner'),
+    scenarioPackCode: row.scenario_pack_code ?? null,
     version: row.version,
     updatedAt: row.updated_at.toISOString(),
   };
@@ -224,6 +227,21 @@ async function loadRecommendation(queryable: Queryable, recommendationId: string
   };
 }
 
+async function loadEvent(queryable: Queryable, eventId: string): Promise<OperationalEvent> {
+  const result = await queryable.query(
+    `SELECT e.*, p.principal_id AS owner_principal_id, p.display_name AS owner_display_name,
+            a.agency_id AS owner_agency_id, a.name AS owner_agency_name,
+            'command_owner' AS owner_role_code
+       FROM operational_events e
+       LEFT JOIN principals p ON p.principal_id = e.command_owner_principal_id
+       LEFT JOIN agencies a ON a.agency_id = e.command_owner_agency_id
+      WHERE e.event_id = $1`,
+    [eventId],
+  );
+  if (!result.rowCount) throw notFound('Operational event', eventId);
+  return mapEvent(result.rows[0]);
+}
+
 async function loadCommitments(queryable: Queryable, eventId: string): Promise<Commitment[]> {
   const result = await queryable.query(
     `SELECT c.*, a.name AS owner_agency_name,
@@ -273,6 +291,153 @@ export class PostgresOperationalRepository implements OperationalRepository {
         message: 'Persistent operational storage is unavailable',
       };
     }
+  }
+
+  async scenarioPacks(): Promise<ScenarioPack[]> {
+    const result = await getDatabasePool().query(
+      `SELECT p.pack_code, p.name, p.event_type, p.description, p.default_phase,
+              p.connector_codes, p.agent_codes,
+              count(r.rule_code) FILTER (WHERE r.active)::int AS rule_count
+         FROM scenario_packs p
+         LEFT JOIN detection_rules r ON r.pack_code = p.pack_code
+        WHERE p.active
+        GROUP BY p.pack_code
+        ORDER BY p.name`,
+    );
+    return result.rows.map(row => ({
+      packCode: row.pack_code,
+      name: row.name,
+      eventType: row.event_type,
+      description: row.description,
+      defaultPhase: row.default_phase,
+      connectorCodes: row.connector_codes ?? [],
+      agentCodes: row.agent_codes ?? [],
+      ruleCount: row.rule_count ?? 0,
+    }));
+  }
+
+  async openOperatingWindow(
+    command: OpenOperatingWindowCommand,
+    principal: PrincipalContext,
+    idempotencyKey: string,
+    requestId: string,
+  ): Promise<OperationalEvent> {
+    if (!principal.scopes.includes('event:manage')) throw forbidden('Required scope: event:manage');
+    assertModeAllowed(command.mode, principal.modes);
+    const requestHash = hashRequest({ command });
+
+    return withTransaction(async client => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [idempotencyKey]);
+      const existing = await client.query(
+        `SELECT request_hash, response_body FROM idempotency_records
+          WHERE idempotency_key = $1 AND principal_id = $2 AND route_key = 'operating-window-open'`,
+        [idempotencyKey, principal.principalId],
+      );
+      if (existing.rowCount) {
+        if (existing.rows[0].request_hash !== requestHash) {
+          throw conflict('IDEMPOTENCY_KEY_REUSED', 'The idempotency key was already used for a different request');
+        }
+        return existing.rows[0].response_body as OperationalEvent;
+      }
+
+      const pack = await client.query(
+        'SELECT pack_code, event_type, default_phase FROM scenario_packs WHERE pack_code = $1 AND active',
+        [command.packCode],
+      );
+      if (!pack.rowCount) throw notFound('Scenario pack', command.packCode);
+
+      // One operating window per mode at a time. Two concurrent windows would split evidence,
+      // detection, and the decision queue across records that agencies cannot see together.
+      const open = await client.query(
+        `SELECT event_id, name FROM operational_events
+          WHERE mode = $1 AND status IN ('active', 'monitoring') LIMIT 1`,
+        [command.mode],
+      );
+      if (open.rowCount) {
+        throw conflict('OPERATING_WINDOW_ALREADY_OPEN', 'Close the current operating window before opening another', {
+          openEventId: open.rows[0].event_id,
+          openEventName: open.rows[0].name,
+        });
+      }
+
+      const inserted = await client.query(
+        `INSERT INTO operational_events (
+           mode, event_type, name, phase, status, starts_at, ends_at,
+           command_owner_principal_id, command_owner_agency_id, location_name, scenario_pack_code
+         ) VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10)
+         RETURNING event_id`,
+        [
+          command.mode,
+          pack.rows[0].event_type,
+          command.name,
+          pack.rows[0].default_phase,
+          command.startsAt ?? new Date().toISOString(),
+          command.endsAt ?? null,
+          principal.principalId,
+          principal.agencyId,
+          command.locationName,
+          pack.rows[0].pack_code,
+        ],
+      );
+      const eventId = inserted.rows[0].event_id;
+
+      await client.query(
+        `INSERT INTO event_participants (event_id, agency_id, operational_role, primary_contact_principal_id, status)
+         VALUES ($1,$2,'command_owner',$3,'active')
+         ON CONFLICT (event_id, agency_id, operational_role) DO NOTHING`,
+        [eventId, principal.agencyId, principal.principalId],
+      );
+
+      const event = await loadEvent(client, eventId);
+      await this.recordEventAudit(client, event, principal, 'event.operating_window_opened', requestId);
+      await client.query(
+        `INSERT INTO idempotency_records (
+           idempotency_key, principal_id, route_key, request_hash, response_status,
+           response_body, resource_type, resource_id, expires_at
+         ) VALUES ($1,$2,'operating-window-open',$3,201,$4,'operational_event',$5,now() + interval '24 hours')`,
+        [idempotencyKey, principal.principalId, requestHash, JSON.stringify(event), eventId],
+      );
+      return event;
+    });
+  }
+
+  async closeOperatingWindow(eventId: string, principal: PrincipalContext, requestId: string): Promise<OperationalEvent> {
+    if (!principal.scopes.includes('event:manage')) throw forbidden('Required scope: event:manage');
+
+    return withTransaction(async client => {
+      const current = await client.query(
+        'SELECT event_id, mode, status FROM operational_events WHERE event_id = $1 FOR UPDATE',
+        [eventId],
+      );
+      if (!current.rowCount) throw notFound('Operational event', eventId);
+      assertModeAllowed(current.rows[0].mode, principal.modes);
+      if (current.rows[0].status === 'closed') return loadEvent(client, eventId);
+
+      await client.query(
+        `UPDATE operational_events
+            SET status = 'closed', phase = 'after_action', ends_at = COALESCE(ends_at, now()),
+                version = version + 1, updated_at = now()
+          WHERE event_id = $1`,
+        [eventId],
+      );
+      // Detection stops for a closed window, so anything still open would sit unattended.
+      await client.query(
+        `UPDATE incidents SET status = 'closed', resolved_at = COALESCE(resolved_at, now()),
+                version = version + 1, updated_at = now()
+          WHERE event_id = $1 AND status IN ('new', 'triaged', 'active', 'monitoring')`,
+        [eventId],
+      );
+      await client.query(
+        `UPDATE recommendations SET state = 'expired', updated_at = now()
+          WHERE incident_id IN (SELECT incident_id FROM incidents WHERE event_id = $1)
+            AND state IN ('draft', 'awaiting_acknowledgement', 'awaiting_approval')`,
+        [eventId],
+      );
+
+      const event = await loadEvent(client, eventId);
+      await this.recordEventAudit(client, event, principal, 'event.operating_window_closed', requestId);
+      return event;
+    });
   }
 
   async activeEvent(mode: OperationalMode): Promise<OperationalEvent | null> {
@@ -662,6 +827,32 @@ export class PostgresOperationalRepository implements OperationalRepository {
       occurredAt: row.occurred_at.toISOString(),
       payload: row.payload,
     }));
+  }
+
+  private async recordEventAudit(
+    client: DatabaseClient,
+    event: OperationalEvent,
+    principal: PrincipalContext,
+    action: string,
+    requestId: string,
+  ): Promise<void> {
+    await client.query(
+      `INSERT INTO audit_events (
+         mode, event_id, actor_type, actor_id, actor_agency_id,
+         action, object_type, object_id, object_version, request_id, outcome, metadata
+       ) VALUES ($1,$2,'human',$3,$4,$5,'operational_event',$6,$7,$8,'accepted',$9)`,
+      [
+        event.mode, event.eventId, principal.principalId, principal.agencyId, action,
+        event.eventId, event.version, requestId,
+        JSON.stringify({ source: 'operational-api', scenarioPackCode: event.scenarioPackCode }),
+      ],
+    );
+    await client.query(
+      `INSERT INTO outbox_events (
+         event_type, aggregate_type, aggregate_id, aggregate_version, mode, payload
+       ) VALUES ($1,'operational_event',$2,$3,$4,$5)`,
+      [action, event.eventId, event.version, event.mode, JSON.stringify({ eventId: event.eventId, data: event })],
+    );
   }
 
   private async recordAuditAndOutbox(

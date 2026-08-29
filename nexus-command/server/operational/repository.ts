@@ -4,11 +4,13 @@ import type {
   DecisionCommand,
   DecisionResult,
   Incident,
+  OpenOperatingWindowCommand,
   OperationalEvent,
   OperationalMode,
   OperationalObservation,
   PrincipalContext,
   Recommendation,
+  ScenarioPack,
   SourceHealth,
   SystemStatus,
 } from './domain.js';
@@ -50,7 +52,19 @@ export interface AuditRecord {
 
 export interface OperationalRepository {
   systemStatus(): Promise<SystemStatus>;
+  scenarioPacks(): Promise<ScenarioPack[]>;
   activeEvent(mode: OperationalMode): Promise<OperationalEvent | null>;
+  openOperatingWindow(
+    command: OpenOperatingWindowCommand,
+    principal: PrincipalContext,
+    idempotencyKey: string,
+    requestId: string,
+  ): Promise<OperationalEvent>;
+  closeOperatingWindow(
+    eventId: string,
+    principal: PrincipalContext,
+    requestId: string,
+  ): Promise<OperationalEvent>;
   snapshot(eventId: string, principal: PrincipalContext): Promise<OperationalSnapshot>;
   recommendation(recommendationId: string, principal: PrincipalContext): Promise<Recommendation>;
   decide(
