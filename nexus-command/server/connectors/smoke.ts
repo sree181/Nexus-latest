@@ -1,9 +1,11 @@
 import { AldotTrafficCountsConnector } from './aldotTrafficCounts.js';
+import { AlgoTrafficConnector } from './algoTraffic.js';
 import { CityRoadClosuresConnector } from './cityRoadClosures.js';
 import { EtaSpotTransitConnector } from './etaSpotTransit.js';
 
 const connectors = [
   new CityRoadClosuresConnector(),
+  new AlgoTrafficConnector(),
   new AldotTrafficCountsConnector(),
   new EtaSpotTransitConnector(),
 ];

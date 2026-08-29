@@ -59,6 +59,7 @@ Open `http://localhost:4001`. The UI displays a persistent `LOCAL REVIEW DATA` b
 | `NEXUS_OIDC_JWKS_URI` | Yes | JWKS endpoint used to verify signatures |
 | `NEXUS_ALLOWED_ORIGINS` | Recommended | Comma-separated trusted browser origins; absent means same-origin only |
 | `ETA_SPOT_PRODUCTION_APPROVED=true` | Yes for transit | Confirms Auburn ETA Spot public data use was reviewed for the deployment |
+| `ALGO_TRAVELER_FEED=false` | Optional | Set only to disable the public ALGO traveler-map connector |
 | `NEXUS_ENABLE_PUBLIC_FEEDS=true` | Optional | Same transit enablement as the ETA Spot approval flag |
 | `TOMTOM_API_KEY` | Optional | Enables live TomTom road-flow observations; remains `configuration_required` when absent |
 | `CONNECTOR_WORKER_TICK_MS` | Optional | Worker wake interval; connector-specific cadence still controls idempotent run buckets |
@@ -149,6 +150,7 @@ A client demonstration still requires Auth0 (or another OIDC provider) and brows
 | Source | Operational classification | Status |
 |---|---|---|
 | City of Auburn `RoadClosuresPublic` ArcGIS service | Live closure/detour observations | Public connector implemented |
+| ALGO Traffic traveler map (`algotraffic.com/map`) | ALDOT events, I-85 travel times, Auburn message signs | Public connector implemented; Auburn operating box only; no cameras or ALEA alerts |
 | Auburn Tiger Transit ETA Spot | Live vehicle/route observations | Public connector implemented; explicit production approval flag required |
 | ALDOT TDM `TDMPublic` | Auburn/Opelika station counts | Connected as **reference**, not live traffic flow |
 | TomTom Traffic Flow | Live road-flow observations | Connector implemented; API key required |

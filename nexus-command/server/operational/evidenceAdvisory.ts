@@ -14,6 +14,7 @@ export interface AdvisoryEvidenceRow {
   summary: string;
   geometry_geojson: unknown;
   connector_code: string | null;
+  attributes?: Record<string, unknown> | null;
 }
 
 export function snapshotHash(evidenceIds: string[]): string {
@@ -44,35 +45,79 @@ export function representativePoint(geometry: unknown): Record<string, unknown> 
   return null;
 }
 
+function attributesOf(row: AdvisoryEvidenceRow): Record<string, unknown> {
+  return row.attributes && typeof row.attributes === 'object' ? row.attributes : {};
+}
+
 export function composeLiveAdvisory(rows: AdvisoryEvidenceRow[]) {
   const city = rows.filter(row => row.connector_code === 'coa-road-closures-v1');
   const transit = rows.filter(row => row.connector_code === 'auburn-eta-spot-v1');
-  const material = (city.length ? city : rows).slice(0, 8);
+  const algo = rows.filter(row => row.connector_code === 'aldot-algo-traffic-v1');
+  const algoEvents = algo.filter(row => ['Crash', 'Incident', 'Roadwork'].includes(String(attributesOf(row).eventType ?? '')));
+  const algoPriority = [...algoEvents].sort((left, right) => {
+    const rank = (row: AdvisoryEvidenceRow) => {
+      const type = String(attributesOf(row).eventType ?? '');
+      return type === 'Crash' ? 0 : type === 'Incident' ? 1 : 2;
+    };
+    return rank(left) - rank(right);
+  });
+  const primary = algoPriority[0];
+  const congestedTravel = algo.filter(row => attributesOf(row).layer === 'travel_time' && attributesOf(row).congestionLevel && attributesOf(row).congestionLevel !== 'Unaffected');
+  const material = (primary ? [primary, ...algo.filter(row => row !== primary), ...city] : city.length ? city : rows).slice(0, 8);
   const evidenceIds = material.map(row => row.evidence_id);
   const roads = [...new Set(city.map(row => row.summary.replace(/^(Block|Closure|Detour): /, '').split(' — ')[0]))].slice(0, 4);
+  const primaryType = primary ? String(attributesOf(primary).eventType) : '';
+  const severity = primaryType === 'Crash'
+    ? 'high'
+    : primaryType === 'Incident' || congestedTravel.length || city.length
+      ? 'medium'
+      : 'low';
+
+  let title = 'Authoritative mobility observations require command review';
+  let whatChanged = `${rows.length} authoritative observations were ingested for the live event.`;
+  let whyItMatters = 'Unreviewed published restrictions can conflict with ingress, remote-lot movement, or emergency-access assumptions during the Game Day window.';
+  let recommendedAction = 'Review the cited authoritative observations and record a named decision. No agency system is controlled from this approval.';
+
+  if (primary) {
+    const attrs = attributesOf(primary);
+    title = `ALGO ${String(attrs.eventType).toLowerCase()}: ${attrs.title ?? primary.summary}`;
+    whatChanged = `ALDOT ALGO traveler map published ${primaryType.toLowerCase()} ${attrs.subtitle ?? ''} ${attrs.description ? `— ${attrs.description}` : ''}`.replace(/\s+/g, ' ').trim();
+    whyItMatters = primaryType === 'Crash' || primaryType === 'Incident'
+      ? 'An official ALGO traveler incident on the I-85 / Auburn approach can delay ingress, remote-lot movement, or emergency access during the Game Day window.'
+      : 'ALDOT-published work on the Auburn approach can change lane availability and should be confirmed before agency handoffs.';
+    recommendedAction = 'Review the cited ALGO traveler record against City closures and I-85 travel times, then issue manual agency handoffs if the condition still affects Game Day movement. Do not change signal timing or close a road from Nexus.';
+  } else if (congestedTravel.length) {
+    title = 'ALGO reports congestion on the Auburn I-85 approach';
+    whatChanged = congestedTravel.map(row => row.summary).join(' ');
+    whyItMatters = 'Sustained ALGO travel-time congestion at Exit 51 can back into remote-lot and campus ingress.';
+    recommendedAction = 'Compare the ALGO travel-time reading with field conditions and notify traffic and parking supervisors. Do not change signal timing from Nexus.';
+  } else if (city.length) {
+    title = 'City-published mobility restrictions near Jordan-Hare';
+    whatChanged = `City of Auburn published ${city.length} current or recent road restriction record${city.length === 1 ? '' : 's'}${roads.length ? ` including ${roads.join(', ')}` : ''}.`;
+    recommendedAction = 'Review the cited City restriction records, confirm they remain in effect with Event Command, and issue manual agency handoffs for affected ingress and wayfinding. Do not change signal timing or close a road from Nexus.';
+  }
+
   return {
     evidenceIds,
     hash: snapshotHash(evidenceIds),
     cityCount: city.length,
     transitCount: transit.length,
+    algoCount: algo.length,
+    severity,
     geometry: representativePoint(material.find(row => row.geometry_geojson)?.geometry_geojson) ?? null,
-    title: city.length
-      ? 'City-published mobility restrictions near Jordan-Hare'
-      : 'Authoritative mobility observations require command review',
-    whatChanged: city.length
-      ? `City of Auburn published ${city.length} current or recent road restriction record${city.length === 1 ? '' : 's'}${roads.length ? ` including ${roads.join(', ')}` : ''}.`
-      : `${rows.length} authoritative observations were ingested for the live event.`,
-    whyItMatters: 'Unreviewed published restrictions can conflict with ingress, remote-lot movement, or emergency-access assumptions during the Game Day window.',
-    recommendedAction: city.length
-      ? 'Review the cited City restriction records, confirm they remain in effect with Event Command, and issue manual agency handoffs for affected ingress and wayfinding. Do not change signal timing or close a road from Nexus.'
-      : 'Review the cited authoritative observations and record a named decision. No agency system is controlled from this approval.',
+    shouldOpen: Boolean(primary || congestedTravel.length || city.length),
+    title,
+    whatChanged,
+    whyItMatters,
+    recommendedAction,
   };
 }
 
 export async function projectLiveAdvisory(eventId: string): Promise<void> {
   const pool = getDatabasePool();
   const evidence = await pool.query<AdvisoryEvidenceRow>(
-    `SELECT e.evidence_id, s.name AS source_name, e.summary, e.geometry_geojson, s.connector_code
+    `SELECT e.evidence_id, s.name AS source_name, e.summary, e.geometry_geojson, s.connector_code,
+            e.normalized_attributes AS attributes
        FROM evidence_events e
        JOIN sources s ON s.source_id = e.source_id
       WHERE e.event_id = $1
@@ -86,6 +131,10 @@ export async function projectLiveAdvisory(eventId: string): Promise<void> {
   }
 
   const advisory = composeLiveAdvisory(evidence.rows);
+  if (!advisory.shouldOpen) {
+    console.info('[advisory] Observations ingested but no ALGO incident, congestion, or City restriction crossed the open threshold');
+    return;
+  }
   await withTransaction(async client => {
     const existing = await client.query(
       'SELECT state, evidence_snapshot_hash FROM recommendations WHERE recommendation_id = $1',
@@ -101,21 +150,22 @@ export async function projectLiveAdvisory(eventId: string): Promise<void> {
          incident_id, event_id, mode, title, what_changed, why_it_matters, severity, status,
          command_owner_principal_id, command_owner_agency_id, location_geojson, affected_services,
          constraints, detected_at
-       ) VALUES ($1,$2,'live',$3,$4,$5,'high','active',$6,$7,$8::jsonb,$9,$10,now())
+       ) VALUES ($1,$2,'live',$3,$4,$5,$6,'active',$7,$8,$9::jsonb,$10,$11,now())
        ON CONFLICT (incident_id) DO UPDATE SET
          title = EXCLUDED.title,
          what_changed = EXCLUDED.what_changed,
          why_it_matters = EXCLUDED.why_it_matters,
+         severity = EXCLUDED.severity,
          location_geojson = EXCLUDED.location_geojson,
          affected_services = EXCLUDED.affected_services,
          status = 'active',
          version = incidents.version + 1,
          updated_at = now()`,
       [
-        LIVE_INCIDENT_ID, eventId, advisory.title, advisory.whatChanged, advisory.whyItMatters,
+        LIVE_INCIDENT_ID, eventId, advisory.title, advisory.whatChanged, advisory.whyItMatters, advisory.severity,
         COMMAND_PRINCIPAL_ID, COMMAND_AGENCY_ID,
         advisory.geometry ? JSON.stringify(advisory.geometry) : null,
-        advisory.cityCount ? ['traffic', 'ingress', 'event_command'] : ['event_command'],
+        advisory.algoCount || advisory.cityCount ? ['traffic', 'ingress', 'event_command'] : ['event_command'],
         ['Preserve emergency corridor', 'No traffic-signal control', 'Manual or deep-link agency handoff only'],
       ],
     );
@@ -141,7 +191,7 @@ export async function projectLiveAdvisory(eventId: string): Promise<void> {
          ) VALUES ($1,'evidence-advisory','Nexus evidence-bound advisory','live-public-v1',1,$2,$3,$4,$5,0.6200,$6)`,
         [
           LIVE_INCIDENT_ID, advisory.hash, advisory.whatChanged, advisory.whyItMatters, advisory.recommendedAction,
-          'This advisory is derived only from ingested authoritative records. It does not include parking occupancy, emergency-access state, or TomTom flow unless those connectors are configured.',
+          'This advisory is derived only from ingested ALGO traveler records and other authoritative observations. It does not include parking occupancy, emergency-access state, or licensed TomTom flow unless those connectors are configured.',
         ],
       );
     }
@@ -149,8 +199,8 @@ export async function projectLiveAdvisory(eventId: string): Promise<void> {
     const commitmentPlan = [
       {
         ownerAgencyId: TRAFFIC_AGENCY_ID,
-        requestedOutcome: 'Confirm the cited City restriction records with field operations and apply the pre-approved ingress adjustment if still in effect.',
-        verificationRule: 'Field confirmation or updated City RoadClosuresPublic record',
+        requestedOutcome: 'Confirm the cited ALGO traveler record and any City restriction with field operations. Apply the pre-approved ingress adjustment only if still in effect.',
+        verificationRule: 'Field confirmation or updated ALGO TrafficEvents / City RoadClosuresPublic record',
         dueAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
       },
       {
@@ -166,8 +216,9 @@ export async function projectLiveAdvisory(eventId: string): Promise<void> {
          recommendation_id, incident_id, mode, recommendation_version, state, priority,
          what_changed, why_it_matters, recommended_action, expected_effect, limitations, constraints,
          commitment_plan, evidence_snapshot_hash, generated_by_model, generated_by_model_version, expires_at
-       ) VALUES ($1,$2,'live',1,'awaiting_approval','high',$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,now() + interval '6 hours')
+       ) VALUES ($1,$2,'live',1,'awaiting_approval',$13,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,now() + interval '6 hours')
        ON CONFLICT (recommendation_id) DO UPDATE SET
+         priority = EXCLUDED.priority,
          what_changed = EXCLUDED.what_changed,
          why_it_matters = EXCLUDED.why_it_matters,
          recommended_action = EXCLUDED.recommended_action,
@@ -184,7 +235,7 @@ export async function projectLiveAdvisory(eventId: string): Promise<void> {
         'Derived only from ingested public authoritative records. Parking occupancy, emergency-access state, and licensed road-flow are absent unless their connectors are configured.',
         ['Preserve emergency corridor', 'Preserve ADA loading', 'No traffic-signal control', 'Manual agency handoff only'],
         JSON.stringify(commitmentPlan), advisory.hash,
-        'Nexus evidence-bound advisory', 'live-public-v1',
+        'Nexus evidence-bound advisory', 'live-public-v1', advisory.severity,
       ],
     );
 
@@ -211,5 +262,6 @@ export async function projectLiveAdvisory(eventId: string): Promise<void> {
     evidenceCount: advisory.evidenceIds.length,
     cityRecords: advisory.cityCount,
     transitRecords: advisory.transitCount,
+    algoRecords: advisory.algoCount,
   });
 }

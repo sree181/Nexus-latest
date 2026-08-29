@@ -28,6 +28,37 @@ describe('composeLiveAdvisory', () => {
     expect(advisory.geometry).toEqual({ type: 'Point', coordinates: [-85.50, 32.61] });
     expect(advisory.evidenceIds).toEqual(['11111111-1111-4111-8111-111111111111']);
   });
+
+  it('prefers an official ALGO traveler incident over City construction', () => {
+    const advisory = composeLiveAdvisory([
+      {
+        evidence_id: '11111111-1111-4111-8111-111111111111',
+        source_name: 'City of Auburn Road Closures',
+        summary: 'Closure: Donahue Drive — Construction',
+        geometry_geojson: null,
+        connector_code: 'coa-road-closures-v1',
+      },
+      {
+        evidence_id: '55555555-5555-4555-8555-555555555555',
+        source_name: 'ALGO Traffic (ALDOT traveler map)',
+        summary: 'Crash: Multi-vehicle crash — I-85 NB @ MP 51',
+        geometry_geojson: { type: 'Point', coordinates: [-85.5209, 32.5558] },
+        connector_code: 'aldot-algo-traffic-v1',
+        attributes: {
+          layer: 'traffic_event',
+          eventType: 'Crash',
+          title: 'Multi-vehicle crash',
+          subtitle: 'I-85 NB @ MP 51',
+          description: 'Right lane blocked.',
+        },
+      },
+    ]);
+    expect(advisory.shouldOpen).toBe(true);
+    expect(advisory.severity).toBe('high');
+    expect(advisory.title).toContain('ALGO crash');
+    expect(advisory.whatChanged).toContain('I-85 NB @ MP 51');
+    expect(advisory.evidenceIds[0]).toBe('55555555-5555-4555-8555-555555555555');
+  });
 });
 
 describe('representativePoint', () => {

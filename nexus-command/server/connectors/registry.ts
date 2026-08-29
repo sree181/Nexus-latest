@@ -1,4 +1,5 @@
 import { AldotTrafficCountsConnector } from './aldotTrafficCounts.js';
+import { AlgoTrafficConnector } from './algoTraffic.js';
 import { CityRoadClosuresConnector } from './cityRoadClosures.js';
 import { EtaSpotTransitConnector } from './etaSpotTransit.js';
 import { parkingOccupancyConnector, emergencyAccessConnector } from './partnerGated.js';
@@ -7,6 +8,7 @@ import type { AuthoritativeConnector } from './types.js';
 
 export const authoritativeConnectors: AuthoritativeConnector[] = [
   new CityRoadClosuresConnector(),
+  new AlgoTrafficConnector(),
   new EtaSpotTransitConnector(),
   new TomTomTrafficFlowConnector(),
   new AldotTrafficCountsConnector(),
