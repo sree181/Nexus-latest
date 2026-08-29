@@ -46,7 +46,9 @@ export class EtaSpotTransitConnector implements AuthoritativeConnector {
     requiredEnvironment: [],
   };
 
-  isConfigured(): boolean { return process.env.ETA_SPOT_PRODUCTION_APPROVED === 'true'; }
+  isConfigured(): boolean {
+    return process.env.ETA_SPOT_PRODUCTION_APPROVED === 'true' || process.env.NEXUS_ENABLE_PUBLIC_FEEDS === 'true';
+  }
 
   async fetch(context: ConnectorContext): Promise<ConnectorBatch> {
     const fetchedAt = new Date().toISOString();

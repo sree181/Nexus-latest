@@ -2,6 +2,7 @@ import { closeDatabasePool, hasDatabaseConfiguration } from '../operational/data
 import { PostgresOperationalRepository } from '../operational/postgresRepository.js';
 import { authoritativeConnectors } from './registry.js';
 import { PostgresConnectorStore } from './postgresStore.js';
+import { ingestConfiguredFeeds } from './scheduledIngest.js';
 import { ConnectorService } from './service.js';
 
 if (!hasDatabaseConfiguration()) {
@@ -26,20 +27,7 @@ async function tick(): Promise<void> {
     return;
   }
 
-  const due = configured.filter(connector => connector.definition.expectedCadenceSeconds !== null);
-  const results = await Promise.allSettled(due.map(async connector => {
-    const cadence = connector.definition.expectedCadenceSeconds ?? 60;
-    const bucket = Math.floor(Date.now() / (cadence * 1_000));
-    const requestId = `scheduled:${connector.definition.code}:${bucket}`;
-    await service.run(connector.definition.code, event.eventId, 'scheduled', requestId);
-    return connector.definition.code;
-  }));
-
-  for (const result of results) {
-    if (result.status === 'rejected') {
-      console.error('[connector-worker] Ingestion failed', result.reason);
-    }
-  }
+  await ingestConfiguredFeeds(service, configured, event.eventId);
 }
 
 async function loop(): Promise<void> {

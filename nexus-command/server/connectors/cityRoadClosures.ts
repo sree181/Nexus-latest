@@ -22,6 +22,18 @@ function property(properties: Record<string, unknown>, names: string[]): unknown
   return null;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+export function isPublishedCityRecord(startValue: unknown, endValue: unknown, now = Date.now()): boolean {
+  const start = startValue === null || startValue === undefined ? null : new Date(asIsoDate(startValue)).getTime();
+  const end = endValue === null || endValue === undefined ? null : new Date(asIsoDate(endValue)).getTime();
+  if (Number.isNaN(start ?? 0) && start !== null) return false;
+  if (start === null && end === null) return true;
+  if (end !== null && end < now - 120 * DAY_MS) return false;
+  if (start !== null && start > now + 45 * DAY_MS) return false;
+  return true;
+}
+
 export class CityRoadClosuresConnector implements AuthoritativeConnector {
   readonly definition: ConnectorDefinition = {
     code: 'coa-road-closures-v1',
@@ -53,15 +65,12 @@ export class CityRoadClosuresConnector implements AuthoritativeConnector {
         returnGeometry: 'true', outSR: '4326', f: 'geojson',
       });
       const collection = await fetchJson<FeatureCollection>(`${AUTHORITY_URI}/${layer.id}/query?${params}`, { signal: context.signal });
-      const now = Date.now();
-      const horizon = now + 24 * 60 * 60 * 1_000;
       const features = (collection.features ?? []).filter(feature => {
         const properties = feature.properties ?? {};
-        const startValue = property(properties, ['starttime', 'StartTime']);
-        const endValue = property(properties, ['endtime', 'EndTime']);
-        const start = startValue === null ? null : new Date(asIsoDate(startValue)).getTime();
-        const end = endValue === null ? null : new Date(asIsoDate(endValue)).getTime();
-        return (start === null || start <= horizon) && (end === null || end >= now);
+        return isPublishedCityRecord(
+          property(properties, ['starttime', 'StartTime']),
+          property(properties, ['endtime', 'EndTime']),
+        );
       });
       return { ...layer, features };
     }));

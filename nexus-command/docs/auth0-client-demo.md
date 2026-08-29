@@ -2,12 +2,13 @@
 
 This is the identity path for a **live operational** Railway demo. Do not enable review authentication on Railway. Review mode is local-only and is labeled `LOCAL REVIEW DATA`.
 
-The command center will not invent incidents or recommendations. After sign-in you should see:
+The command center will not invent incidents or recommendations. After sign-in and the first successful public-feed ingest you should see:
 
 - `LIVE OPERATIONS`
 - Active event `SEC Game Day Mobility Operations`
-- City of Auburn road closures as a connected public source
-- Empty situation and decision panes until verified evidence crosses an approved threshold
+- City of Auburn road closures as a connected public source with published restriction records
+- One evidence-bound incident and `awaiting_approval` recommendation derived from those records
+- Tiger Transit ETA Spot connected only after `ETA_SPOT_PRODUCTION_APPROVED=true` or `NEXUS_ENABLE_PUBLIC_FEEDS=true` is set on `nexus-api` and `nexus-worker`
 - Parking, emergency-access, and TomTom remaining not connected until partner credentials exist
 
 ## 1. Create the Auth0 tenant
@@ -123,5 +124,6 @@ Redeploy `nexus-api` after saving. The worker does not need OIDC variables.
 2. Click **Sign in to live command**.
 3. Sign in as the named operator.
 4. Confirm the header shows `LIVE OPERATIONS`, not `LOCAL REVIEW DATA`.
-5. Confirm City of Auburn closures is connected or refreshing.
-6. Explain empty decision queue as the production rule: Nexus does not invent a recommendation when no evidence-bound advisory has been authorized.
+5. Confirm City of Auburn closures is connected and shows recent observations, not `No observations`.
+6. Open the pending recommendation, cite the City records, then **Review & approve**. Approval should create traffic and parking commitments.
+7. Explain that parking occupancy, emergency-access, and TomTom stay gated until real partner credentials exist. Do not invent those feeds.

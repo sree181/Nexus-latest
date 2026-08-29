@@ -59,6 +59,7 @@ Open `http://localhost:4001`. The UI displays a persistent `LOCAL REVIEW DATA` b
 | `NEXUS_OIDC_JWKS_URI` | Yes | JWKS endpoint used to verify signatures |
 | `NEXUS_ALLOWED_ORIGINS` | Recommended | Comma-separated trusted browser origins; absent means same-origin only |
 | `ETA_SPOT_PRODUCTION_APPROVED=true` | Yes for transit | Confirms Auburn ETA Spot public data use was reviewed for the deployment |
+| `NEXUS_ENABLE_PUBLIC_FEEDS=true` | Optional | Same transit enablement as the ETA Spot approval flag |
 | `TOMTOM_API_KEY` | Optional | Enables live TomTom road-flow observations; remains `configuration_required` when absent |
 | `CONNECTOR_WORKER_TICK_MS` | Optional | Worker wake interval; connector-specific cadence still controls idempotent run buckets |
 | `CONNECTOR_RUN_TIMEOUT_MS` | Optional | Overall connector-run deadline; defaults to 65 seconds |
@@ -120,7 +121,8 @@ Set these on **both** `nexus-api` and `nexus-worker` unless noted.
 | `NEXUS_OIDC_JWKS_URI` | API | JWKS URL |
 | `NEXUS_OIDC_CLIENT_ID` | API | Public SPA client ID used by the browser sign-in |
 | `NEXUS_ALLOWED_ORIGINS` | API | Public Railway URL, for example `https://nexus-api-production.up.railway.app` |
-| `ETA_SPOT_PRODUCTION_APPROVED` | API + worker | `true` only after Auburn transit use is reviewed |
+| `ETA_SPOT_PRODUCTION_APPROVED` | API + worker | `true` to ingest Tiger Transit ETA Spot public vehicle locations |
+| `NEXUS_ENABLE_PUBLIC_FEEDS` | API + worker | Optional alias that also enables ETA Spot |
 | `TOMTOM_API_KEY` | API + worker | Optional; omit until a production key exists |
 | `CONNECTOR_WORKER_TICK_MS` | Worker | `15000` |
 | `CONNECTOR_RUN_TIMEOUT_MS` | Worker | `65000` |
@@ -129,7 +131,7 @@ Set these on **both** `nexus-api` and `nexus-worker` unless noted.
 
 Without a configured OIDC provider, `/api/health` can still pass and the UI will load, but every authenticated `/api/v1` route returns `OIDC_NOT_CONFIGURED` or `AUTHENTICATION_REQUIRED`. Auth0, Clerk, Keycloak, or another OIDC IdP must issue tokens with `nexus_principal_id`, `nexus_agency_id`, `nexus_agency_name`, `nexus_roles`, `nexus_scopes`, and `nexus_modes`.
 
-The worker pauses until PostgreSQL contains an active or monitoring `live` operational event. Migration `004_live_command_window.sql` inserts the named command owner, agencies, and the SEC Game Day live event. It does not insert simulated incidents or recommendations.
+The worker pauses until PostgreSQL contains an active or monitoring `live` operational event. Migration `004_live_command_window.sql` inserts the named command owner, agencies, and the SEC Game Day live event. It does not insert simulated incidents or recommendations. After City of Auburn (and any other configured public feed) records are ingested, Nexus opens one evidence-bound recommendation that a named operator can approve. Approval creates agency commitments only; it does not invent observations or control signals.
 
 A client demonstration still requires Auth0 (or another OIDC provider) and browser sign-in. Follow `docs/auth0-client-demo.md`.
 
