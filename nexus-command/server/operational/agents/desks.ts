@@ -219,9 +219,10 @@ const phoenix: AgentDesk = {
 
     const accessConnected = context.liveConnectors.includes('auburn-emergency-access-v1');
     const restrictions = visible.filter(item => text(item.attributes.kind) !== '');
+    // A contributing desk must cite evidence. Without a published restriction there is nothing
+    // PHOENIX is allowed to name, so it stays silent rather than asserting from the constraint alone.
+    if (!restrictions.length) return null;
 
-    // The corridor is named as a constraint on the action while its actual state is unobservable.
-    // Saying so is the whole value of this desk today.
     const conflicts: DeskConflict[] = accessConnected ? [] : [{
       withAgentCode: context.match.rule.agentCode,
       concern: 'The recommended action is constrained to preserve the emergency corridor, but Nexus cannot verify the corridor is clear.',

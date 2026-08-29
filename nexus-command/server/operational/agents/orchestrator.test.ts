@@ -169,6 +169,24 @@ describe('composition', () => {
     expect(nexus.observation).toMatch(/No staffed desk could evaluate/);
   });
 
+  it('keeps PHOENIX silent when the corridor is constrained but no permitted evidence exists to cite', () => {
+    const composition = composeDeskFindings({
+      staffedAgentCodes: GAMEDAY_DESKS,
+      match: match(),
+      snapshot: [
+        evidence({
+          evidenceId: '00000000-0000-4000-8000-000000000021',
+          connectorCode: 'aldot-algo-traffic-v1',
+          attributes: { layer: 'traffic_event', eventType: 'Crash' },
+        }),
+      ],
+      liveConnectors: ['aldot-algo-traffic-v1'],
+    });
+    const phoenix = composition.findings.find(finding => finding.agentCode === 'phoenix')!;
+    expect(phoenix.status).toBe('abstained');
+    expect(phoenix.citedEvidenceIds).toEqual([]);
+  });
+
   it('has PHOENIX flag an emergency-corridor constraint it cannot verify', () => {
     const composition = composeDeskFindings({
       staffedAgentCodes: GAMEDAY_DESKS,

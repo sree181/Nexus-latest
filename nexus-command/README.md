@@ -8,8 +8,8 @@ An operating window runs under a **scenario pack**, so the same platform serves 
 
 1. Authorized connectors normalize real traffic, parking, transit, closure, and emergency-access observations into `evidence_events`.
 2. Detection evaluates the active scenario pack's rules against that evidence and opens one `incident` per qualifying upstream record, keyed by its connector and upstream identity. Quiet periods open nothing.
-3. Each incident carries an evidence-bound `agent_finding` and a versioned `recommendation` built from the rule's playbook.
-4. Nexus shows the exact recommendation version, material evidence, known limitations, constraints, approval authorities, and expiry.
+3. Every staffed agent desk reviews the same evidence snapshot. A desk that cannot evaluate the incident is recorded as abstained, not as agreeing. NEXUS composes those findings without inventing a different action than the playbook.
+4. Nexus shows the recommendation, which desks contributed or stayed silent, any dissent, material evidence, known limitations, constraints, approval authorities, and expiry.
 5. A named human approver accepts, rejects, revises, delegates, or escalates the recommendation.
 6. Approval creates accountable `commitments`; it does not execute an agency action.
 7. Agencies acknowledge, approve, execute, and verify commitments through guarded state transitions.
@@ -150,6 +150,10 @@ A pack binds an operating window to the feeds it reads, the agent desks it staff
 | `cyber_incident` | Communications and OT disruption | Security alerts plus closures |
 
 A command lead opens and closes windows from the header, or through `GET /api/v1/scenario-packs`, `POST /api/v1/events`, and `POST /api/v1/events/:eventId/close`. Both write operations require the `event:manage` scope. Rules whose connector is not yet built stay dormant rather than producing anything.
+
+### Agent desks
+
+ATLAS, FORGE, AQUA, SENTINEL, PHOENIX, and ECHO each declare the only connectors they may read. A contributing desk must cite evidence IDs. A staffed desk with no permitted feed, or with nothing that bears on the incident, is recorded as `abstained` and named on the decision card. NEXUS composes those findings; it does not author a different action than the playbook.
 
 To see which rules would fire against the live feeds without writing to the database:
 

@@ -179,7 +179,19 @@ describe('detection projection', () => {
       }
     }
     expect(await countRows('approval_requirements')).toBe(2);
-    expect(await countRows('agent_findings')).toBe(2);
+    const findings = await database.query<{ agent_code: string; status: string; cited_evidence_ids: string[] }>(
+      'SELECT agent_code, status, cited_evidence_ids FROM agent_findings',
+    );
+    // One finding per staffed domain desk plus NEXUS, for each incident.
+    expect(findings.rows.length).toBeGreaterThan(2);
+    expect(findings.rows.filter(row => row.agent_code === 'nexus').length).toBe(2);
+    expect(findings.rows.some(row => row.agent_code === 'atlas' && row.status === 'contributed')).toBe(true);
+    expect(findings.rows.some(row => row.agent_code === 'aqua' && row.status === 'abstained')).toBe(true);
+    for (const row of findings.rows) {
+      if (row.status === 'contributed' && row.agent_code !== 'nexus') {
+        expect(row.cited_evidence_ids.length, `${row.agent_code} contributed without citing`).toBeGreaterThan(0);
+      }
+    }
   }, TIMEOUT_MS);
 
   it('evaluates a long-standing restriction that the connector still confirms upstream', async () => {
@@ -223,7 +235,13 @@ describe('detection projection', () => {
     expect(second.incidentsUpdated).toBe(1);
     expect(await countRows('incidents')).toBe(1);
     expect(await countRows('recommendations')).toBe(1);
-    expect(await countRows('agent_findings')).toBe(1);
+    expect(await countRows('agent_findings')).toBeGreaterThan(1);
+    const desks = await database.query<{ agent_code: string }>(
+      'SELECT DISTINCT agent_code FROM agent_findings',
+    );
+    expect(desks.rows.map(row => row.agent_code).sort()).toEqual(
+      ['aqua', 'atlas', 'echo', 'nexus', 'phoenix', 'sentinel'],
+    );
   }, TIMEOUT_MS);
 
   it('resolves an incident when the upstream record clears but the feed is still reporting', async () => {

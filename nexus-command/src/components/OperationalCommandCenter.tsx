@@ -6,6 +6,7 @@ import type {
   Incident,
   OperationalObservation,
   OperationalSnapshot,
+  AgentFinding,
   PrincipalContext,
   Recommendation,
   ReferenceLayer,
@@ -402,6 +403,43 @@ function ApprovalProgress({ recommendation }: { recommendation: Recommendation }
   );
 }
 
+function DeskReview({ findings }: { findings: AgentFinding[] }) {
+  if (!findings.length) return null;
+  const nexus = findings.find(finding => finding.agentCode === 'nexus');
+  const desks = findings.filter(finding => finding.agentCode !== 'nexus');
+  return (
+    <div className="decision-block decision-block--desks">
+      <span>Agent desks</span>
+      {nexus && (
+        <p className="desk-composition">
+          {nexus.observation} {nexus.interpretation}
+        </p>
+      )}
+      {nexus?.limitations && <p className="desk-composition__limit">{nexus.limitations}</p>}
+      <div className="desk-chips" role="list">
+        {desks.map(finding => (
+          <article
+            key={finding.agentCode}
+            className={`desk-chip desk-chip--${finding.status}${finding.conflicts.length ? ' desk-chip--dissent' : ''}`}
+            role="listitem"
+          >
+            <header>
+              <strong>{finding.agentName}</strong>
+              <span>{finding.status === 'contributed' ? 'Contributed' : 'No evidence'}</span>
+            </header>
+            <p>{finding.status === 'contributed' ? finding.interpretation : finding.observation}</p>
+            {finding.conflicts.map(conflict => (
+              <small key={`${conflict.withAgentCode}:${conflict.concern}`}>
+                Disagrees with {conflict.withAgentCode.toUpperCase()}: {conflict.concern}
+              </small>
+            ))}
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DecisionQueue({ recommendation, onReview }: { recommendation: Recommendation | null; onReview: (action: DecisionAction) => void }) {
   if (!recommendation) {
     return (
@@ -433,6 +471,7 @@ function DecisionQueue({ recommendation, onReview }: { recommendation: Recommend
           <span>AI-assisted recommendation</span>
           <p>{recommendation.recommendedAction}</p>
         </div>
+        <DeskReview findings={recommendation.agentFindings ?? []} />
         <div className="decision-block">
           <span>Expected effect</span>
           <p>{recommendation.expectedEffect}</p>

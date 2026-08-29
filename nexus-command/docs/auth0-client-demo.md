@@ -127,6 +127,6 @@ Redeploy `nexus-api` after saving. The worker does not need OIDC variables.
 4. Confirm the header shows `LIVE OPERATIONS`, not `LOCAL REVIEW DATA`.
 5. Confirm City of Auburn closures is connected and shows recent observations, not `No observations`.
 6. Point at the **Scenario** field in the header. Explain that the pack decides which feeds are read, which agent desks are staffed, and which detection rules may open an incident, and that Game Day is one pack among several.
-7. Open a pending recommendation, cite the upstream record it names, then **Review & approve**. Approval creates the commitments the rule's playbook assigns.
+7. Open a pending recommendation. Point at the agent-desk chips: which desks contributed, which stayed silent because they had no feed, and any named dissent. Then cite the upstream record and **Review & approve**. Approval creates the commitments the rule's playbook assigns.
 8. If the decision queue is empty, say so plainly: no authoritative record crossed a detection rule in the current window. Nexus does not manufacture an incident to fill the screen.
 9. Explain that parking occupancy, emergency-access, and TomTom stay gated until real partner credentials exist. Do not invent those feeds.
