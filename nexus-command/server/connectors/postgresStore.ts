@@ -142,6 +142,12 @@ export class PostgresConnectorStore implements ConnectorStore {
             [run.sourceId, observation.sourceEventId],
           );
           if (existing.rowCount && existing.rows[0].content_hash === observation.contentHash) {
+            // Content is unchanged, but the record is still published upstream. Recording that
+            // confirmation is what lets detection tell "still in force" from "withdrawn".
+            await client.query(
+              'UPDATE evidence_events SET received_at = now(), connector_run_id = $2 WHERE evidence_id = $1',
+              [existing.rows[0].evidence_id, run.runId],
+            );
             duplicateCount += 1;
             continue;
           }

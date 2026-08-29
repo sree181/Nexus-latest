@@ -12,7 +12,12 @@ import {
 
 const MODEL_NAME = 'Nexus evidence-bound detection';
 const MODEL_VERSION = 'detection-v1';
-const EVIDENCE_WINDOW_HOURS = 6;
+/**
+ * How recently a connector must have confirmed a record is still published upstream. This is
+ * deliberately not the upstream `observed_at`: a City closure last edited in April can still be
+ * in force today, while a crash withdrawn ten minutes ago must stop counting.
+ */
+const CONFIRMED_WITHIN_HOURS = 6;
 const OPEN_STATES = ['draft', 'awaiting_acknowledgement', 'awaiting_approval'];
 const OPEN_INCIDENT_STATES = ['new', 'triaged', 'active', 'monitoring'];
 
@@ -416,10 +421,10 @@ export async function runDetection(eventId: string, store: DetectionStore = data
        JOIN sources s ON s.source_id = e.source_id
       WHERE e.event_id = $1
         AND s.connector_code = ANY($2::text[])
-        AND e.observed_at > now() - ($3 || ' hours')::interval
+        AND e.received_at > now() - ($3 || ' hours')::interval
       ORDER BY e.observed_at DESC
       LIMIT 800`,
-    [eventId, pack.connector_codes, String(EVIDENCE_WINDOW_HOURS)],
+    [eventId, pack.connector_codes, String(CONFIRMED_WITHIN_HOURS)],
   );
   const evidence = evidenceResult.rows.map(toDetectionEvidence);
   summary.evidenceConsidered = evidence.length;

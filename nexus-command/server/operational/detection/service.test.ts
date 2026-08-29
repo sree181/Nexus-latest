@@ -84,20 +84,26 @@ async function upsertEvidence(
   summary: string,
   attributes: Record<string, unknown>,
   observedAtOffsetMinutes = -5,
+  receivedAtOffsetMinutes = -1,
 ): Promise<void> {
   const contentHash = createHash('sha256').update(JSON.stringify(attributes)).digest('hex');
   await database.query(
     `INSERT INTO evidence_events (
        evidence_id, event_id, source_id, source_event_id, schema_version, observed_at, received_at,
        summary, normalized_attributes, content_hash, quality_flags
-     ) VALUES ($1,$2,$3,$4,'test-v1', now() + ($5 || ' minutes')::interval, now(), $6, $7::jsonb, $8, ARRAY[]::text[])
+     ) VALUES ($1,$2,$3,$4,'test-v1', now() + ($5 || ' minutes')::interval,
+               now() + ($9 || ' minutes')::interval, $6, $7::jsonb, $8, ARRAY[]::text[])
      ON CONFLICT (source_id, source_event_id) DO UPDATE SET
        summary = EXCLUDED.summary,
        normalized_attributes = EXCLUDED.normalized_attributes,
        content_hash = EXCLUDED.content_hash,
        observed_at = EXCLUDED.observed_at,
+       received_at = EXCLUDED.received_at,
        version = evidence_events.version + 1`,
-    [evidenceId, EVENT_ID, sourceId, sourceEventId, String(observedAtOffsetMinutes), summary, JSON.stringify(attributes), contentHash],
+    [
+      evidenceId, EVENT_ID, sourceId, sourceEventId, String(observedAtOffsetMinutes),
+      summary, JSON.stringify(attributes), contentHash, String(receivedAtOffsetMinutes),
+    ],
   );
 }
 
@@ -172,6 +178,37 @@ describe('detection projection', () => {
     }
     expect(await countRows('approval_requirements')).toBe(2);
     expect(await countRows('agent_findings')).toBe(2);
+  }, TIMEOUT_MS);
+
+  it('evaluates a long-standing restriction that the connector still confirms upstream', async () => {
+    // The City last edited this record months ago; it is still published and still in force.
+    await upsertEvidence(
+      '11111111-1111-4111-8111-111111111ca1', CITY_SOURCE_ID, 'closure:hwy14', 'Closure: Hwy 14',
+      { kind: 'closure', road: 'Martin Luther King Dr.', description: 'Resurfacing', startsAt: null, endsAt: null },
+      -60 * 24 * 120, -2,
+    );
+
+    const summary = await runDetection(EVENT_ID, detectionStore);
+
+    expect(summary.evidenceConsidered).toBe(1);
+    expect(summary.incidentsOpened).toBe(1);
+  }, TIMEOUT_MS);
+
+  it('stops counting a record the connector no longer sees upstream', async () => {
+    await upsertEvidence('11111111-1111-4111-8111-111111111cb1', ALGO_SOURCE_ID, 'event:Crash:2357202', 'Crash: I-85 NB', crashAttributes);
+    await runDetection(EVENT_ID, detectionStore);
+
+    // The crash was withdrawn from the feed, so its row is no longer being re-confirmed, while
+    // the connector keeps reporting other records.
+    await database.query(`UPDATE evidence_events SET received_at = now() - interval '9 hours'`);
+    await upsertEvidence('11111111-1111-4111-8111-111111111cb2', ALGO_SOURCE_ID, 'travel-time:7', 'I-85 Auburn: 68 mph', {
+      layer: 'travel_time', algoTravelTimeId: 7, name: 'I-85 Auburn', congestionLevel: 'Unaffected',
+    });
+
+    const summary = await runDetection(EVENT_ID, detectionStore);
+
+    expect(summary.incidentsResolved).toBe(1);
+    expect(await countRows('incidents', "status = 'resolved'")).toBe(1);
   }, TIMEOUT_MS);
 
   it('is idempotent across repeated passes over the same upstream record', async () => {
