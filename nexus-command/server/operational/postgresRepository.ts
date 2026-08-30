@@ -23,7 +23,7 @@ import type {
 } from './domain.js';
 import { getDatabasePool, withTransaction, type DatabaseClient } from './database.js';
 import { conflict, forbidden, notFound } from './errors.js';
-import type { AuditRecord, EventStreamRecord, OperationalRepository, OperationalSnapshot } from './repository.js';
+import type { AuditRecord, EventLineage, EventStreamRecord, OperationalRepository, OperationalSnapshot } from './repository.js';
 import {
   applyRecommendationDecision,
   assertCommitmentTransition,
@@ -554,6 +554,58 @@ export class PostgresOperationalRepository implements OperationalRepository {
       commitments,
       sources: sourcesResult.rows.map(mapSource),
       observations: observationsResult.rows.map(mapObservation),
+    };
+  }
+
+  async eventLineage(eventId: string, principal: PrincipalContext): Promise<EventLineage> {
+    const snapshot = await this.snapshot(eventId, principal);
+    const pool = getDatabasePool();
+    const recommendationRows = await pool.query<{ recommendation_id: string }>(
+      `SELECT r.recommendation_id
+         FROM recommendations r
+         JOIN incidents i ON i.incident_id = r.incident_id
+        WHERE i.event_id = $1
+        ORDER BY r.created_at`,
+      [eventId],
+    );
+    const recommendations = await Promise.all(
+      recommendationRows.rows.map(row => loadRecommendation(pool, row.recommendation_id)),
+    );
+    const decisionRows = await pool.query(
+      `SELECT d.decision_id, d.recommendation_id, d.recommendation_version, d.action, d.reason_code,
+              d.comment, d.decided_at, d.actor_principal_id, d.actor_role_code,
+              p.display_name AS actor_display_name, d.actor_agency_id, a.name AS actor_agency_name
+         FROM decisions d
+         JOIN recommendations r ON r.recommendation_id = d.recommendation_id
+         JOIN incidents i ON i.incident_id = r.incident_id
+         JOIN principals p ON p.principal_id = d.actor_principal_id
+         JOIN agencies a ON a.agency_id = d.actor_agency_id
+        WHERE i.event_id = $1
+        ORDER BY d.decided_at`,
+      [eventId],
+    );
+    const decisions: Decision[] = decisionRows.rows.map(row => ({
+      decisionId: row.decision_id,
+      recommendationId: row.recommendation_id,
+      recommendationVersion: row.recommendation_version,
+      action: row.action,
+      actor: {
+        principalId: row.actor_principal_id,
+        displayName: row.actor_display_name,
+        agencyId: row.actor_agency_id,
+        agencyName: row.actor_agency_name,
+        roleCode: row.actor_role_code,
+      },
+      reasonCode: row.reason_code,
+      comment: row.comment,
+      decidedAt: row.decided_at.toISOString(),
+    }));
+    return {
+      event: snapshot.event,
+      incidents: snapshot.incidents,
+      recommendations,
+      decisions,
+      commitments: snapshot.commitments,
     };
   }
 

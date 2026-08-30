@@ -10,6 +10,7 @@ import type {
   RecommendationState,
   ReferenceLayer,
   ReferenceLayerDefinition,
+  WeatherOverlay,
   ScenarioPack,
   SystemStatus,
   AtlasAgentProfile,
@@ -68,6 +69,9 @@ export const operationalApi = {
   },
   referenceLayer(code: string): Promise<ReferenceLayer> {
     return request(`/reference-layers/${code}`);
+  },
+  weatherOverlay(): Promise<WeatherOverlay> {
+    return request('/weather-overlay');
   },
   openOperatingWindow(input: {
     packCode: string;

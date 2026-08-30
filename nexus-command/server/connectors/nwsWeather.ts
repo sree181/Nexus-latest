@@ -18,6 +18,21 @@ const FORECAST_GRID = { office: 'BMX', x: 111, y: 47 };
 /** How much of the hourly grid the command center carries as operating context. */
 export const FORECAST_HOURS = 12;
 
+/**
+ * Drawn only when NWS publishes a zone/county product with no polygon. Matches the
+ * command-center map bounds, not the full Lee County boundary.
+ */
+export const OPERATING_BOX_POLYGON = {
+  type: 'Polygon',
+  coordinates: [[
+    [-85.57, 32.55],
+    [-85.39, 32.55],
+    [-85.39, 32.67],
+    [-85.57, 32.67],
+    [-85.57, 32.55],
+  ]],
+};
+
 interface AlertProperties {
   id?: string;
   event?: string;
@@ -88,6 +103,36 @@ export function isOperationalAlert(
   if (Number.isFinite(expires) && expires < now) return false;
   const ugc = properties.geocode?.UGC ?? [];
   return ugc.some(zone => zones.includes(zone));
+}
+
+function isAlertPolygon(geometry: Record<string, unknown> | null | undefined): geometry is Record<string, unknown> {
+  return geometry?.type === 'Polygon' || geometry?.type === 'MultiPolygon';
+}
+
+/**
+ * Map overlay features for in-force Lee County products. A missing NWS polygon is replaced
+ * with the operating box so the layer stays honest: county/zone product, not a surveyed cell.
+ */
+export function weatherOverlayFeatures(
+  features: AlertFeature[],
+  now = Date.now(),
+): Array<{ type: 'Feature'; properties: Record<string, unknown>; geometry: Record<string, unknown> }> {
+  return features.flatMap(feature => {
+    const properties = feature.properties ?? {};
+    if (!isOperationalAlert(properties, AUBURN_WEATHER_ZONES, now)) return [];
+    const published = isAlertPolygon(feature.geometry) ? feature.geometry : OPERATING_BOX_POLYGON;
+    return [{
+      type: 'Feature',
+      properties: {
+        eventName: properties.event ?? 'Weather alert',
+        headline: properties.headline ?? properties.areaDesc ?? 'Lee County',
+        severity: properties.severity ?? 'Unknown',
+        expiresAt: properties.expires ?? null,
+        geometrySource: isAlertPolygon(feature.geometry) ? 'nws-polygon' : 'operating-box',
+      },
+      geometry: published,
+    }];
+  });
 }
 
 /** Condenses the hourly grid into the horizon an operator can actually act on. */

@@ -68,6 +68,15 @@ export interface ReferenceLayer {
   attribution: string;
 }
 
+export interface WeatherOverlay {
+  retrievedAt: string;
+  attribution: string;
+  limitations: string;
+  alertCount: number;
+  forecastSummary: string | null;
+  featureCollection: { type: 'FeatureCollection'; features: unknown[] };
+}
+
 export interface SourceHealth {
   sourceId: string;
   sourceCode: string;

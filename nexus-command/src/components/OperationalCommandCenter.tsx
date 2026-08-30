@@ -14,6 +14,7 @@ import type {
   ScenarioPack,
   SourceHealth,
   SystemStatus,
+  WeatherOverlay,
 } from '../operationalTypes';
 import { DeskConfigDialog } from './DeskConfigDialog';
 import { NoOperatingWindowScreen, OperatingWindowChip, OperatingWindowDialog } from './OperatingWindow';
@@ -177,16 +178,26 @@ function ReviewQueue({
   );
 }
 
+function isWeatherObservation(item: OperationalObservation): boolean {
+  return item.sourceCode.includes('weather')
+    || item.qualityFlags.includes('nws_alert')
+    || item.qualityFlags.includes('nws_gridded_forecast');
+}
+
 function OperationalMap({ incident, sources, observations }: { incident: Incident | null; sources: SourceHealth[]; observations: OperationalObservation[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<MapLibreMarker | null>(null);
   const observationMarkersRef = useRef<MapLibreMarker[]>([]);
+  const forecastMarkerRef = useRef<MapLibreMarker | null>(null);
   const referenceCacheRef = useRef(new Map<string, ReferenceLayer>());
   const [mapReady, setMapReady] = useState(false);
   const [referenceCatalog, setReferenceCatalog] = useState<ReferenceLayerDefinition[]>([]);
   const [activeReference, setActiveReference] = useState<string[]>([]);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [weatherOn, setWeatherOn] = useState(true);
+  const [weatherOverlay, setWeatherOverlay] = useState<WeatherOverlay | null>(null);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -233,6 +244,7 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
       cancelled = true;
       observer?.disconnect();
       markerRef.current?.remove();
+      forecastMarkerRef.current?.remove();
       observationMarkersRef.current.forEach(marker => marker.remove());
       createdMap?.remove();
       mapRef.current = null;
@@ -266,7 +278,7 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
       observationMarkersRef.current.forEach(marker => marker.remove());
       observationMarkersRef.current = [];
 
-      const current = observations.filter(item => !item.qualityFlags.includes('stale'));
+      const current = observations.filter(item => !item.qualityFlags.includes('stale') && !isWeatherObservation(item));
       for (const observation of current
         .filter(item => item.geometryGeojson?.type === 'Point' && item.dataClassification !== 'reference')
         .slice(0, 80)) {
@@ -359,6 +371,63 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
     return () => { cancelled = true; };
   }, [mapReady, activeReference, referenceCatalog]);
 
+  useEffect(() => {
+    if (!weatherOn) return;
+    let cancelled = false;
+    setWeatherError(null);
+    void operationalApi.weatherOverlay()
+      .then(overlay => { if (!cancelled) setWeatherOverlay(overlay); })
+      .catch(() => { if (!cancelled) setWeatherError('NWS weather overlay is unavailable'); });
+    return () => { cancelled = true; };
+  }, [weatherOn]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const sourceId = 'nws-weather';
+    const removeWeather = () => {
+      for (const suffix of ['fill', 'line']) {
+        if (map.getLayer(`${sourceId}-${suffix}`)) map.removeLayer(`${sourceId}-${suffix}`);
+      }
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    };
+    if (!weatherOn || !weatherOverlay) {
+      removeWeather();
+      forecastMarkerRef.current?.remove();
+      forecastMarkerRef.current = null;
+      return;
+    }
+    const data = weatherOverlay.featureCollection;
+    const existing = map.getSource(sourceId) as { setData: (value: unknown) => void } | undefined;
+    if (existing) existing.setData(data);
+    else {
+      map.addSource(sourceId, { type: 'geojson', data: data as never });
+      map.addLayer({
+        id: `${sourceId}-fill`, type: 'fill', source: sourceId,
+        paint: { 'fill-color': '#c9a66b', 'fill-opacity': 0.22 },
+      });
+      map.addLayer({
+        id: `${sourceId}-line`, type: 'line', source: sourceId,
+        paint: { 'line-color': '#e2c48a', 'line-width': 2, 'line-opacity': 0.85 },
+      });
+    }
+    if (weatherOverlay.forecastSummary) {
+      void import('maplibre-gl').then(({ default: maplibregl }) => {
+        if (!mapRef.current) return;
+        forecastMarkerRef.current?.remove();
+        const element = document.createElement('button');
+        element.className = 'source-map-marker source-map-marker--weather';
+        element.type = 'button';
+        element.title = weatherOverlay.forecastSummary ?? 'NWS hourly forecast';
+        element.setAttribute('aria-label', weatherOverlay.forecastSummary ?? 'NWS hourly forecast');
+        element.innerHTML = '<span>W</span>';
+        forecastMarkerRef.current = new maplibregl.Marker({ element, anchor: 'center' })
+          .setLngLat([-85.4900, 32.6025])
+          .addTo(mapRef.current);
+      });
+    }
+  }, [mapReady, weatherOn, weatherOverlay]);
+
   const delayed = sources.filter(source => source.status !== 'healthy' || source.connectionStatus !== 'connected');
   const liveObservations = observations.filter(item => item.dataClassification !== 'reference' && !item.qualityFlags.includes('stale'));
   const closureCount = liveObservations.filter(item => item.sourceCode.includes('closure')).length;
@@ -368,6 +437,17 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
       <div ref={containerRef} className="map-canvas" />
       <div className="map-toolbar">
         <span>{liveObservations.length} live · {transitCount} transit · {closureCount} closures</span>
+        <button
+          type="button"
+          className={weatherOn ? 'map-reference__toggle map-reference__toggle--weather' : 'map-reference__toggle'}
+          aria-pressed={weatherOn}
+          title={weatherOverlay?.limitations ?? 'Official NWS products for Lee County. Overlay only; it does not open an incident.'}
+          onClick={() => setWeatherOn(current => !current)}
+        >
+          {weatherOverlay
+            ? (weatherOverlay.alertCount ? `NWS · ${weatherOverlay.alertCount} alert${weatherOverlay.alertCount === 1 ? '' : 's'}` : 'NWS · no alert')
+            : 'NWS alerts'}
+        </button>
         {referenceCatalog.map(definition => {
           const active = activeReference.includes(definition.code);
           return (
@@ -388,6 +468,8 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
             </button>
           );
         })}
+        {weatherOn && weatherOverlay?.forecastSummary && <small>{weatherOverlay.forecastSummary}</small>}
+        {weatherError && <small>{weatherError}</small>}
         {referenceError && <small>{referenceError}</small>}
       </div>
       {delayed.length > 0 && <span className="map-toolbar__note">{delayed.length} feeds need attention — listed at right</span>}
@@ -409,9 +491,11 @@ function ApprovalProgress({ recommendation }: { recommendation: Recommendation }
   );
 }
 
-function deskNote(finding: AgentFinding): string {
-  const text = finding.status === 'contributed' ? finding.interpretation : finding.observation;
-  return text.length > 92 ? `${text.slice(0, 89).trim()}…` : text;
+function deskNote(finding: AgentFinding | undefined): string {
+  if (!finding) return 'Not staffed on this pack.';
+  if (finding.status !== 'contributed') return 'No evidence on this incident.';
+  const first = finding.interpretation.split(/[.!?]/)[0]?.trim() || finding.interpretation.trim();
+  return first.length > 90 ? `${first.slice(0, 87).trim()}…` : first;
 }
 
 function DeskBoard({
@@ -441,13 +525,15 @@ function DeskBoard({
               className={`desk-card desk-card--${status}${finding?.conflicts.length ? ' desk-card--dissent' : ''}`}
               role="listitem"
             >
-              <img src={DESK_ICONS[code]} alt="" />
-              <div className="desk-card__brand">
-                <strong>{deskCallsign(code)}</strong>
-                <small>{deskName(code)}</small>
+              <div className="desk-card__top">
+                <img src={DESK_ICONS[code]} alt="" />
+                <div className="desk-card__brand">
+                  <strong>{deskCallsign(code)}</strong>
+                  <small>{deskName(code)}</small>
+                </div>
+                <span className="desk-card__status">{finding ? deskStatusLabel(finding.status, finding.modelVersion) : 'Not staffed'}</span>
               </div>
-              <span className="desk-card__status">{finding ? deskStatusLabel(finding.status, finding.modelVersion) : 'Not on this card'}</span>
-              <p>{finding ? deskNote(finding) : 'This desk was not asked to review this incident.'}</p>
+              <p>{deskNote(finding)}</p>
               {(code === 'atlas' || code === 'aqua') && (
                 <button type="button" className="desk-card__config" onClick={() => onConfigureDesk(code)}>Configure</button>
               )}

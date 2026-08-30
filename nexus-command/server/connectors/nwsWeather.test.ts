@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isOperationalAlert, stableAlertKey, summarizeForecast } from './nwsWeather.js';
+import { isOperationalAlert, OPERATING_BOX_POLYGON, stableAlertKey, summarizeForecast, weatherOverlayFeatures } from './nwsWeather.js';
 
 const NOW = Date.parse('2026-08-29T12:00:00Z');
 
@@ -77,5 +77,31 @@ describe('NWS forecast summary', () => {
   it('holds to the requested horizon', () => {
     expect(summarizeForecast(periods, 1).hours).toHaveLength(1);
     expect(summarizeForecast([], 12).maxTemperatureF).toBeNull();
+  });
+});
+
+describe('NWS weather overlay', () => {
+  it('keeps a published NWS polygon', () => {
+    const polygon = { type: 'Polygon', coordinates: [[[-85.5, 32.6], [-85.4, 32.6], [-85.4, 32.61], [-85.5, 32.6]]] };
+    const features = weatherOverlayFeatures([
+      { geometry: polygon, properties: alert({ event: 'Severe Thunderstorm Warning', headline: 'Lee County' }) },
+    ], NOW);
+    expect(features).toHaveLength(1);
+    expect(features[0].geometry).toEqual(polygon);
+    expect(features[0].properties.geometrySource).toBe('nws-polygon');
+  });
+
+  it('uses the operating box when NWS published only a zone', () => {
+    const features = weatherOverlayFeatures([
+      { geometry: null, properties: alert({ event: 'Heat Advisory' }) },
+    ], NOW);
+    expect(features[0].geometry).toEqual(OPERATING_BOX_POLYGON);
+    expect(features[0].properties.geometrySource).toBe('operating-box');
+  });
+
+  it('does not draw a product outside Lee County', () => {
+    expect(weatherOverlayFeatures([
+      { geometry: OPERATING_BOX_POLYGON, properties: alert({ geocode: { UGC: ['ALC073'] } }) },
+    ], NOW)).toEqual([]);
   });
 });

@@ -14,7 +14,7 @@ import type {
 import { hasDatabaseConfiguration } from './database.js';
 import { OperationalError } from './errors.js';
 import { PostgresOperationalRepository } from './postgresRepository.js';
-import type { AuditRecord, EventStreamRecord, OperationalRepository, OperationalSnapshot } from './repository.js';
+import type { AuditRecord, EventLineage, EventStreamRecord, OperationalRepository, OperationalSnapshot } from './repository.js';
 import { ReviewOperationalRepository } from './reviewRepository.js';
 
 class ConfigurationRequiredRepository implements OperationalRepository {
@@ -47,6 +47,7 @@ class ConfigurationRequiredRepository implements OperationalRepository {
     _requestId: string,
   ): Promise<OperationalEvent> { return this.unavailable(); }
   async snapshot(_eventId: string, _principal: PrincipalContext): Promise<OperationalSnapshot> { return this.unavailable(); }
+  async eventLineage(_eventId: string, _principal: PrincipalContext): Promise<EventLineage> { return this.unavailable(); }
   async recommendation(_recommendationId: string, _principal: PrincipalContext): Promise<Recommendation> { return this.unavailable(); }
   async decide(
     _recommendationId: string,

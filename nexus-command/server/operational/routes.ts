@@ -8,8 +8,10 @@ import type { OperationalRepository } from './repository.js';
 import { ConnectorError } from '../connectors/types.js';
 import type { ConnectorService } from '../connectors/service.js';
 import { createGraphRouter } from '../graph/routes.js';
+import { OperationalGraphRepository } from '../graph/operationalGraph.js';
 import type { GraphRepository } from '../graph/repository.js';
 import { cityReferenceLayers, loadCityReferenceLayer, referenceLayerByCode } from '../reference/cityLayers.js';
+import { loadWeatherOverlay } from '../reference/weatherOverlay.js';
 import { atlasProfileWriteSchema, loadAtlasProfile, resetAtlasProfile, saveAtlasProfile } from './agents/atlas/profileStore.js';
 import { presentAtlasProfile } from './agents/atlas/presentation.js';
 import { aquaProfileWriteSchema, loadAquaProfile, resetAquaProfile, saveAquaProfile } from './agents/aqua/profileStore.js';
@@ -97,7 +99,7 @@ export function createOperationalRouter(repository: OperationalRepository, conne
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  router.use(createGraphRouter(graphRepository));
+  router.use(createGraphRouter(new OperationalGraphRepository(repository, graphRepository)));
 
   router.get('/me', (req, res) => {
     const principal = requirePrincipal(req);
@@ -189,6 +191,14 @@ export function createOperationalRouter(repository: OperationalRepository, conne
 
   router.get('/reference-layers', requireScope('event:read'), (req, res) => {
     res.json({ data: cityReferenceLayers, requestId: req.requestId });
+  });
+
+  router.get('/weather-overlay', requireScope('event:read'), async (req, res, next) => {
+    try {
+      res.json({ data: await loadWeatherOverlay(), requestId: req.requestId });
+    } catch (error) {
+      next(error instanceof ConnectorError ? asOperationalConnectorError(error) : error);
+    }
   });
 
   router.get('/reference-layers/:layerCode', requireScope('event:read'), async (req, res, next) => {

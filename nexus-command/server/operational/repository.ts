@@ -1,6 +1,7 @@
 import type {
   Commitment,
   CommitmentTransitionCommand,
+  Decision,
   DecisionCommand,
   DecisionResult,
   Incident,
@@ -35,6 +36,15 @@ export interface OperationalSnapshot {
   observations: OperationalObservation[];
 }
 
+/** Every recommendation and decision for an event, including closed ones. Used by Lineage. */
+export interface EventLineage {
+  event: OperationalEvent;
+  incidents: Incident[];
+  recommendations: Recommendation[];
+  decisions: Decision[];
+  commitments: Commitment[];
+}
+
 export interface AuditRecord {
   auditId: string;
   sequenceNo: number;
@@ -66,6 +76,7 @@ export interface OperationalRepository {
     requestId: string,
   ): Promise<OperationalEvent>;
   snapshot(eventId: string, principal: PrincipalContext): Promise<OperationalSnapshot>;
+  eventLineage(eventId: string, principal: PrincipalContext): Promise<EventLineage>;
   recommendation(recommendationId: string, principal: PrincipalContext): Promise<Recommendation>;
   decide(
     recommendationId: string,

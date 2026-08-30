@@ -1,5 +1,22 @@
 /* Review-center layout: queue | map + cards + actions | context */
 
+.command-shell.desk,
+.command-shell.desk button,
+.command-shell.desk input,
+.command-shell.desk textarea,
+.command-shell.desk select {
+  font-family: "Source Sans 3", system-ui, sans-serif;
+  font-feature-settings: "ss01" 0, "kern" 1;
+  letter-spacing: 0;
+}
+
+.command-shell.desk {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--text);
+}
+
 .app-workspace > .command-shell.desk,
 .command-shell.desk {
   min-height: 0;
@@ -12,10 +29,66 @@
 }
 
 .desk .ops-header {
-  min-height: 52px;
-  padding: 8px 16px;
-  gap: 16px;
+  min-height: 58px;
+  padding: 10px 18px;
+  gap: 18px;
   flex: 0 0 auto;
+}
+
+.desk .live-pill,
+.desk .mode-chip {
+  min-height: 32px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.desk .now-chip span,
+.desk .header-field span,
+.desk .operator-menu span,
+.desk .header-meta dt {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.desk .now-chip strong,
+.desk .header-field strong,
+.desk .header-meta dd {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.desk .operator-menu strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.desk .review-banner {
+  font-size: 14px;
+}
+
+.desk .button {
+  min-height: 42px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.desk .source-item strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.desk .source-item span {
+  font-size: 13px;
+}
+
+.desk .commitment-card,
+.desk .evidence-line,
+.desk .context-empty {
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .desk .header-status,
@@ -63,20 +136,20 @@
 .workspace-card > span,
 .decision-block > span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .pane-head strong {
-  font-size: 13px;
-  font-weight: 560;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .pane-head p {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 .queue-list {
@@ -122,15 +195,15 @@
   gap: 8px;
   align-items: center;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .queue-card strong {
   display: block;
   margin: 8px 0 6px;
-  font-size: 14px;
-  font-weight: 560;
-  line-height: 1.3;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.25;
 }
 
 .queue-alert {
@@ -148,9 +221,9 @@
     0 1px 0 rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(14px) saturate(1.2);
   color: #eceae4;
-  font-size: 12px;
-  font-weight: 560;
-  line-height: 1.2;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .queue-alert__icon {
@@ -181,9 +254,9 @@
     inset 0 -1px 0 rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(8px);
   color: #eceae4;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 650;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
 .queue-badge img {
@@ -203,7 +276,7 @@
 
 .workspace-pane {
   display: grid;
-  grid-template-rows: auto minmax(160px, 1fr) auto minmax(90px, 22%) auto;
+  grid-template-rows: auto minmax(180px, 1fr) minmax(220px, 36%) minmax(72px, 18%) auto;
   background: #0c0e12;
   overflow: hidden;
 }
@@ -216,11 +289,11 @@
 
 .workspace-head h1 {
   margin: 6px 0 8px;
-  font-family: "IBM Plex Serif", Georgia, serif;
-  font-size: clamp(20px, 1.6vw, 26px);
-  font-weight: 560;
+  font-family: inherit;
+  font-size: clamp(22px, 1.8vw, 30px);
+  font-weight: 650;
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 
 .workspace-head__meta {
@@ -229,7 +302,7 @@
   gap: 10px;
   align-items: center;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .workspace-map {
@@ -261,12 +334,13 @@
 }
 
 .map-toolbar > span {
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: 6px;
   background: rgba(10, 11, 13, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #c8c4ba;
-  font-size: 11px;
+  color: #d8d4ca;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .map-toolbar__note {
@@ -274,70 +348,83 @@
   z-index: 5;
   right: 10px;
   bottom: 10px;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: 6px;
   background: rgba(32, 24, 12, 0.86);
   color: #e2c48a;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .desk-board {
   min-height: 0;
-  padding: 10px 12px 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 4px;
+  border-top: 1px solid var(--line);
 }
 
 .desk-board__head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
 }
 
 .desk-board__head span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .desk-board__head strong {
   margin-left: 8px;
-  font-size: 12px;
-  font-weight: 560;
+  font-size: 18px;
+  font-weight: 650;
 }
 
 .desk-board__head p,
 .desk-board__empty {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 .desk-board__grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
 }
 
 .desk-card {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 10px;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
     inset 0 -1px 0 rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(10px);
+}
+
+.desk-card__top {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
 }
 
 .desk-card img {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
@@ -347,40 +434,41 @@
 }
 
 .desk-card__brand strong {
-  font-size: 12px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
 }
 
 .desk-card__brand small {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .desk-card__status {
-  color: #8d8a82;
-  font-size: 10px;
-  font-weight: 600;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .desk-card p {
   margin: 0;
-  color: #c8c4ba;
-  font-size: 11px;
+  color: #e8e4da;
+  font-size: 16px;
   line-height: 1.35;
 }
 
 .desk-card__config {
   margin-top: auto;
-  min-height: 26px;
-  padding: 0 8px;
+  min-height: 36px;
+  padding: 0 14px;
   align-self: flex-start;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
-  color: #d4d0c6;
-  font-size: 10px;
+  color: #eceae4;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -426,9 +514,9 @@
 .workspace-card p,
 .workspace-card ul {
   margin: 6px 0 0;
-  color: #ddd9d0;
-  font-size: 13px;
-  line-height: 1.45;
+  color: #e8e4da;
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 .workspace-card ul {
@@ -437,7 +525,7 @@
 
 .workspace-card__muted {
   color: var(--muted) !important;
-  font-size: 12px !important;
+  font-size: 14px !important;
 }
 
 .workspace-card--action {
@@ -474,7 +562,7 @@
 .desk .button--approve {
   background: #c45a1a;
   border-color: #e07a38;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .desk .button--approve:hover:not(:disabled) {
@@ -507,8 +595,8 @@
 
 .context-empty {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .context-feeds {
@@ -519,6 +607,10 @@
 
 .context-feeds .source-item {
   padding: 8px;
+}
+
+.workspace-pane--empty {
+  grid-template-rows: auto minmax(180px, 1fr) minmax(220px, 42%);
 }
 
 .workspace-pane--empty .empty-state {
@@ -543,7 +635,8 @@
   }
 
   .desk-board__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
   }
 }
 

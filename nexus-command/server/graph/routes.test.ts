@@ -28,9 +28,21 @@ describe('Nexus temporal graph API', () => {
     process.env.NODE_ENV = 'test';
   });
 
-  it('fails explicitly when persistent graph storage is not configured', async () => {
+  it('projects decision lineage from operational records when graph storage is not configured', async () => {
     const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
-    const response = await request(app).get(`/api/v1/events/${eventId}/graph?mode=live&view=mobility`).expect(503);
+    const response = await request(app).get(`/api/v1/events/${eventId}/graph?mode=live&view=decision_lineage`).expect(200);
+    const types = response.body.data.nodes.map((node: { nodeType: string }) => node.nodeType);
+    expect(types).toEqual(expect.arrayContaining(['incident', 'recommendation', 'evidence', 'finding']));
+    expect(response.body.data.edges.length).toBeGreaterThan(0);
+  });
+
+  it('fails ingest when persistent graph storage is not configured', async () => {
+    const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
+    const response = await request(app)
+      .post(`/api/v1/events/${eventId}/graph/sources/${sourceId}/batches`)
+      .set('Idempotency-Key', 'graph-ingest-missing-store')
+      .send({ mode: 'live', schemaVersion: '1.0.0', nodes: [{ nodeType: 'parking_lot', externalKey: 'lot-west', label: 'West Campus Lot', dataClassification: 'live', state: {}, validFrom: new Date().toISOString() }], edges: [] })
+      .expect(503);
     expect(response.body.error.code).toBe('GRAPH_STORAGE_NOT_CONFIGURED');
   });
 

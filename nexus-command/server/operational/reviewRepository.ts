@@ -13,7 +13,7 @@ import type {
   SystemStatus,
 } from './domain.js';
 import { conflict, notFound, OperationalError } from './errors.js';
-import type { AuditRecord, EventStreamRecord, OperationalRepository, OperationalSnapshot } from './repository.js';
+import type { AuditRecord, EventLineage, EventStreamRecord, OperationalRepository, OperationalSnapshot } from './repository.js';
 import {
   applyRecommendationDecision,
   assertCommitmentTransition,
@@ -41,6 +41,7 @@ export class ReviewOperationalRepository implements OperationalRepository {
   private readonly streamRecords: EventStreamRecord[] = [];
   private recommendationRecord: Recommendation;
   private commitments: Commitment[] = [];
+  private decisions: Decision[] = [];
   private desksPromise: Promise<void> | null = null;
 
   constructor() {
@@ -381,6 +382,19 @@ export class ReviewOperationalRepository implements OperationalRepository {
     };
   }
 
+  async eventLineage(eventId: string, _principal: PrincipalContext): Promise<EventLineage> {
+    if (eventId !== EVENT_ID) throw notFound('Operational event', eventId);
+    await this.ensureDesks();
+    const snapshot = await this.snapshot(eventId, _principal);
+    return {
+      event: snapshot.event,
+      incidents: snapshot.incidents,
+      recommendations: [structuredClone(this.recommendationRecord)],
+      decisions: structuredClone(this.decisions),
+      commitments: structuredClone(this.commitments),
+    };
+  }
+
   async recommendation(recommendationId: string): Promise<Recommendation> {
     if (recommendationId !== RECOMMENDATION_ID) throw notFound('Recommendation', recommendationId);
     await this.ensureDesks();
@@ -439,6 +453,7 @@ export class ReviewOperationalRepository implements OperationalRepository {
       comment: command.comment ?? null,
       decidedAt: iso(),
     };
+    this.decisions.push(decision);
 
     if (targetState === 'approved') {
       this.commitments = [
