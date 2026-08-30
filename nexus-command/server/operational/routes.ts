@@ -10,6 +10,10 @@ import type { ConnectorService } from '../connectors/service.js';
 import { createGraphRouter } from '../graph/routes.js';
 import type { GraphRepository } from '../graph/repository.js';
 import { cityReferenceLayers, loadCityReferenceLayer, referenceLayerByCode } from '../reference/cityLayers.js';
+import { atlasProfileWriteSchema, loadAtlasProfile, resetAtlasProfile, saveAtlasProfile } from './agents/atlas/profileStore.js';
+import { presentAtlasProfile } from './agents/atlas/presentation.js';
+import { aquaProfileWriteSchema, loadAquaProfile, resetAquaProfile, saveAquaProfile } from './agents/aqua/profileStore.js';
+import { presentAquaProfile } from './agents/aqua/presentation.js';
 
 const decisionSchema = z.object({
   action: z.enum(['approve', 'reject', 'request_revision', 'delegate', 'escalate', 'acknowledge', 'withdraw']),
@@ -104,6 +108,59 @@ export function createOperationalRouter(repository: OperationalRepository, conne
     try {
       const status = await repository.systemStatus();
       res.status(status.status === 'major_degradation' ? 503 : 200).json({ data: status, requestId: req.requestId });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  const deskProfiles = {
+    atlas: {
+      load: loadAtlasProfile,
+      save: saveAtlasProfile,
+      reset: resetAtlasProfile,
+      present: presentAtlasProfile,
+      schema: atlasProfileWriteSchema,
+    },
+    aqua: {
+      load: loadAquaProfile,
+      save: saveAquaProfile,
+      reset: resetAquaProfile,
+      present: presentAquaProfile,
+      schema: aquaProfileWriteSchema,
+    },
+  } as const;
+
+  function configurableDesk(code: string | string[] | undefined) {
+    const parsed = z.enum(['atlas', 'aqua']).safeParse(Array.isArray(code) ? code[0] : code);
+    if (!parsed.success) {
+      throw new OperationalError(404, 'DESK_PROFILE_NOT_FOUND', 'This desk is not configurable');
+    }
+    return deskProfiles[parsed.data];
+  }
+
+  router.get('/desks/:deskCode/profile', requireScope('event:read'), (req, res, next) => {
+    try {
+      const desk = configurableDesk(req.params.deskCode);
+      res.json({ data: desk.present(desk.load()), requestId: req.requestId });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/desks/:deskCode/profile', requireScope('event:manage'), (req, res, next) => {
+    try {
+      const desk = configurableDesk(req.params.deskCode);
+      const profile = desk.save(desk.schema.parse(req.body));
+      res.json({ data: desk.present(profile), requestId: req.requestId });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/desks/:deskCode/profile/reset', requireScope('event:manage'), (req, res, next) => {
+    try {
+      const desk = configurableDesk(req.params.deskCode);
+      res.json({ data: desk.present(desk.reset()), requestId: req.requestId });
     } catch (error) {
       next(error);
     }

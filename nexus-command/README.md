@@ -65,6 +65,9 @@ Open `http://localhost:4001`. The UI displays a persistent `LOCAL REVIEW DATA` b
 | `ALGO_TRAVELER_FEED=false` | Optional | Set only to disable the public ALGO traveler-map connector |
 | `NEXUS_ENABLE_PUBLIC_FEEDS=true` | Optional | Same transit enablement as the ETA Spot approval flag |
 | `TOMTOM_API_KEY` | Optional | Enables live TomTom road-flow observations; remains `configuration_required` when absent |
+| `ATLAS_AI_ENABLED=true` | Optional | Turns ATLAS into a tool-using agent loop. Requires `GROQ_API_KEY` or `ATLAS_AI_API_KEY`. Off = current rule assessor |
+| `GROQ_API_KEY` | Optional | Free Groq key (`console.groq.com`). Default model is `openai/gpt-oss-20b`. Does not change signals or publish messages |
+| `ATLAS_AI_BASE_URL` | Optional | OpenAI-compatible host. Default Groq. Point at Ollama (`http://127.0.0.1:11434/v1`) to run local |
 | `CONNECTOR_WORKER_TICK_MS` | Optional | Worker wake interval; connector-specific cadence still controls idempotent run buckets |
 | `CONNECTOR_RUN_TIMEOUT_MS` | Optional | Overall connector-run deadline; defaults to 65 seconds |
 | `PGSSL=true` | Provider-dependent | Enables PostgreSQL TLS |
@@ -154,6 +157,8 @@ A command lead opens and closes windows from the header, or through `GET /api/v1
 ### Agent desks
 
 ATLAS, FORGE, AQUA, SENTINEL, PHOENIX, and ECHO each declare the only connectors they may read. A contributing desk must cite evidence IDs. A staffed desk with no permitted feed, or with nothing that bears on the incident, is recorded as `abstained` and named on the decision card. NEXUS composes those findings; it does not author a different action than the playbook.
+
+When `ATLAS_AI_ENABLED` and a Groq (or other OpenAI-compatible) key are set, ATLAS runs a tool loop on each detection heartbeat: list evidence, read rows, compare speed to free flow, draft a cited finding, or stay quiet. A failed or illegal draft falls back to the rule assessor. ATLAS still cannot change a signal, close a road, or publish a message. Approve still only records a human decision.
 
 To see which rules would fire against the live feeds without writing to the database:
 

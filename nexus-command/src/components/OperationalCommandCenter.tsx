@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Map as MapLibreMap, Marker as MapLibreMarker } from 'maplibre-gl';
 import { OperationalApiError, operationalApi } from '../operationalApi';
 import type {
@@ -15,7 +15,24 @@ import type {
   SourceHealth,
   SystemStatus,
 } from '../operationalTypes';
+import { DeskConfigDialog } from './DeskConfigDialog';
 import { NoOperatingWindowScreen, OperatingWindowChip, OperatingWindowDialog } from './OperatingWindow';
+import {
+  classificationLabel,
+  commitmentLabel,
+  connectionLabel,
+  DESK_ICONS,
+  DESK_ORDER,
+  deskCallsign,
+  deskName,
+  deskStatusLabel,
+  phaseLabel,
+  QUEUE_BADGE_ICONS,
+  queueAlert,
+  queueBadges,
+  serviceLabel,
+  severityLabel,
+} from '../uiCopy';
 
 type DecisionAction = 'approve' | 'reject' | 'request_revision' | 'escalate';
 
@@ -25,15 +42,15 @@ interface DecisionDialogState {
 }
 
 const decisionLabels: Record<DecisionAction, string> = {
-  approve: 'Approve recommendation',
-  reject: 'Reject recommendation',
-  request_revision: 'Request revision',
-  escalate: 'Escalate decision',
+  approve: 'Approve',
+  reject: 'Decline',
+  request_revision: 'Send back',
+  escalate: 'Escalate',
 };
 
 function formatTime(value: string | null): string {
   if (!value) return 'Not available';
-  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 function formatRelativeSeconds(seconds: number | null): string {
@@ -67,17 +84,30 @@ function Header({
   const sourcesRequiringAction = snapshot.sources.length - connectedSources;
   return (
     <header className="ops-header">
-      <div className={`mode-chip ${isReview ? 'mode-chip--review' : 'mode-chip--live'}`}>
-        <span className="mode-chip__dot" />
-        <span>{isReview ? 'LOCAL REVIEW DATA' : 'LIVE OPERATIONS'}</span>
+      <span className={`live-pill ${isReview ? 'live-pill--review' : 'live-pill--live'}`}>
+        <i aria-hidden="true" />
+        {isReview ? 'Practice data' : 'Live'}
+      </span>
+      <div className="now-chip">
+        <span>Now coordinating</span>
+        <strong>{event.name}</strong>
       </div>
-      <div className="brand-lockup">
-        <img src="/harbert-logo.jpg" alt="Auburn University Harbert College of Business" />
+      <dl className="header-meta">
         <div>
-          <strong>Nexus Coordinate</strong>
-          <span>{event.name}</span>
+          <dt>Phase</dt>
+          <dd>{phaseLabel(event.phase)}</dd>
         </div>
-      </div>
+        <div>
+          <dt>Owner</dt>
+          <dd>{event.commandOwner?.displayName || 'Unassigned'}</dd>
+        </div>
+        <div>
+          <dt>Feeds</dt>
+          <dd className={sourcesRequiringAction ? 'text-warning' : 'text-positive'}>
+            {connectedSources} connected{sourcesRequiringAction ? ` · ${sourcesRequiringAction} need attention` : ''}
+          </dd>
+        </div>
+      </dl>
       <OperatingWindowChip
         event={event}
         pack={pack}
@@ -85,20 +115,6 @@ function Header({
         onChange={onChangeWindow}
         onClose={onCloseWindow}
       />
-      <div className="header-field">
-        <span>Phase</span>
-        <strong>{titleCase(event.phase)}</strong>
-      </div>
-      <div className="header-field header-field--wide">
-        <span>Command owner</span>
-        <strong>{event.commandOwner?.displayName || 'Unassigned'} · {event.commandOwner?.agencyName || 'No agency'}</strong>
-      </div>
-      <div className="header-field">
-        <span>Data connections</span>
-        <strong className={sourcesRequiringAction ? 'text-warning' : 'text-positive'}>
-          {connectedSources} connected · {sourcesRequiringAction} require action
-        </strong>
-      </div>
       <div className="operator-menu" aria-label="Signed in operator">
         <span>{principal.displayName}</span>
         <strong>{principal.agencyName}</strong>
@@ -107,48 +123,66 @@ function Header({
   );
 }
 
-function SituationBrief({ incident, recommendation }: { incident: Incident | null; recommendation: Recommendation | null }) {
-  if (!incident) {
-    return (
-      <section className="situation-pane empty-pane">
-        <div className="empty-state">
-          <span className="empty-state__code">CLEAR</span>
-          <h2>No active operational incident</h2>
-          <p>Nexus will surface verified changes here when evidence crosses an approved event threshold.</p>
-        </div>
-      </section>
-    );
-  }
-
+function ReviewQueue({
+  incidents, selectedId, recommendation, onSelect,
+}: {
+  incidents: Incident[];
+  selectedId: string | null;
+  recommendation: Recommendation | null;
+  onSelect: (incidentId: string) => void;
+}) {
   return (
-    <section className="situation-pane" aria-label="Current situation brief">
-      <div className="section-eyebrow">Current situation</div>
-      <div className="severity-line">
-        <span className={`severity-badge severity-badge--${incident.severity}`}>{incident.severity}</span>
-        <span>Detected {formatTime(incident.detectedAt)}</span>
+    <aside className="queue-pane" aria-label="Decisions waiting">
+      <header className="pane-head">
+        <div>
+          <span>Needs your review</span>
+          <strong>{recommendation ? '1 waiting' : 'Clear'}</strong>
+        </div>
+        <p>{recommendation ? 'Open a card, read the recommendation, then approve or send it back.' : 'No named rule has opened an incident in this window.'}</p>
+      </header>
+      <div className="queue-list">
+        {incidents.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-state__code">Clear</span>
+            <h2>Nothing needs attention</h2>
+            <p>When a named rule fires on official feed data, it will appear here.</p>
+          </div>
+        )}
+        {incidents.map(incident => {
+          const selected = incident.incidentId === selectedId;
+          const due = recommendation?.incidentId === incident.incidentId ? recommendation.expiresAt : null;
+          return (
+            <button
+              key={incident.incidentId}
+              type="button"
+              className={selected ? 'queue-card queue-card--active' : 'queue-card'}
+              onClick={() => onSelect(incident.incidentId)}
+              aria-pressed={selected}
+            >
+              <div className="queue-card__meta">
+                <span className={`severity-badge severity-badge--${incident.severity}`}>{severityLabel(incident.severity)}</span>
+                <span>{due ? `Decide by ${formatTime(due)}` : formatTime(incident.detectedAt)}</span>
+              </div>
+              <strong>{incident.title}</strong>
+              <p className="queue-alert">
+                <svg className="queue-alert__icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fillRule="evenodd" d="M12 3.2 2.4 20.5h19.2L12 3.2Zm.9 13.6h-1.8v-1.7h1.8v1.7Zm0-3.2h-1.8V9.4h1.8v4.2Z" />
+                </svg>
+                <span>{queueAlert(incident.whyItMatters)}</span>
+              </p>
+              <div className="queue-badges">
+                {queueBadges(incident.affectedServices).map(badge => (
+                  <span key={badge} className={`queue-badge queue-badge--${badge.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <img src={QUEUE_BADGE_ICONS[badge]} alt="" />
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
       </div>
-      <h1>{incident.title}</h1>
-      <div className="brief-block">
-        <span>What changed</span>
-        <p>{incident.whatChanged}</p>
-      </div>
-      <div className="brief-block brief-block--risk">
-        <span>Why it matters</span>
-        <p>{incident.whyItMatters}</p>
-      </div>
-      <div className="brief-block brief-block--next">
-        <span>Next decision</span>
-        <p>{recommendation ? `Review required by ${recommendation.expiresAt ? formatTime(recommendation.expiresAt) : 'the assigned authority'}.` : 'No human decision is currently pending.'}</p>
-      </div>
-      <div className="tag-group" aria-label="Affected services">
-        {incident.affectedServices.map(service => <span key={service}>{service}</span>)}
-      </div>
-      <div className="owner-block">
-        <span>Incident owner</span>
-        <strong>{incident.commandOwner?.displayName || 'Unassigned'}</strong>
-        <small>{incident.commandOwner?.agencyName || 'No agency assigned'}</small>
-      </div>
-    </section>
+    </aside>
   );
 }
 
@@ -167,6 +201,7 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
     if (!containerRef.current || mapRef.current) return;
     let cancelled = false;
     let createdMap: MapLibreMap | null = null;
+    let observer: ResizeObserver | null = null;
     void import('maplibre-gl').then(({ default: maplibregl }) => {
       if (cancelled || !containerRef.current) return;
       createdMap = new maplibregl.Map({
@@ -186,7 +221,7 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
             id: 'satellite',
             type: 'raster',
             source: 'satellite',
-            paint: { 'raster-brightness-max': 0.72, 'raster-brightness-min': 0.03, 'raster-contrast': 0.18, 'raster-saturation': -0.22 },
+            paint: { 'raster-brightness-max': 0.58, 'raster-brightness-min': 0.02, 'raster-contrast': 0.12, 'raster-saturation': -0.35 },
           }],
         },
         center: [-85.4808, 32.6067],
@@ -200,9 +235,12 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
       createdMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
       mapRef.current = createdMap;
       createdMap.once('load', () => { if (!cancelled) setMapReady(true); });
+      observer = new ResizeObserver(() => createdMap?.resize());
+      observer.observe(containerRef.current);
     });
     return () => {
       cancelled = true;
+      observer?.disconnect();
       markerRef.current?.remove();
       observationMarkersRef.current.forEach(marker => marker.remove());
       createdMap?.remove();
@@ -220,7 +258,7 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
       markerElement.className = `incident-marker incident-marker--${incident.severity}`;
       markerElement.type = 'button';
       markerElement.setAttribute('aria-label', `${incident.severity} incident: ${incident.title}`);
-      markerElement.innerHTML = '<span></span><strong>ACTIVE INCIDENT</strong>';
+      markerElement.innerHTML = '<span></span>';
       markerRef.current = new maplibregl.Marker({ element: markerElement, anchor: 'center' })
         .setLngLat([coordinates[0], coordinates[1]])
         .addTo(mapRef.current);
@@ -267,8 +305,8 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
       if (existingSource) existingSource.setData(featureCollection);
       else {
         map.addSource('authoritative-operations', { type: 'geojson', data: featureCollection as never });
-        map.addLayer({ id: 'authoritative-operations-glow', type: 'line', source: 'authoritative-operations', paint: { 'line-color': '#ff9f43', 'line-width': 8, 'line-opacity': 0.28, 'line-blur': 5 } });
-        map.addLayer({ id: 'authoritative-operations-line', type: 'line', source: 'authoritative-operations', paint: { 'line-color': '#ffb45f', 'line-width': 3.5, 'line-opacity': 0.95 } });
+        map.addLayer({ id: 'authoritative-operations-glow', type: 'line', source: 'authoritative-operations', paint: { 'line-color': '#c9a66b', 'line-width': 4, 'line-opacity': 0.18, 'line-blur': 2 } });
+        map.addLayer({ id: 'authoritative-operations-line', type: 'line', source: 'authoritative-operations', paint: { 'line-color': '#c9a66b', 'line-width': 2, 'line-opacity': 0.9 } });
       }
     });
     return () => { cancelled = true; };
@@ -309,16 +347,16 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
           if (definition.geometryType === 'point') {
             map.addLayer({
               id: `${sourceId}-point`, type: 'circle', source: sourceId,
-              paint: { 'circle-radius': 4, 'circle-color': '#54d6ff', 'circle-opacity': 0.75, 'circle-stroke-width': 1, 'circle-stroke-color': '#04222c' },
+              paint: { 'circle-radius': 3.5, 'circle-color': '#7eb8c9', 'circle-opacity': 0.7, 'circle-stroke-width': 1, 'circle-stroke-color': '#0a0c0e' },
             });
           } else {
             map.addLayer({
               id: `${sourceId}-fill`, type: 'fill', source: sourceId,
-              paint: { 'fill-color': '#8fd6a0', 'fill-opacity': 0.35 },
+              paint: { 'fill-color': '#5dcaa5', 'fill-opacity': 0.18 },
             });
             map.addLayer({
               id: `${sourceId}-line`, type: 'line', source: sourceId,
-              paint: { 'line-color': '#b7f0c4', 'line-width': 1, 'line-opacity': 0.7 },
+              paint: { 'line-color': '#8fd9bd', 'line-width': 1, 'line-opacity': 0.55 },
             });
           }
         } catch {
@@ -337,54 +375,31 @@ function OperationalMap({ incident, sources, observations }: { incident: Inciden
   return (
     <section className="map-pane" aria-label="Operational map">
       <div ref={containerRef} className="map-canvas" />
-      <div className="map-titlebar">
-        <div>
-          <span>Operational map</span>
-          <strong>{incident?.title || 'Auburn event area'}</strong>
-        </div>
-        <div className="map-freshness">
-          <span>{liveObservations.length} authoritative observations</span>
-          <span>{transitCount} active transit vehicles</span>
-          <span>{closureCount} current closures / detours</span>
-        </div>
+      <div className="map-toolbar">
+        <span>{liveObservations.length} live · {transitCount} transit · {closureCount} closures</span>
+        {referenceCatalog.map(definition => {
+          const active = activeReference.includes(definition.code);
+          return (
+            <button
+              key={definition.code}
+              type="button"
+              className={active ? 'map-reference__toggle map-reference__toggle--on' : 'map-reference__toggle'}
+              aria-pressed={active}
+              title={definition.limitations}
+              onClick={() => {
+                setReferenceError(null);
+                setActiveReference(current => active
+                  ? current.filter(code => code !== definition.code)
+                  : [...current, definition.code]);
+              }}
+            >
+              {definition.name}
+            </button>
+          );
+        })}
+        {referenceError && <small>{referenceError}</small>}
       </div>
-      <div className="map-legend">
-        <span><i className="legend-dot legend-dot--incident" /> Active incident</span>
-        <span><i className="legend-line" /> Official closure / detour</span>
-        <span><i className="legend-dot legend-dot--capacity" /> Live transit / flow observation</span>
-      </div>
-      {referenceCatalog.length > 0 && (
-        <div className="map-reference" role="group" aria-label="City reference layers">
-          <span>City asset reference</span>
-          {referenceCatalog.map(definition => {
-            const active = activeReference.includes(definition.code);
-            return (
-              <button
-                key={definition.code}
-                type="button"
-                className={active ? 'map-reference__toggle map-reference__toggle--on' : 'map-reference__toggle'}
-                aria-pressed={active}
-                title={definition.limitations}
-                onClick={() => {
-                  setReferenceError(null);
-                  setActiveReference(current => active
-                    ? current.filter(code => code !== definition.code)
-                    : [...current, definition.code]);
-                }}
-              >
-                {definition.name}
-              </button>
-            );
-          })}
-          {referenceError && <small>{referenceError}</small>}
-        </div>
-      )}
-      {delayed.length > 0 && (
-        <button className="source-warning" type="button" aria-label="Open source health">
-          <strong>{delayed.length} source{delayed.length === 1 ? '' : 's'} require connection or attention</strong>
-          <span>{delayed.map(source => source.name).join(', ')}</span>
-        </button>
-      )}
+      {delayed.length > 0 && <span className="map-toolbar__note">{delayed.length} feeds need attention — listed at right</span>}
     </section>
   );
 }
@@ -403,154 +418,207 @@ function ApprovalProgress({ recommendation }: { recommendation: Recommendation }
   );
 }
 
-function DeskReview({ findings }: { findings: AgentFinding[] }) {
-  if (!findings.length) return null;
+function deskNote(finding: AgentFinding): string {
+  const text = finding.status === 'contributed' ? finding.interpretation : finding.observation;
+  return text.length > 92 ? `${text.slice(0, 89).trim()}…` : text;
+}
+
+function DeskBoard({
+  findings, canConfigure, onConfigureDesk,
+}: {
+  findings: AgentFinding[];
+  canConfigure: boolean;
+  onConfigureDesk: (deskCode: 'atlas' | 'aqua') => void;
+}) {
   const nexus = findings.find(finding => finding.agentCode === 'nexus');
-  const desks = findings.filter(finding => finding.agentCode !== 'nexus');
+  const byCode = new Map(findings.map(finding => [finding.agentCode.toLowerCase(), finding]));
   return (
-    <div className="decision-block decision-block--desks">
-      <span>Agent desks</span>
-      {nexus && (
-        <p className="desk-composition">
-          {nexus.observation} {nexus.interpretation}
-        </p>
-      )}
-      {nexus?.limitations && <p className="desk-composition__limit">{nexus.limitations}</p>}
-      <div className="desk-chips" role="list">
-        {desks.map(finding => (
-          <article
-            key={finding.agentCode}
-            className={`desk-chip desk-chip--${finding.status}${finding.conflicts.length ? ' desk-chip--dissent' : ''}`}
-            role="listitem"
-          >
-            <header>
-              <strong>{finding.agentName}</strong>
-              <span>{finding.status === 'contributed' ? 'Contributed' : 'No evidence'}</span>
-            </header>
-            <p>{finding.status === 'contributed' ? finding.interpretation : finding.observation}</p>
-            {finding.conflicts.map(conflict => (
-              <small key={`${conflict.withAgentCode}:${conflict.concern}`}>
-                Disagrees with {conflict.withAgentCode.toUpperCase()}: {conflict.concern}
-              </small>
-            ))}
-          </article>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DecisionQueue({ recommendation, onReview }: { recommendation: Recommendation | null; onReview: (action: DecisionAction) => void }) {
-  if (!recommendation) {
-    return (
-      <aside className="decision-pane empty-pane">
-        <div className="section-eyebrow">Decision queue</div>
-        <div className="empty-state">
-          <span className="empty-state__code">0 PENDING</span>
-          <h2>No decision requires your authority</h2>
-          <p>Approved agency commitments remain visible in the action rail below.</p>
-        </div>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="decision-pane" aria-label="Human decision queue">
-      <div className="decision-pane__header">
+    <section className="desk-board" aria-label="Agent desks">
+      <header className="desk-board__head">
         <div>
-          <span className="section-eyebrow">Decision queue · 1 requires authority</span>
-          <h2>{recommendation.priority.toUpperCase()} PRIORITY</h2>
+          <span>Who looked</span>
+          <strong>Six desks</strong>
         </div>
-        <div className="expiry-chip">
-          <span>Expires</span>
-          <strong>{formatTime(recommendation.expiresAt)}</strong>
-        </div>
-      </div>
-      <div className="decision-scroll">
-        <div className="decision-block decision-block--action">
-          <span>AI-assisted recommendation</span>
-          <p>{recommendation.recommendedAction}</p>
-        </div>
-        <DeskReview findings={recommendation.agentFindings ?? []} />
-        <div className="decision-block">
-          <span>Expected effect</span>
-          <p>{recommendation.expectedEffect}</p>
-        </div>
-        <div className="decision-block decision-block--constraints">
-          <span>Operational constraints</span>
-          <ul>{recommendation.constraints.map(constraint => <li key={constraint}>{constraint}</li>)}</ul>
-        </div>
-        <div className="decision-block">
-          <span>Evidence reviewed by Nexus</span>
-          {recommendation.evidence.map(item => (
-            <div className="evidence-line" key={item.evidenceId}>
-              <div><strong>{item.sourceName}</strong><small>{formatTime(item.observedAt)}</small></div>
-              <p>{item.summary}</p>
-            </div>
-          ))}
-        </div>
-        <div className="decision-block decision-block--limitations">
-          <span>Known limitation</span>
-          <p>{recommendation.limitations}</p>
-        </div>
-        <ApprovalProgress recommendation={recommendation} />
-      </div>
-      <div className="decision-actions">
-        <button className="button button--approve" type="button" onClick={() => onReview('approve')}>Review & approve</button>
-        <button className="button button--secondary" type="button" onClick={() => onReview('request_revision')}>Revise</button>
-        <button className="button button--danger" type="button" onClick={() => onReview('reject')}>Reject</button>
-        <button className="button button--secondary" type="button" onClick={() => onReview('escalate')}>Escalate</button>
-      </div>
-    </aside>
-  );
-}
-
-function CommitmentRail({ commitments, onTransition }: { commitments: Commitment[]; onTransition: (commitment: Commitment, target: Commitment['state']) => void }) {
-  return (
-    <section className="commitment-rail" aria-label="Persistent agency commitment rail">
-      <div className="commitment-rail__title">
-        <span>Agency commitments</span>
-        <strong>{commitments.length} active</strong>
-      </div>
-      <div className="commitment-list">
-        {commitments.length === 0 ? (
-          <div className="commitment-empty">No agency commitment has been created. Approval creates accountable work; it does not execute an agency action.</div>
-        ) : commitments.map(commitment => (
-          <article key={commitment.commitmentId} className={`commitment-card commitment-card--${commitment.state}`}>
-            <div className="commitment-card__status"><span />{titleCase(commitment.state)}</div>
-            <h3>{commitment.ownerAgencyName}</h3>
-            <p>{commitment.requestedOutcome}</p>
-            <div className="commitment-card__meta">
-              <span>Due {formatTime(commitment.dueAt)}</span>
-              <span>v{commitment.version}</span>
-            </div>
-            {commitment.state === 'requested' && (
-              <button type="button" onClick={() => onTransition(commitment, 'acknowledged')}>Acknowledge request</button>
-            )}
-            {commitment.state === 'acknowledged' && (
-              <button type="button" onClick={() => onTransition(commitment, 'approved')}>Accept work</button>
-            )}
-            {commitment.state === 'approved' && (
-              <button type="button" onClick={() => onTransition(commitment, 'executing')}>Mark executing</button>
-            )}
-          </article>
-        ))}
+        {nexus && <p>{nexus.observation}</p>}
+      </header>
+      <div className="desk-board__grid" role="list">
+        {DESK_ORDER.map(code => {
+          const finding = byCode.get(code);
+          const status = finding?.status ?? 'absent';
+          return (
+            <article
+              key={code}
+              className={`desk-card desk-card--${status}${finding?.conflicts.length ? ' desk-card--dissent' : ''}`}
+              role="listitem"
+            >
+              <img src={DESK_ICONS[code]} alt="" />
+              <div className="desk-card__brand">
+                <strong>{deskCallsign(code)}</strong>
+                <small>{deskName(code)}</small>
+              </div>
+              <span className="desk-card__status">{finding ? deskStatusLabel(finding.status, finding.modelVersion) : 'Not on this card'}</span>
+              <p>{finding ? deskNote(finding) : 'This desk was not asked to review this incident.'}</p>
+              {(code === 'atlas' || code === 'aqua') && canConfigure && (
+                <button type="button" className="desk-card__config" onClick={() => onConfigureDesk(code)}>Configure</button>
+              )}
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function SourceStrip({ sources }: { sources: SourceHealth[] }) {
-  return (
-    <div className="source-strip" aria-label="Source freshness">
-      {sources.map(source => (
-        <div key={source.sourceId} className={`source-item source-item--${source.connectionStatus || 'not_connected'}`} title={source.authorityUri || source.ownerAgencyName}>
-          <StatusDot status={source.status} />
-          <div><strong>{source.name}</strong><span>{source.connectionStatus && source.connectionStatus !== 'connected' ? titleCase(source.connectionStatus) : formatRelativeSeconds(source.lagSeconds)}</span></div>
-          <small>{titleCase(source.dataClassification || 'operational')}</small>
+function ReviewWorkspace({
+  incident, recommendation, map, onReview, canConfigure, onConfigureDesk,
+}: {
+  incident: Incident | null;
+  recommendation: Recommendation | null;
+  map: ReactNode;
+  onReview: (action: DecisionAction) => void;
+  canConfigure: boolean;
+  onConfigureDesk: (deskCode: 'atlas' | 'aqua') => void;
+}) {
+  if (!incident) {
+    return (
+      <section className="workspace-pane workspace-pane--empty">
+        <div className="empty-state">
+          <span className="empty-state__code">Clear</span>
+          <h2>No incident to review</h2>
+          <p>The map still shows the operating area. A decision card will open here when a rule fires.</p>
         </div>
-      ))}
-    </div>
+        <div className="workspace-map">{map}</div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="workspace-pane" aria-label="Review workspace">
+      <header className="workspace-head">
+        <span>Review this</span>
+        <h1>{incident.title}</h1>
+        <div className="workspace-head__meta">
+          <span className={`severity-badge severity-badge--${incident.severity}`}>{severityLabel(incident.severity)}</span>
+          {recommendation && <span>Decide by {formatTime(recommendation.expiresAt)}</span>}
+          <span>Owned by {incident.commandOwner?.displayName || 'Unassigned'}</span>
+        </div>
+      </header>
+      <div className="workspace-map">{map}</div>
+      {recommendation?.agentFindings?.length
+        ? <DeskBoard findings={recommendation.agentFindings} canConfigure={canConfigure} onConfigureDesk={onConfigureDesk} />
+        : (
+          <section className="desk-board">
+            <header className="desk-board__head"><div><span>Who looked</span><strong>Six desks</strong></div></header>
+            <p className="desk-board__empty">Desks have not reviewed this yet.</p>
+          </section>
+        )}
+      <div className="workspace-cards">
+        <article className="workspace-card">
+          <span>Why this is open</span>
+          <p>{incident.whatChanged}</p>
+          <p className="workspace-card__muted">{incident.whyItMatters}</p>
+        </article>
+        <article className="workspace-card workspace-card--action">
+          <span>Recommended next step</span>
+          <p>{recommendation?.recommendedAction || 'No recommendation is waiting.'}</p>
+          {recommendation && <p className="workspace-card__muted">{recommendation.expectedEffect}</p>}
+        </article>
+        <article className="workspace-card workspace-card--limits">
+          <span>Limits</span>
+          {recommendation ? (
+            <>
+              <ul>{recommendation.constraints.map(constraint => <li key={constraint}>{constraint}</li>)}</ul>
+              <p className="workspace-card__muted">{recommendation.limitations}</p>
+            </>
+          ) : <p>No decision limits are open.</p>}
+        </article>
+      </div>
+      {recommendation && (
+        <div className="workspace-actions">
+          <button className="button button--danger" type="button" onClick={() => onReview('reject')}>Decline</button>
+          <button className="button button--secondary" type="button" onClick={() => onReview('request_revision')}>Send back</button>
+          <button className="button button--secondary" type="button" onClick={() => onReview('escalate')}>Escalate</button>
+          <button className="button button--approve" type="button" onClick={() => onReview('approve')}>Approve</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ReviewContext({
+  recommendation, sources, commitments, onTransition,
+}: {
+  recommendation: Recommendation | null;
+  sources: SourceHealth[];
+  commitments: Commitment[];
+  onTransition: (commitment: Commitment, target: Commitment['state']) => void;
+}) {
+  const attention = sources.filter(source => source.status !== 'healthy' || source.connectionStatus !== 'connected');
+  return (
+    <aside className="context-pane" aria-label="Sources and assigned work">
+      <section className="context-card">
+        <header className="pane-head">
+          <div>
+            <span>Official sources</span>
+            <strong>{recommendation?.evidence.length ?? 0} cited</strong>
+          </div>
+        </header>
+        {recommendation?.evidence.length ? recommendation.evidence.map(item => (
+          <div className="evidence-line" key={item.evidenceId}>
+            <div><strong>{item.sourceName}</strong><small>{formatTime(item.observedAt)}</small></div>
+            <p>{item.summary}</p>
+          </div>
+        )) : <p className="context-empty">No cited sources until a recommendation is open.</p>}
+        {recommendation && <ApprovalProgress recommendation={recommendation} />}
+      </section>
+      <section className="context-card">
+        <header className="pane-head">
+          <div>
+            <span>Feeds</span>
+            <strong className={attention.length ? 'text-warning' : 'text-positive'}>
+              {attention.length ? `${attention.length} need attention` : 'All connected'}
+            </strong>
+          </div>
+        </header>
+        <div className="context-feeds">
+          {sources.map(source => (
+            <div key={source.sourceId} className={`source-item source-item--${source.connectionStatus || 'not_connected'}`}>
+              <StatusDot status={source.status} />
+              <div>
+                <strong>{source.name}</strong>
+                <span>{source.connectionStatus && source.connectionStatus !== 'connected' ? connectionLabel(source.connectionStatus) : formatRelativeSeconds(source.lagSeconds)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="context-card">
+        <header className="pane-head">
+          <div>
+            <span>Assigned work</span>
+            <strong>{commitments.length} open</strong>
+          </div>
+        </header>
+        {commitments.length === 0 ? (
+          <p className="context-empty">Approving creates a record of who is responsible. It does not send a crew.</p>
+        ) : commitments.map(commitment => (
+          <article key={commitment.commitmentId} className={`commitment-card commitment-card--${commitment.state}`}>
+            <div className="commitment-card__status"><span />{commitmentLabel(commitment.state)}</div>
+            <h3>{commitment.ownerAgencyName}</h3>
+            <p>{commitment.requestedOutcome}</p>
+            {commitment.state === 'requested' && (
+              <button type="button" onClick={() => onTransition(commitment, 'acknowledged')}>Mark seen</button>
+            )}
+            {commitment.state === 'acknowledged' && (
+              <button type="button" onClick={() => onTransition(commitment, 'approved')}>Accept</button>
+            )}
+            {commitment.state === 'approved' && (
+              <button type="button" onClick={() => onTransition(commitment, 'executing')}>Mark in progress</button>
+            )}
+          </article>
+        ))}
+      </section>
+    </aside>
   );
 }
 
@@ -578,30 +646,30 @@ function DecisionDialog({
       <section className="decision-dialog" role="dialog" aria-modal="true" aria-labelledby="decision-dialog-title">
         <div className="decision-dialog__header">
           <div>
-            <span>Human authorization</span>
+            <span>Your decision</span>
             <h2 id="decision-dialog-title">{decisionLabels[state.action]}</h2>
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Close decision review">Close</button>
         </div>
         <div className="dialog-summary">
-          <span>Exact recommendation version {state.recommendation.version}</span>
+          <span>Recommendation version {state.recommendation.version}</span>
           <p>{state.recommendation.recommendedAction}</p>
         </div>
         <div className="dialog-grid">
           <div><span>Evidence snapshot</span><strong>{state.recommendation.evidenceSnapshotHash}</strong></div>
-          <div><span>Approval expires</span><strong>{formatTime(state.recommendation.expiresAt)}</strong></div>
+          <div><span>Decide by</span><strong>{formatTime(state.recommendation.expiresAt)}</strong></div>
         </div>
         <label className="field-label">
-          Reason code
-          <input value={reason} onChange={event => setReason(event.target.value)} placeholder="Operational reason code" disabled={busy} />
+          Why
+          <input value={reason} onChange={event => setReason(event.target.value)} placeholder="Short reason" disabled={busy} />
         </label>
         <label className="field-label">
-          Operator comment {requiresComment ? '(required)' : '(optional)'}
-          <textarea value={comment} onChange={event => setComment(event.target.value)} placeholder="Record the operational rationale and relevant constraints." disabled={busy} />
+          Note {requiresComment ? '(required)' : '(optional)'}
+          <textarea value={comment} onChange={event => setComment(event.target.value)} placeholder="What you reviewed and any limits that still apply." disabled={busy} />
         </label>
         <label className="confirmation-check">
           <input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy} />
-          <span>I reviewed the cited evidence, degraded-source warning, operational constraints, and exact recommendation version. I understand that approval creates agency commitments and does not directly control an agency system.</span>
+          <span>I reviewed the cited sources, any feed warnings, and the limits listed on the card. Approving records who is responsible. It does not control a signal, radio, or field system.</span>
         </label>
         {error && <div className="form-error" role="alert">{error}</div>}
         <div className="decision-dialog__actions">
@@ -616,16 +684,16 @@ function DecisionDialog({
 }
 
 function LoadingScreen() {
-  return <main className="system-screen"><div className="system-panel"><div className="loading-mark" /><h1>Opening operational command center</h1><p>Validating identity, storage, active event, and source health.</p></div></main>;
+  return <main className="system-screen"><div className="system-panel"><div className="loading-mark" /><h1>Opening the desk</h1><p>Checking who you are, the open window, and which feeds are connected.</p></div></main>;
 }
 
 function FailureScreen({ title, message, onRetry }: { title: string; message: string; onRetry: () => void }) {
   return (
     <main className="system-screen">
       <div className="system-panel system-panel--error">
-        <span className="system-code">COMMAND CENTER UNAVAILABLE</span>
+        <span className="system-code">Unavailable</span>
         <h1>{title}</h1><p>{message}</p>
-        <button className="button button--approve" type="button" onClick={onRetry}>Retry connection</button>
+        <button className="button button--approve" type="button" onClick={onRetry}>Try again</button>
       </div>
     </main>
   );
@@ -643,6 +711,8 @@ export function OperationalCommandCenter() {
   const [packs, setPacks] = useState<ScenarioPack[]>([]);
   const [noActiveWindow, setNoActiveWindow] = useState(false);
   const [windowDialogOpen, setWindowDialogOpen] = useState(false);
+  const [configDesk, setConfigDesk] = useState<'atlas' | 'aqua' | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -674,7 +744,7 @@ export function OperationalCommandCenter() {
         window.location.assign('/');
         return;
       }
-      const message = reason instanceof OperationalApiError ? reason.message : 'Unable to open the operational command center.';
+      const message = reason instanceof OperationalApiError ? reason.message : 'Unable to open the desk.';
       setError(message);
     } finally {
       setLoading(false);
@@ -688,8 +758,12 @@ export function OperationalCommandCenter() {
     return () => { window.clearInterval(timer); };
   }, [load, snapshot?.event.eventId]);
 
-  const primaryIncident = useMemo(() => snapshot?.incidents.find(item => ['active', 'triaged', 'new'].includes(item.status)) || snapshot?.incidents[0] || null, [snapshot]);
-  const primaryRecommendation = snapshot?.decisionQueue[0] || null;
+  const openIncidents = useMemo(
+    () => snapshot?.incidents.filter(item => ['active', 'triaged', 'new'].includes(item.status)) || snapshot?.incidents || [],
+    [snapshot],
+  );
+  const selectedIncident = openIncidents.find(item => item.incidentId === selectedIncidentId) || openIncidents[0] || null;
+  const selectedRecommendation = snapshot?.decisionQueue.find(item => item.incidentId === selectedIncident?.incidentId) || snapshot?.decisionQueue[0] || null;
 
   const submitDecision = async (reason: string, comment: string) => {
     if (!dialog) return;
@@ -766,13 +840,13 @@ export function OperationalCommandCenter() {
       </>
     );
   }
-  if (error && !snapshot) return <FailureScreen title="Operational services are not ready" message={error} onRetry={() => void load()} />;
-  if (!status || !principal || !snapshot) return <FailureScreen title="No live event is available" message="A named operational event, persistent database, and agency identity are required." onRetry={() => void load()} />;
+  if (error && !snapshot) return <FailureScreen title="The desk could not open" message={error} onRetry={() => void load()} />;
+  if (!status || !principal || !snapshot) return <FailureScreen title="Nothing is being coordinated" message="An open window, a working database, and a named operator are required." onRetry={() => void load()} />;
 
   const activePack = packs.find(pack => pack.packCode === snapshot.event.scenarioPackCode) ?? null;
 
   return (
-    <div className="command-shell">
+    <div className="command-shell desk">
       <Header
         status={status}
         snapshot={snapshot}
@@ -782,17 +856,48 @@ export function OperationalCommandCenter() {
         onChangeWindow={() => { setMutationError(null); setWindowDialogOpen(true); }}
         onCloseWindow={() => void closeWindow()}
       />
-      {status.database === 'review_repository' && <div className="review-banner">LOCAL REVIEW DATA · NO LIVE AGENCY SYSTEM IS CONNECTED OR CONTROLLED</div>}
-      <main className="command-grid">
-        <SituationBrief incident={primaryIncident} recommendation={primaryRecommendation} />
-        <OperationalMap incident={primaryIncident} sources={snapshot.sources} observations={snapshot.observations} />
-        <DecisionQueue recommendation={primaryRecommendation} onReview={action => { if (primaryRecommendation) { setMutationError(null); setDialog({ action, recommendation: primaryRecommendation }); } }} />
+      <main className="desk-layout">
+        <ReviewQueue
+          incidents={openIncidents}
+          selectedId={selectedIncident?.incidentId ?? null}
+          recommendation={selectedRecommendation}
+          onSelect={setSelectedIncidentId}
+        />
+        <ReviewWorkspace
+          incident={selectedIncident}
+          recommendation={selectedRecommendation}
+          map={<OperationalMap incident={selectedIncident} sources={snapshot.sources} observations={snapshot.observations} />}
+          canConfigure={canManageWindow}
+          onConfigureDesk={deskCode => { setMutationError(null); setConfigDesk(deskCode); }}
+          onReview={action => {
+            if (selectedRecommendation) {
+              setMutationError(null);
+              setDialog({ action, recommendation: selectedRecommendation });
+            }
+          }}
+        />
+        <ReviewContext
+          recommendation={selectedRecommendation}
+          sources={snapshot.sources}
+          commitments={snapshot.commitments}
+          onTransition={transitionCommitment}
+        />
       </main>
-      <SourceStrip sources={snapshot.sources} />
-      <CommitmentRail commitments={snapshot.commitments} onTransition={transitionCommitment} />
       {error && <button className="global-alert" type="button" onClick={() => setError(null)}>{error}<span>Dismiss</span></button>}
       {dialog && <DecisionDialog state={dialog} busy={mutationBusy} error={mutationError} onClose={() => setDialog(null)} onSubmit={submitDecision} />}
       {windowDialog}
+      {configDesk && (
+        <DeskConfigDialog
+          deskCode={configDesk}
+          busy={mutationBusy}
+          error={mutationError}
+          onClose={() => { setConfigDesk(null); setMutationError(null); }}
+          onSaved={async () => {
+            await load(true);
+            setConfigDesk(null);
+          }}
+        />
+      )}
     </div>
   );
 }

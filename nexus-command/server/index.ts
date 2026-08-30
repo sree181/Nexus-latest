@@ -9,6 +9,7 @@
  * always runs the image default will otherwise start a second API and no worker at all,
  * which looks healthy while ingestion silently stops between deploys.
  */
+import './loadEnv.js';
 import express from 'express';
 import { createApp } from './app.js';
 import { createOperationalRepository } from './operational/repositoryFactory.js';
@@ -20,9 +21,16 @@ import { ConnectorService } from './connectors/service.js';
 import { startConnectorWorker } from './connectors/workerLoop.js';
 import { PostgresGraphRepository } from './graph/postgresRepository.js';
 import { resolveServiceRole } from './serviceRole.js';
+import { atlasAiConfig } from './operational/agents/atlas/config.js';
 
 const port = Number(process.env.PORT || process.env.AGENT_PORT || 4002);
 const role = resolveServiceRole(process.env.NEXUS_SERVICE_ROLE);
+const atlas = atlasAiConfig();
+if (atlas.enabled) {
+  console.info('[desk-agent] ATLAS and AQUA enabled', { model: atlas.model, host: atlas.baseUrl });
+} else {
+  console.info('[desk-agent] Rule assessor only (set ATLAS_AI_ENABLED and GROQ_API_KEY to enable ATLAS and AQUA)');
+}
 
 if (role === 'connector-worker') {
   if (!hasDatabaseConfiguration()) {

@@ -9,10 +9,13 @@
  */
 import { authoritativeConnectors } from '../../connectors/registry.js';
 import type { DetectionEvidence, DetectionMatch } from '../detection/rules.js';
+import { isAtlasAiEnabled, runAtlasAgent } from './atlas/index.js';
+import { runAquaAgent } from './aqua/index.js';
 import {
   agentDesks,
   COMPOSER_AGENT_CODE,
   type AgentDesk,
+  type DeskAssessment,
   type DeskConflict,
   type DeskContext,
   type FindingStatus,
@@ -29,6 +32,8 @@ export interface DeskFinding {
   limitations: string;
   citedEvidenceIds: string[];
   conflicts: DeskConflict[];
+  modelName?: string;
+  modelVersion?: string;
 }
 
 export interface DeskComposition {
@@ -58,9 +63,49 @@ export interface ComposeOptions {
   desks?: AgentDesk[];
   connectorNames?: Map<string, string>;
   now?: number;
+  /** Test hook. Production uses the desk agent when ATLAS_AI_ENABLED and a key are set. */
+  assessAtlas?: (visible: DetectionEvidence[], context: DeskContext) => Promise<DeskAssessment | null> | DeskAssessment | null;
+  assessAqua?: (visible: DetectionEvidence[], context: DeskContext) => Promise<DeskAssessment | null> | DeskAssessment | null;
 }
 
-export function composeDeskFindings(options: ComposeOptions): DeskComposition {
+async function assessStaffedDesk(
+  desk: AgentDesk,
+  visible: DetectionEvidence[],
+  context: DeskContext,
+  options: ComposeOptions,
+): Promise<{ assessment: DeskAssessment | null; modelName?: string; modelVersion?: string }> {
+  if (desk.code === 'atlas') {
+    if (options.assessAtlas) {
+      return { assessment: await options.assessAtlas(visible, context) };
+    }
+    if (!isAtlasAiEnabled() || process.env.NODE_ENV === 'test') {
+      return { assessment: desk.assess(visible, context) };
+    }
+    const result = await runAtlasAgent(visible, context);
+    return {
+      assessment: result.assessment,
+      modelName: result.source === 'agent' ? result.modelName : undefined,
+      modelVersion: result.source === 'agent' ? result.modelVersion : undefined,
+    };
+  }
+  if (desk.code === 'aqua') {
+    if (options.assessAqua) {
+      return { assessment: await options.assessAqua(visible, context) };
+    }
+    if (!isAtlasAiEnabled() || process.env.NODE_ENV === 'test') {
+      return { assessment: desk.assess(visible, context) };
+    }
+    const result = await runAquaAgent(visible, context);
+    return {
+      assessment: result.assessment,
+      modelName: result.source === 'agent' ? result.modelName : undefined,
+      modelVersion: result.source === 'agent' ? result.modelVersion : undefined,
+    };
+  }
+  return { assessment: desk.assess(visible, context) };
+}
+
+export async function composeDeskFindings(options: ComposeOptions): Promise<DeskComposition> {
   const names = options.connectorNames ?? connectorNameMap();
   const roster = options.desks ?? agentDesks;
   const staffed = roster.filter(desk => options.staffedAgentCodes.includes(desk.code));
@@ -82,11 +127,16 @@ export function composeDeskFindings(options: ComposeOptions): DeskComposition {
     const connected = desk.allowedConnectors.filter(code => options.liveConnectors.includes(code));
     let reason: string | null = null;
     let assessment = null;
+    let modelName: string | undefined;
+    let modelVersion: string | undefined;
 
     if (!connected.length) {
       reason = `No ${describe(desk.allowedConnectors, names)} feed is connected, so ${desk.name} cannot evaluate this incident.`;
     } else {
-      assessment = desk.assess(visible, context);
+      const reviewed = await assessStaffedDesk(desk, visible, context, options);
+      assessment = reviewed.assessment;
+      modelName = reviewed.modelName;
+      modelVersion = reviewed.modelVersion;
       if (!assessment) {
         reason = `${desk.name} reviewed ${visible.length} observation${visible.length === 1 ? '' : 's'} from ${describe(connected, names)} and found nothing that bears on this incident.`;
       }
@@ -125,6 +175,8 @@ export function composeDeskFindings(options: ComposeOptions): DeskComposition {
       limitations: `${assessment.limitations} ${desk.boundary}`.trim(),
       citedEvidenceIds: assessment.citedEvidenceIds,
       conflicts: deskConflicts,
+      modelName,
+      modelVersion,
     });
   }
 

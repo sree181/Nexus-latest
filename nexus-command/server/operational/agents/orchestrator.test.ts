@@ -67,8 +67,8 @@ describe('desk contract', () => {
     expect(assessment).toBeNull();
   });
 
-  it('requires a contributing desk to cite evidence', () => {
-    const composition = composeDeskFindings({
+  it('requires a contributing desk to cite evidence', async () => {
+    const composition = await composeDeskFindings({
       staffedAgentCodes: GAMEDAY_DESKS,
       match: match(),
       snapshot: [
@@ -98,7 +98,7 @@ describe('composition', () => {
    * The acceptance case: two desks contribute on real evidence, the parking desk is silent because
    * no occupancy feed exists, and the two contributors disagree on one point.
    */
-  it('names contributors, reports the silent desks, and records dissent', () => {
+  it('names contributors, reports the silent desks, and records dissent', async () => {
     const snapshot = [
       evidence({
         evidenceId: '00000000-0000-4000-8000-000000000010',
@@ -114,7 +114,7 @@ describe('composition', () => {
       }),
     ];
 
-    const composition = composeDeskFindings({
+    const composition = await composeDeskFindings({
       staffedAgentCodes: GAMEDAY_DESKS,
       match: match(),
       snapshot,
@@ -144,8 +144,8 @@ describe('composition', () => {
     expect(nexus.candidateAction).toBe(match().rule.playbook.recommendedAction);
   });
 
-  it('produces one finding per staffed desk plus the composer', () => {
-    const composition = composeDeskFindings({
+  it('produces one finding per staffed desk plus the composer', async () => {
+    const composition = await composeDeskFindings({
       staffedAgentCodes: GAMEDAY_DESKS,
       match: match(),
       snapshot: [],
@@ -156,8 +156,8 @@ describe('composition', () => {
     expect(composition.findings.filter(finding => finding.agentCode === 'nexus')).toHaveLength(1);
   });
 
-  it('states plainly when no desk could evaluate the incident', () => {
-    const composition = composeDeskFindings({
+  it('states plainly when no desk could evaluate the incident', async () => {
+    const composition = await composeDeskFindings({
       staffedAgentCodes: GAMEDAY_DESKS,
       match: match(),
       snapshot: [],
@@ -169,8 +169,8 @@ describe('composition', () => {
     expect(nexus.observation).toMatch(/No staffed desk could evaluate/);
   });
 
-  it('keeps PHOENIX silent when the corridor is constrained but no permitted evidence exists to cite', () => {
-    const composition = composeDeskFindings({
+  it('keeps PHOENIX silent when the corridor is constrained but no permitted evidence exists to cite', async () => {
+    const composition = await composeDeskFindings({
       staffedAgentCodes: GAMEDAY_DESKS,
       match: match(),
       snapshot: [
@@ -187,8 +187,8 @@ describe('composition', () => {
     expect(phoenix.citedEvidenceIds).toEqual([]);
   });
 
-  it('has PHOENIX flag an emergency-corridor constraint it cannot verify', () => {
-    const composition = composeDeskFindings({
+  it('has PHOENIX flag an emergency-corridor constraint it cannot verify', async () => {
+    const composition = await composeDeskFindings({
       staffedAgentCodes: GAMEDAY_DESKS,
       match: match(),
       snapshot: [
@@ -209,8 +209,8 @@ describe('composition', () => {
     expect(conflict!.basis).toMatch(/No emergency-access feed is connected/);
   });
 
-  it('keeps a desk silent rather than guessing when its feed is absent', () => {
-    const composition = composeDeskFindings({
+  it('keeps a desk silent rather than guessing when its feed is absent', async () => {
+    const composition = await composeDeskFindings({
       staffedAgentCodes: ['aqua', 'nexus'],
       match: match(),
       snapshot: [
@@ -221,5 +221,58 @@ describe('composition', () => {
     const aqua = composition.findings.find(finding => finding.agentCode === 'aqua')!;
     expect(aqua.status).toBe('abstained');
     expect(aqua.candidateAction).toMatch(/silent by design/);
+  });
+
+  it('lets an injected ATLAS assessor replace the rule desk', async () => {
+    const composition = await composeDeskFindings({
+      staffedAgentCodes: ['atlas', 'nexus'],
+      match: match(),
+      snapshot: [
+        evidence({
+          evidenceId: '00000000-0000-4000-8000-000000000040',
+          connectorCode: 'aldot-algo-traffic-v1',
+          attributes: { layer: 'travel_time', congestionLevel: 'Heavy' },
+          summary: 'I-85 heavy',
+        }),
+      ],
+      liveConnectors: ['aldot-algo-traffic-v1'],
+      assessAtlas: () => ({
+        observation: 'Agent-drafted observation of I-85 congestion.',
+        interpretation: 'The approach already has little headroom.',
+        candidateAction: 'Confirm the corridor picture with traffic operations before committing to a routing or messaging change.',
+        confidence: 0.61,
+        limitations: 'Probe speed only.',
+        citedEvidenceIds: ['00000000-0000-4000-8000-000000000040'],
+      }),
+    });
+    const atlas = composition.findings.find(finding => finding.agentCode === 'atlas')!;
+    expect(atlas.status).toBe('contributed');
+    expect(atlas.observation).toMatch(/Agent-drafted/);
+  });
+
+  it('lets an injected AQUA assessor replace the rule desk', async () => {
+    const composition = await composeDeskFindings({
+      staffedAgentCodes: ['aqua', 'nexus'],
+      match: match(),
+      snapshot: [
+        evidence({
+          evidenceId: '00000000-0000-4000-8000-000000000041',
+          connectorCode: 'auburn-eta-spot-v1',
+          summary: 'Two shuttles available',
+        }),
+      ],
+      liveConnectors: ['auburn-eta-spot-v1'],
+      assessAqua: () => ({
+        observation: 'Agent-drafted shuttle observation for the remote lot.',
+        interpretation: 'Occupancy is not connected, so AQUA cannot tell a full lot from a shuttle problem.',
+        candidateAction: 'Ask Parking and Transit to confirm lot and shuttle state before any remote-lot or staging change.',
+        confidence: 0.34,
+        limitations: 'Shuttle positions only.',
+        citedEvidenceIds: ['00000000-0000-4000-8000-000000000041'],
+      }),
+    });
+    const aqua = composition.findings.find(finding => finding.agentCode === 'aqua')!;
+    expect(aqua.status).toBe('contributed');
+    expect(aqua.observation).toMatch(/Agent-drafted/);
   });
 });

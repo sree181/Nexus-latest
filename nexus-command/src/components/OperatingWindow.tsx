@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import type { OperationalEvent, ScenarioPack } from '../operationalTypes';
-
-function titleCase(value: string): string {
-  return value.replace(/[_-]/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
-}
+import { phaseLabel } from '../uiCopy';
 
 function PackCard({ pack, selected, onSelect }: { pack: ScenarioPack; selected: boolean; onSelect: () => void }) {
   return (
@@ -17,9 +14,9 @@ function PackCard({ pack, selected, onSelect }: { pack: ScenarioPack; selected: 
       <p>{pack.description}</p>
       <div className="pack-card__facts">
         <span>{pack.connectorCodes.length} feeds</span>
-        <span>{pack.agentCodes.length} agent desks</span>
-        <span>{pack.ruleCount} detection rules</span>
-        <span>Opens in {titleCase(pack.defaultPhase)}</span>
+        <span>{pack.agentCodes.length} desks</span>
+        <span>{pack.ruleCount} rules</span>
+        <span>Starts as {phaseLabel(pack.defaultPhase)}</span>
       </div>
     </button>
   );
@@ -46,34 +43,33 @@ export function OperatingWindowDialog({
         <div className="decision-dialog__header">
           <div>
             <span>Operating window</span>
-            <h2 id="operating-window-title">Open a scenario</h2>
+            <h2 id="operating-window-title">Start coordinating</h2>
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Close">Close</button>
         </div>
 
         <div className="dialog-summary">
-          <span>What a scenario changes</span>
+          <span>What this chooses</span>
           <p>
-            The scenario decides which authoritative feeds are read, which agent desks are staffed, and which
-            detection rules may open an incident. Nexus coordinates and records decisions in every scenario; it
-            never controls an agency system.
+            The scenario picks which official feeds we read, which desks review them, and which rules can open
+            an incident. Nexus records decisions. It never controls a signal, radio, or field system.
           </p>
         </div>
 
         <div className="pack-grid">
-          {packs.length === 0 && <p className="pack-grid__empty">No scenario pack is available from the operational database.</p>}
+          {packs.length === 0 && <p className="pack-grid__empty">No scenarios are available yet.</p>}
           {packs.map(pack => (
             <PackCard key={pack.packCode} pack={pack} selected={pack.packCode === packCode} onSelect={() => setPackCode(pack.packCode)} />
           ))}
         </div>
 
         <label className="field-label">
-          Window name
+          What to call this window
           <input type="text" value={name} placeholder={resolvedName} onChange={event => setName(event.target.value)} disabled={busy} />
         </label>
 
         <label className="field-label">
-          Operating area
+          Area
           <input type="text" value={locationName} onChange={event => setLocationName(event.target.value)} disabled={busy} />
         </label>
 
@@ -87,7 +83,7 @@ export function OperatingWindowDialog({
             disabled={busy || !selected || resolvedName.length < 3 || locationName.trim().length < 2}
             onClick={() => onOpen({ packCode, name: resolvedName, locationName: locationName.trim() })}
           >
-            {busy ? 'Opening…' : 'Open operating window'}
+            {busy ? 'Opening…' : 'Start coordinating'}
           </button>
         </div>
       </section>
@@ -105,15 +101,15 @@ export function NoOperatingWindowScreen({
   return (
     <main className="system-screen">
       <div className="system-panel">
-        <span className="system-code">NO OPERATING WINDOW</span>
+        <span className="system-code">Idle</span>
         <h1>Nothing is being coordinated right now</h1>
         <p>
-          Nexus reads authoritative feeds and evaluates detection rules only inside an open operating window.
-          {canManage ? ' Open a scenario to begin.' : ' Opening a window requires the command-lead role.'}
+          Official feeds are read and rules can open incidents only while a window is open.
+          {canManage ? ' Choose a scenario to begin.' : ' Starting a window needs a command-lead account.'}
         </p>
         <div className="system-panel__actions">
           <button className="button button--secondary" type="button" onClick={onRetry}>Check again</button>
-          {canManage && <button className="button button--approve" type="button" onClick={onOpenWindow}>Open a scenario</button>}
+          {canManage && <button className="button button--approve" type="button" onClick={onOpenWindow}>Start coordinating</button>}
         </div>
       </div>
     </main>
@@ -121,7 +117,7 @@ export function NoOperatingWindowScreen({
 }
 
 export function OperatingWindowChip({
-  event, pack, canManage, onClose, onChange,
+  canManage, onClose, onChange,
 }: {
   event: OperationalEvent;
   pack: ScenarioPack | null;
@@ -130,12 +126,10 @@ export function OperatingWindowChip({
   onChange: () => void;
 }) {
   return (
-    <div className="header-field header-field--scenario" aria-label="Active scenario">
-      <span>Scenario</span>
-      <strong>{pack?.name ?? titleCase(event.eventType)}</strong>
+    <div className="header-field header-field--scenario" aria-label="Active window">
       {canManage && (
         <div className="scenario-actions">
-          <button type="button" onClick={onChange}>Switch</button>
+          <button type="button" onClick={onChange}>Switch window</button>
           <button type="button" onClick={onClose}>Close</button>
         </div>
       )}

@@ -77,8 +77,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <main className="system-screen">
         <div className="system-panel">
           <div className="loading-mark" />
-          <h1>Validating operator identity</h1>
-          <p>Live operations require a named human identity before the command center can open.</p>
+          <h1>Checking who you are</h1>
+          <p>A named person has to sign in before the desk can open.</p>
         </div>
       </main>
     );
@@ -88,18 +88,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <main className="system-screen">
         <div className="system-panel">
-          <span className="system-code">LIVE OPERATIONS</span>
-          <h1>Named operator sign-in required</h1>
+          <span className="system-code">Sign in</span>
+          <h1>Named operator required</h1>
           <p>
-            Nexus Coordinate records human decisions against a verified identity. This is not a simulation
-            workspace. Sign in with the assigned Event Mobility Command account.
+            Decisions are recorded against a real person. Sign in with your assigned account. This is not a
+            simulation.
           </p>
           {error && <div className="form-error" role="alert">{error}</div>}
           {!config.configured && (
             <p>The identity provider is not configured on this deployment. Set OIDC issuer, audience, JWKS, and client ID on nexus-api.</p>
           )}
           <button className="button button--approve" type="button" onClick={() => void signIn()} disabled={!config.configured}>
-            Sign in to live command
+            Sign in
           </button>
         </div>
       </main>
@@ -110,8 +110,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <main className="system-screen">
         <div className="system-panel system-panel--error">
-          <span className="system-code">IDENTITY UNAVAILABLE</span>
-          <h1>Operator identity could not be verified</h1>
+          <span className="system-code">Unavailable</span>
+          <h1>We could not verify who you are</h1>
           <p>{error}</p>
         </div>
       </main>

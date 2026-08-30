@@ -212,6 +212,8 @@ export interface AgentFinding {
   citedEvidenceIds: string[];
   conflicts: AgentConflict[];
   createdAt: string;
+  modelName?: string;
+  modelVersion?: string;
 }
 
 export interface Recommendation {

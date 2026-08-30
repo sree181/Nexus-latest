@@ -20,6 +20,9 @@ import {
   assertRecommendationSnapshot,
   assertVerifiedEvidence,
 } from './stateMachine.js';
+import { composeReviewDeskFindings, REVIEW_SIGN_ID } from './agents/reviewComposition.js';
+import { isAtlasAiEnabled } from './agents/atlas/config.js';
+import { setReviewDeskInvalidator } from './agents/reviewDeskCache.js';
 
 const EVENT_ID = '22222222-2222-4222-8222-222222222222';
 const INCIDENT_ID = '33333333-3333-4333-8333-333333333333';
@@ -38,8 +41,10 @@ export class ReviewOperationalRepository implements OperationalRepository {
   private readonly streamRecords: EventStreamRecord[] = [];
   private recommendationRecord: Recommendation;
   private commitments: Commitment[] = [];
+  private desksPromise: Promise<void> | null = null;
 
   constructor() {
+    setReviewDeskInvalidator(() => { this.desksPromise = null; });
     this.recommendationRecord = {
       recommendationId: RECOMMENDATION_ID,
       incidentId: INCIDENT_ID,
@@ -63,7 +68,14 @@ export class ReviewOperationalRepository implements OperationalRepository {
           receivedAt: iso(-1),
           summary: 'Approach speed has remained below the event threshold for eight minutes.',
           qualityFlags: [],
-          attributes: { corridor: 'Remote-lot approach', trend: 'deteriorating' },
+          attributes: {
+            corridor: 'Remote-lot approach',
+            trend: 'deteriorating',
+            layer: 'travel_time',
+            congestionLevel: 'Heavy',
+            currentSpeedMph: 18,
+            freeFlowSpeedMph: 42,
+          },
         },
         {
           evidenceId: '55555555-5555-4555-8555-555555555552',
@@ -84,6 +96,16 @@ export class ReviewOperationalRepository implements OperationalRepository {
           summary: 'Two shuttles are available for event staging.',
           qualityFlags: [],
           attributes: { availableUnits: 2, currentDelayMinutes: 4 },
+        },
+        {
+          evidenceId: REVIEW_SIGN_ID,
+          sourceId: '66666666-6666-4666-8666-666666666664',
+          sourceName: 'ALGO Traffic',
+          observedAt: iso(-4),
+          receivedAt: iso(-4),
+          summary: 'I-85 message sign southbound Auburn is displaying traveler text.',
+          qualityFlags: [],
+          attributes: { layer: 'message_sign', pages: ['EVENT TRAFFIC / FOLLOW DETOUR'] },
         },
       ],
       approvalRequirements: [
@@ -186,8 +208,26 @@ export class ReviewOperationalRepository implements OperationalRepository {
       checkedAt: iso(),
       database: 'review_repository',
       sourceSummary: { healthy: 3, delayed: 1, unavailable: 0, unverified: 0 },
-      message: 'Local review data is active. No agency system is connected or controlled.',
+      message: isAtlasAiEnabled()
+        ? 'Local review data is active. ATLAS and AQUA may use the desk agent. No agency system is connected or controlled.'
+        : 'Local review data is active. No agency system is connected or controlled.',
     };
+  }
+
+  private ensureDesks(): Promise<void> {
+    if (!this.desksPromise) {
+      this.desksPromise = composeReviewDeskFindings(this.recommendationRecord)
+        .then(findings => {
+          this.recommendationRecord.agentFindings = findings;
+        })
+        .catch(error => {
+          this.desksPromise = null;
+          console.warn('[review] Desk composition failed; keeping the canned findings', {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
+    return this.desksPromise;
   }
 
   async scenarioPacks(): Promise<ScenarioPack[]> {
@@ -258,6 +298,7 @@ export class ReviewOperationalRepository implements OperationalRepository {
 
   async snapshot(eventId: string, _principal: PrincipalContext): Promise<OperationalSnapshot> {
     if (eventId !== EVENT_ID) throw notFound('Operational event', eventId);
+    await this.ensureDesks();
     const event = await this.activeEvent('live');
     if (!event) throw notFound('Operational event', eventId);
     return {
@@ -342,6 +383,7 @@ export class ReviewOperationalRepository implements OperationalRepository {
 
   async recommendation(recommendationId: string): Promise<Recommendation> {
     if (recommendationId !== RECOMMENDATION_ID) throw notFound('Recommendation', recommendationId);
+    await this.ensureDesks();
     return structuredClone(this.recommendationRecord);
   }
 
@@ -360,6 +402,7 @@ export class ReviewOperationalRepository implements OperationalRepository {
       return structuredClone(cached.response) as DecisionResult;
     }
     if (recommendationId !== RECOMMENDATION_ID) throw notFound('Recommendation', recommendationId);
+    await this.ensureDesks();
     assertRecommendationSnapshot(
       this.recommendationRecord,
       command.recommendationVersion,

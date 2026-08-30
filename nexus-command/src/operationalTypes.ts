@@ -168,6 +168,8 @@ export interface AgentFinding {
   citedEvidenceIds: string[];
   conflicts: AgentConflict[];
   createdAt: string;
+  modelName?: string;
+  modelVersion?: string;
 }
 
 export interface Recommendation {
@@ -227,6 +229,46 @@ export interface SystemStatus {
   database: 'connected' | 'unavailable' | 'not_configured' | 'review_repository';
   sourceSummary: { healthy: number; delayed: number; unavailable: number; unverified: number };
   message: string;
+}
+
+export interface AtlasPolicy {
+  id: string;
+  title: string;
+  jurisdiction: 'department' | 'city' | 'county' | 'state';
+  source: string;
+  body: string;
+}
+
+export interface AtlasToolOption {
+  name: string;
+  label: string;
+  description: string;
+  required: boolean;
+  enabled: boolean;
+}
+
+export interface AtlasAgentProfile {
+  deskCode: 'atlas' | 'aqua';
+  name: string;
+  role: string;
+  backstory: string;
+  instructions: string;
+  llm: { model: string; temperature: number; maxTurns: number; timeoutMs: number };
+  tools: AtlasToolOption[];
+  policies: AtlasPolicy[];
+  locked: {
+    mission: string;
+    boundary: string;
+    allowedConnectors: string[];
+    actionFamilies: string[];
+  };
+  runtime: {
+    enabled: boolean;
+    host: string;
+    keyConfigured: boolean;
+    models: Array<{ id: string; label: string }>;
+  };
+  updatedAt: string;
 }
 
 export interface ApiEnvelope<T> {

@@ -3,6 +3,7 @@
  * On a platform that always runs the image default, set `NEXUS_SERVICE_ROLE=connector-worker`
  * instead and `server/index.ts` will run this same loop.
  */
+import '../loadEnv.js';
 import { hasDatabaseConfiguration } from '../operational/database.js';
 import { startConnectorWorker } from './workerLoop.js';
 

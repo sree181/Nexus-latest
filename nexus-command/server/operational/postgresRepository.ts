@@ -184,7 +184,8 @@ async function loadRecommendation(queryable: Queryable, recommendationId: string
     // stale desk assessment can never be shown beside a newer recommendation.
     queryable.query(
       `SELECT f.agent_code, f.status, f.observation, f.interpretation, f.candidate_action,
-              f.confidence, f.limitations, f.cited_evidence_ids, f.conflicts, f.created_at
+              f.confidence, f.limitations, f.cited_evidence_ids, f.conflicts, f.created_at,
+              f.model_name, f.model_version
          FROM agent_findings f
         WHERE f.incident_id = $1 AND f.evidence_snapshot_hash = $2
         ORDER BY (f.agent_code = 'nexus') DESC, (f.status = 'contributed') DESC, f.agent_code`,
@@ -227,6 +228,8 @@ async function loadRecommendation(queryable: Queryable, recommendationId: string
     citedEvidenceIds: item.cited_evidence_ids ?? [],
     conflicts: Array.isArray(item.conflicts) ? item.conflicts : [],
     createdAt: item.created_at.toISOString(),
+    modelName: item.model_name ?? undefined,
+    modelVersion: item.model_version ?? undefined,
   }));
 
   return {

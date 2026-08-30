@@ -12,6 +12,7 @@ import type {
   ReferenceLayerDefinition,
   ScenarioPack,
   SystemStatus,
+  AtlasAgentProfile,
 } from './operationalTypes';
 
 export class OperationalApiError extends Error {
@@ -108,6 +109,44 @@ export const operationalApi = {
         confirmationTextHash: action === 'approve' ? recommendation.evidenceSnapshotHash : undefined,
       }),
     });
+  },
+  deskProfile(deskCode: 'atlas' | 'aqua'): Promise<AtlasAgentProfile> {
+    return request(`/desks/${deskCode}/profile`);
+  },
+  saveDeskProfile(deskCode: 'atlas' | 'aqua', input: {
+    role: string;
+    backstory: string;
+    instructions: string;
+    llm: AtlasAgentProfile['llm'];
+    enabledTools: string[];
+    policies: AtlasAgentProfile['policies'];
+  }): Promise<AtlasAgentProfile> {
+    return request(`/desks/${deskCode}/profile`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+  resetDeskProfile(deskCode: 'atlas' | 'aqua'): Promise<AtlasAgentProfile> {
+    return request(`/desks/${deskCode}/profile/reset`, { method: 'POST' });
+  },
+  atlasProfile(): Promise<AtlasAgentProfile> {
+    return request('/desks/atlas/profile');
+  },
+  saveAtlasProfile(input: {
+    role: string;
+    backstory: string;
+    instructions: string;
+    llm: AtlasAgentProfile['llm'];
+    enabledTools: string[];
+    policies: AtlasAgentProfile['policies'];
+  }): Promise<AtlasAgentProfile> {
+    return request('/desks/atlas/profile', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+  resetAtlasProfile(): Promise<AtlasAgentProfile> {
+    return request('/desks/atlas/profile/reset', { method: 'POST' });
   },
   transitionCommitment(
     commitment: Commitment,

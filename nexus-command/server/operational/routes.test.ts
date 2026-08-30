@@ -60,6 +60,29 @@ describe('Nexus operational API', () => {
     expect(response.body).not.toHaveProperty('sources');
   });
 
+  it('returns the ATLAS profile a command lead can configure', async () => {
+    const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
+    const response = await request(app).get('/api/v1/desks/atlas/profile').expect(200);
+    expect(response.body.data.deskCode).toBe('atlas');
+    expect(response.body.data.role).toBeTruthy();
+    expect(response.body.data.tools.some((tool: { name: string }) => tool.name === 'search_policies')).toBe(true);
+    expect(response.body.data.runtime).not.toHaveProperty('apiKey');
+  });
+
+  it('returns the AQUA profile a command lead can configure', async () => {
+    const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
+    const response = await request(app).get('/api/v1/desks/aqua/profile').expect(200);
+    expect(response.body.data.deskCode).toBe('aqua');
+    expect(response.body.data.tools.some((tool: { name: string }) => tool.name === 'list_aqua_evidence')).toBe(true);
+    expect(response.body.data.locked.actionFamilies).toContain('confirm_lot_shuttle');
+    expect(response.body.data.runtime).not.toHaveProperty('apiKey');
+  });
+
+  it('does not expose a profile for a rule-only desk', async () => {
+    const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
+    await request(app).get('/api/v1/desks/echo/profile').expect(404);
+  });
+
   it('exposes public identity configuration without a bearer token', async () => {
     const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
     const response = await request(app).get('/api/v1/auth/config').expect(200);

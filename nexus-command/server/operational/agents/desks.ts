@@ -72,40 +72,55 @@ function ids(evidence: DetectionEvidence[]): string[] {
   return evidence.map(item => item.evidenceId);
 }
 
+export const ATLAS_ALLOWED_CONNECTORS = [
+  'aldot-algo-traffic-v1',
+  'tomtom-traffic-flow-v1',
+  'aldot-traffic-counts-v1',
+] as const;
+
+export const ATLAS_BOUNDARY = 'ATLAS cannot change a signal plan, close a road, or publish traffic-control instructions.';
+
+export const ATLAS_MISSION = 'Keep arrival and egress corridors moving while avoiding spillback into campus and neighbourhood streets.';
+
+/** Deterministic fallback. The LLM runner calls this when the agent loop fails closed. */
+export function assessAtlasRules(visible: DetectionEvidence[]): DeskAssessment | null {
+  const events = visible.filter(item => layer(item, 'traffic_event'));
+  const congested = visible.filter(item => layer(item, 'travel_time')
+    && !['', 'Unaffected', 'Unknown'].includes(text(item.attributes.congestionLevel)));
+  const degraded = visible.filter(item => {
+    const current = numeric(item.attributes.currentSpeedMph);
+    const free = numeric(item.attributes.freeFlowSpeedMph);
+    return current !== null && free !== null && free > 0 && current / free < 0.6;
+  });
+  const cited = [...new Map([...events, ...congested, ...degraded].map(item => [item.evidenceId, item])).values()];
+  if (!cited.length) return null;
+
+  const worst = congested[0] ?? degraded[0] ?? events[0];
+  const parts: string[] = [];
+  if (events.length) parts.push(`${events.length} ALDOT traveler event${events.length === 1 ? '' : 's'} in the Auburn box`);
+  if (congested.length) parts.push(`${congested.length} corridor${congested.length === 1 ? '' : 's'} reporting congestion`);
+  if (degraded.length) parts.push(`${degraded.length} monitored point${degraded.length === 1 ? '' : 's'} below 60% of free flow`);
+
+  return {
+    observation: `${parts.join(', ')}. Closest to this incident: ${worst.summary}`,
+    interpretation: congested.length || degraded.length
+      ? 'Approach capacity is already reduced, so a change here will land on a corridor with little headroom.'
+      : 'State-reported events are present but corridor speed has not yet degraded.',
+    candidateAction: 'Confirm the corridor picture with traffic operations before committing to a routing or messaging change.',
+    confidence: congested.length || degraded.length ? 0.68 : 0.5,
+    limitations: 'Segment travel time and probe speed only. Neither identifies the cause of a delay, and ATLAS has no signal-timing or detector data.',
+    citedEvidenceIds: ids(cited).slice(0, 12),
+  };
+}
+
 const atlas: AgentDesk = {
   code: 'atlas',
   name: 'ATLAS',
-  mission: 'Keep arrival and egress corridors moving while avoiding spillback into campus and neighbourhood streets.',
-  allowedConnectors: ['aldot-algo-traffic-v1', 'tomtom-traffic-flow-v1', 'aldot-traffic-counts-v1'],
-  boundary: 'ATLAS cannot change a signal plan, close a road, or publish traffic-control instructions.',
+  mission: ATLAS_MISSION,
+  allowedConnectors: [...ATLAS_ALLOWED_CONNECTORS],
+  boundary: ATLAS_BOUNDARY,
   assess(visible) {
-    const events = visible.filter(item => layer(item, 'traffic_event'));
-    const congested = visible.filter(item => layer(item, 'travel_time')
-      && !['', 'Unaffected', 'Unknown'].includes(text(item.attributes.congestionLevel)));
-    const degraded = visible.filter(item => {
-      const current = numeric(item.attributes.currentSpeedMph);
-      const free = numeric(item.attributes.freeFlowSpeedMph);
-      return current !== null && free !== null && free > 0 && current / free < 0.6;
-    });
-    const cited = [...events, ...congested, ...degraded];
-    if (!cited.length) return null;
-
-    const worst = congested[0] ?? degraded[0] ?? events[0];
-    const parts: string[] = [];
-    if (events.length) parts.push(`${events.length} ALDOT traveler event${events.length === 1 ? '' : 's'} in the Auburn box`);
-    if (congested.length) parts.push(`${congested.length} corridor${congested.length === 1 ? '' : 's'} reporting congestion`);
-    if (degraded.length) parts.push(`${degraded.length} monitored point${degraded.length === 1 ? '' : 's'} below 60% of free flow`);
-
-    return {
-      observation: `${parts.join(', ')}. Closest to this incident: ${worst.summary}`,
-      interpretation: congested.length || degraded.length
-        ? 'Approach capacity is already reduced, so a change here will land on a corridor with little headroom.'
-        : 'State-reported events are present but corridor speed has not yet degraded.',
-      candidateAction: 'Confirm the corridor picture with traffic operations before committing to a routing or messaging change.',
-      confidence: congested.length || degraded.length ? 0.68 : 0.5,
-      limitations: 'Segment travel time and probe speed only. Neither identifies the cause of a delay, and ATLAS has no signal-timing or detector data.',
-      citedEvidenceIds: ids(cited).slice(0, 12),
-    };
+    return assessAtlasRules(visible);
   },
 };
 
@@ -144,28 +159,36 @@ const forge: AgentDesk = {
   },
 };
 
+export const AQUA_ALLOWED_CONNECTORS = ['auburn-eta-spot-v1', 'auburn-parking-occupancy-v1'] as const;
+export const AQUA_BOUNDARY = 'AQUA cannot change an operator schedule or parking policy without agency authorization.';
+export const AQUA_MISSION = 'Balance parking, remote-lot, curb, and shuttle demand.';
+
+export function assessAquaRules(visible: DetectionEvidence[], context: DeskContext): DeskAssessment | null {
+  const vehicles = visible.filter(item => item.connectorCode === 'auburn-eta-spot-v1');
+  if (!vehicles.length) return null;
+  const parkingConnected = context.liveConnectors.includes('auburn-parking-occupancy-v1');
+  return {
+    observation: `${vehicles.length} Tiger Transit observation${vehicles.length === 1 ? '' : 's'} in the current window.`,
+    interpretation: parkingConnected
+      ? 'Shuttle and lot state can both be weighed against this incident.'
+      : 'Shuttle movement is visible but lot occupancy is not, so AQUA cannot tell a full lot from a shuttle problem.',
+    candidateAction: 'Ask Parking and Transit to confirm lot and shuttle state before any remote-lot or staging change.',
+    confidence: parkingConnected ? 0.6 : 0.35,
+    limitations: parkingConnected
+      ? 'Vehicle positions and lot occupancy only. No curb, queue, or ADA state.'
+      : 'No parking-occupancy feed is connected. AQUA is reasoning from shuttle positions alone.',
+    citedEvidenceIds: ids(vehicles).slice(0, 12),
+  };
+}
+
 const aqua: AgentDesk = {
   code: 'aqua',
   name: 'AQUA',
-  mission: 'Balance parking, remote-lot, curb, and shuttle demand.',
-  allowedConnectors: ['auburn-eta-spot-v1', 'auburn-parking-occupancy-v1'],
-  boundary: 'AQUA cannot change an operator schedule or parking policy without agency authorization.',
+  mission: AQUA_MISSION,
+  allowedConnectors: [...AQUA_ALLOWED_CONNECTORS],
+  boundary: AQUA_BOUNDARY,
   assess(visible, context) {
-    const vehicles = visible.filter(item => item.connectorCode === 'auburn-eta-spot-v1');
-    if (!vehicles.length) return null;
-    const parkingConnected = context.liveConnectors.includes('auburn-parking-occupancy-v1');
-    return {
-      observation: `${vehicles.length} Tiger Transit observation${vehicles.length === 1 ? '' : 's'} in the current window.`,
-      interpretation: parkingConnected
-        ? 'Shuttle and lot state can both be weighed against this incident.'
-        : 'Shuttle movement is visible but lot occupancy is not, so AQUA cannot tell a full lot from a shuttle problem.',
-      candidateAction: 'Ask Parking and Transit to confirm lot and shuttle state before any remote-lot or staging change.',
-      confidence: parkingConnected ? 0.6 : 0.35,
-      limitations: parkingConnected
-        ? 'Vehicle positions and lot occupancy only. No curb, queue, or ADA state.'
-        : 'No parking-occupancy feed is connected. AQUA is reasoning from shuttle positions alone.',
-      citedEvidenceIds: ids(vehicles).slice(0, 12),
-    };
+    return assessAquaRules(visible, context);
   },
 };
 

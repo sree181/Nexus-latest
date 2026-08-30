@@ -9,10 +9,10 @@ export default function App() {
   const { config, signOut } = useContext(AuthContext);
   return <div className="app-workspace">
     <nav className="workspace-switcher" aria-label="Nexus workspace">
-      <strong>Nexus operational workspace</strong>
+      <strong>Nexus Coordinate</strong>
       <div>
-        <button className={workspace === 'command' ? 'active' : ''} onClick={() => setWorkspace('command')}>Command center</button>
-        <button className={workspace === 'graph' ? 'active' : ''} onClick={() => setWorkspace('graph')}>Operational graph</button>
+        <button className={workspace === 'command' ? 'active' : ''} onClick={() => setWorkspace('command')}>Desk</button>
+        <button className={workspace === 'graph' ? 'active' : ''} onClick={() => setWorkspace('graph')}>Lineage</button>
         {config?.loginRequired && <button type="button" onClick={signOut}>Sign out</button>}
       </div>
     </nav>

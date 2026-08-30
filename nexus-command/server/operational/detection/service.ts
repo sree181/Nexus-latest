@@ -237,7 +237,7 @@ async function projectMatch(
     );
   }
 
-  const composition = composeDeskFindings({
+  const composition = await composeDeskFindings({
     staffedAgentCodes: staffedAgents,
     match,
     snapshot,
@@ -259,9 +259,12 @@ async function projectMatch(
          limitations = EXCLUDED.limitations,
          status = EXCLUDED.status,
          cited_evidence_ids = EXCLUDED.cited_evidence_ids,
-         conflicts = EXCLUDED.conflicts`,
+         conflicts = EXCLUDED.conflicts,
+         model_name = EXCLUDED.model_name,
+         model_version = EXCLUDED.model_version`,
       [
-        incidentId, finding.agentCode, MODEL_NAME, MODEL_VERSION, incidentVersion, match.evidenceHash,
+        incidentId, finding.agentCode, finding.modelName ?? MODEL_NAME, finding.modelVersion ?? MODEL_VERSION,
+        incidentVersion, match.evidenceHash,
         finding.observation, finding.interpretation, finding.candidateAction, finding.confidence,
         finding.limitations, finding.status, finding.citedEvidenceIds, JSON.stringify(finding.conflicts),
       ],
