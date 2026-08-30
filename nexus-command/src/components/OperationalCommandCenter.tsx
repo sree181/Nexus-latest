@@ -424,10 +424,9 @@ function deskNote(finding: AgentFinding): string {
 }
 
 function DeskBoard({
-  findings, canConfigure, onConfigureDesk,
+  findings, onConfigureDesk,
 }: {
   findings: AgentFinding[];
-  canConfigure: boolean;
   onConfigureDesk: (deskCode: 'atlas' | 'aqua') => void;
 }) {
   const nexus = findings.find(finding => finding.agentCode === 'nexus');
@@ -458,7 +457,7 @@ function DeskBoard({
               </div>
               <span className="desk-card__status">{finding ? deskStatusLabel(finding.status, finding.modelVersion) : 'Not on this card'}</span>
               <p>{finding ? deskNote(finding) : 'This desk was not asked to review this incident.'}</p>
-              {(code === 'atlas' || code === 'aqua') && canConfigure && (
+              {(code === 'atlas' || code === 'aqua') && (
                 <button type="button" className="desk-card__config" onClick={() => onConfigureDesk(code)}>Configure</button>
               )}
             </article>
@@ -470,13 +469,12 @@ function DeskBoard({
 }
 
 function ReviewWorkspace({
-  incident, recommendation, map, onReview, canConfigure, onConfigureDesk,
+  incident, recommendation, map, onReview, onConfigureDesk,
 }: {
   incident: Incident | null;
   recommendation: Recommendation | null;
   map: ReactNode;
   onReview: (action: DecisionAction) => void;
-  canConfigure: boolean;
   onConfigureDesk: (deskCode: 'atlas' | 'aqua') => void;
 }) {
   if (!incident) {
@@ -485,9 +483,10 @@ function ReviewWorkspace({
         <div className="empty-state">
           <span className="empty-state__code">Clear</span>
           <h2>No incident to review</h2>
-          <p>The map still shows the operating area. A decision card will open here when a rule fires.</p>
+          <p>The map still shows the operating area. A decision card will open here when a rule fires. The desks stay available to configure.</p>
         </div>
         <div className="workspace-map">{map}</div>
+        <DeskBoard findings={[]} onConfigureDesk={onConfigureDesk} />
       </section>
     );
   }
@@ -506,7 +505,6 @@ function ReviewWorkspace({
       <div className="workspace-map">{map}</div>
       <DeskBoard
         findings={recommendation?.agentFindings ?? []}
-        canConfigure={canConfigure}
         onConfigureDesk={onConfigureDesk}
       />
       <div className="workspace-cards">
@@ -864,7 +862,6 @@ export function OperationalCommandCenter() {
           incident={selectedIncident}
           recommendation={selectedRecommendation}
           map={<OperationalMap incident={selectedIncident} sources={snapshot.sources} observations={snapshot.observations} />}
-          canConfigure={canManageWindow}
           onConfigureDesk={deskCode => { setMutationError(null); setConfigDesk(deskCode); }}
           onReview={action => {
             if (selectedRecommendation) {

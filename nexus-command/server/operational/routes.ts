@@ -147,7 +147,7 @@ export function createOperationalRouter(repository: OperationalRepository, conne
     }
   });
 
-  router.put('/desks/:deskCode/profile', requireScope('event:manage'), (req, res, next) => {
+  router.put('/desks/:deskCode/profile', requireScope('event:read'), (req, res, next) => {
     try {
       const desk = configurableDesk(req.params.deskCode);
       const profile = desk.save(desk.schema.parse(req.body));
@@ -157,7 +157,7 @@ export function createOperationalRouter(repository: OperationalRepository, conne
     }
   });
 
-  router.post('/desks/:deskCode/profile/reset', requireScope('event:manage'), (req, res, next) => {
+  router.post('/desks/:deskCode/profile/reset', requireScope('event:read'), (req, res, next) => {
     try {
       const desk = configurableDesk(req.params.deskCode);
       res.json({ data: desk.present(desk.reset()), requestId: req.requestId });
