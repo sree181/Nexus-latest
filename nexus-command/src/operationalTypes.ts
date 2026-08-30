@@ -129,7 +129,6 @@ export interface Incident {
   eventId: string;
   mode: OperationalMode;
   title: string;
-  impact?: string;
   whatChanged: string;
   whyItMatters: string;
   severity: Severity;
