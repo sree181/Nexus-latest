@@ -439,7 +439,7 @@ function DeskBoard({
           <span>Who looked</span>
           <strong>Six desks</strong>
         </div>
-        {nexus && <p>{nexus.observation}</p>}
+        <p>{nexus?.observation ?? 'Desks have not reviewed this yet.'}</p>
       </header>
       <div className="desk-board__grid" role="list">
         {DESK_ORDER.map(code => {
@@ -504,14 +504,11 @@ function ReviewWorkspace({
         </div>
       </header>
       <div className="workspace-map">{map}</div>
-      {recommendation?.agentFindings?.length
-        ? <DeskBoard findings={recommendation.agentFindings} canConfigure={canConfigure} onConfigureDesk={onConfigureDesk} />
-        : (
-          <section className="desk-board">
-            <header className="desk-board__head"><div><span>Who looked</span><strong>Six desks</strong></div></header>
-            <p className="desk-board__empty">Desks have not reviewed this yet.</p>
-          </section>
-        )}
+      <DeskBoard
+        findings={recommendation?.agentFindings ?? []}
+        canConfigure={canConfigure}
+        onConfigureDesk={onConfigureDesk}
+      />
       <div className="workspace-cards">
         <article className="workspace-card">
           <span>Why this is open</span>
