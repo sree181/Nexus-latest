@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
+    "test:wall": "playwright test",
     "db:migrate": "tsx server/operational/migrate.ts",
     "connectors:smoke": "ETA_SPOT_PRODUCTION_APPROVED=true tsx server/connectors/smoke.ts",
     "detection:dry-run": "tsx server/operational/detection/dryRun.ts"
@@ -37,6 +38,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/supertest": "^7.2.1",
+    "@playwright/test": "^1.55.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.2.4",
     "esbuild": "^0.24.2",

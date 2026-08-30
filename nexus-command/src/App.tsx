@@ -1,21 +1,5 @@
-import { useContext, useState } from 'react';
-import { OperationalCommandCenter } from './components/OperationalCommandCenter';
-import { OperationalGraphWorkspace } from './components/OperationalGraphWorkspace';
-import { AuthContext } from './auth/AuthGate';
-import './graphWorkspace.css';
+import { WallApp } from './wall/WallApp';
 
 export default function App() {
-  const [workspace, setWorkspace] = useState<'command' | 'graph'>('command');
-  const { config, signOut } = useContext(AuthContext);
-  return <div className="app-workspace">
-    <nav className="workspace-switcher" aria-label="Nexus workspace">
-      <strong>Nexus Coordinate</strong>
-      <div>
-        <button className={workspace === 'command' ? 'active' : ''} onClick={() => setWorkspace('command')}>Desk</button>
-        <button className={workspace === 'graph' ? 'active' : ''} onClick={() => setWorkspace('graph')}>Lineage</button>
-        {config?.loginRequired && <button type="button" onClick={signOut}>Sign out</button>}
-      </div>
-    </nav>
-    {workspace === 'command' ? <OperationalCommandCenter /> : <OperationalGraphWorkspace />}
-  </div>;
+  return <WallApp />;
 }
