@@ -18,8 +18,8 @@ export const parkingOccupancyConnector = new PartnerGatedConnector({
 });
 
 export const emergencyAccessConnector = new PartnerGatedConnector({
-  code: 'auburn-emergency-access-v1', sourceCode: 'auburn-emergency-access', name: 'Game Day Emergency Access',
-  ownerAgencyCode: 'public-safety', ownerAgencyName: 'Auburn Public Safety / Game Day Event Command', sourceType: 'webhook', authority: 'Auburn Public Safety / Game Day Event Command',
+  code: 'auburn-emergency-access-v1', sourceCode: 'auburn-emergency-access', name: 'Emergency Access',
+  ownerAgencyCode: 'public-safety', ownerAgencyName: 'Auburn Public Safety', sourceType: 'webhook', authority: 'Auburn Public Safety',
   authorityUri: 'https://www.auburnal.gov/public-safety/', schemaVersion: 'agency-contract-required', expectedCadenceSeconds: null,
   staleAfterSeconds: 120, dataClassification: 'restricted',
   permittedUse: 'Corridor operational state and restrictions supplied by authorized Event Command; no dispatch, patient, or law-enforcement-sensitive data.',

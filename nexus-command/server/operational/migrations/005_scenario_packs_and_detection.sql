@@ -71,9 +71,9 @@ VALUES
   ),
   (
     'sec_gameday',
-    'SEC Game Day mobility operations',
+    'Campus and city mobility',
     'sec_gameday',
-    'Event-day window adding transit, parking, and public-safety desks to the everyday mobility pack.',
+    'Full desk roster for campus and city mobility: traffic, transit, parking, public safety, and communications.',
     'readiness',
     ARRAY['coa-road-closures-v1', 'aldot-algo-traffic-v1', 'tomtom-traffic-flow-v1', 'auburn-eta-spot-v1', 'auburn-parking-occupancy-v1', 'auburn-emergency-access-v1'],
     ARRAY['atlas', 'aqua', 'sentinel', 'phoenix', 'echo', 'nexus']

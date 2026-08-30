@@ -5,7 +5,7 @@ This is the identity path for a **live operational** Railway demo. Do not enable
 The command center will not invent incidents or recommendations. After sign-in and the first successful public-feed ingest you should see:
 
 - `LIVE OPERATIONS`
-- Active event `SEC Game Day Mobility Operations`
+- Active event `Auburn Mobility Operations`
 - City of Auburn road closures as a connected public source with published restriction records
 - One evidence-bound incident and `awaiting_approval` recommendation derived from those records
 - Tiger Transit ETA Spot connected only after `ETA_SPOT_PRODUCTION_APPROVED=true` or `NEXUS_ENABLE_PUBLIC_FEEDS=true` is set on `nexus-api` and `nexus-worker`
@@ -126,7 +126,7 @@ Redeploy `nexus-api` after saving. The worker does not need OIDC variables.
 3. Sign in as the named operator.
 4. Confirm the header shows `LIVE OPERATIONS`, not `LOCAL REVIEW DATA`.
 5. Confirm City of Auburn closures is connected and shows recent observations, not `No observations`.
-6. Point at the **Scenario** field in the header. Explain that the pack decides which feeds are read, which agent desks are staffed, and which detection rules may open an incident, and that Game Day is one pack among several.
+6. Point at the **Window** field in the header. Explain that the pack decides which feeds are read, which agent desks are staffed, and which detection rules may open an incident.
 7. Open a pending recommendation. Point at the agent-desk chips: which desks contributed, which stayed silent because they had no feed, and any named dissent. Then cite the upstream record and **Review & approve**. Approval creates the commitments the rule's playbook assigns.
 8. If the decision queue is empty, say so plainly: no authoritative record crossed a detection rule in the current window. Nexus does not manufacture an incident to fill the screen.
 9. Explain that parking occupancy, emergency-access, and TomTom stay gated until real partner credentials exist. Do not invent those feeds.

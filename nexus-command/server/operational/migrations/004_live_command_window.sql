@@ -59,14 +59,14 @@ VALUES (
   '22222222-2222-4222-8222-222222222222',
   'live',
   'sec_gameday',
-  'SEC Game Day Mobility Operations',
+  'Auburn Mobility Operations',
   'readiness',
   'active',
   now() - interval '4 hours',
   now() + interval '18 hours',
   '11111111-1111-4111-8111-111111111111',
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  'Jordan-Hare Stadium, Auburn, Alabama',
+  'Auburn, Alabama',
   1
 )
 ON CONFLICT (event_id) DO NOTHING;

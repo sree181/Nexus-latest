@@ -12,7 +12,7 @@ describe('Nexus operational API', () => {
   it('returns the active event and complete operator snapshot', async () => {
     const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
     const active = await request(app).get('/api/v1/events/active?mode=live').expect(200);
-    expect(active.body.data.name).toBe('SEC Game Day Mobility Operations');
+    expect(active.body.data.name).toBe('Auburn Mobility Operations');
 
     const snapshot = await request(app).get(`/api/v1/events/${active.body.data.eventId}/snapshot`).expect(200);
     expect(snapshot.body.data.incidents).toHaveLength(1);

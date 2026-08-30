@@ -26,7 +26,6 @@ import {
   deskCallsign,
   deskName,
   deskStatusLabel,
-  phaseLabel,
   QUEUE_BADGE_ICONS,
   queueAlert,
   queueBadges,
@@ -80,8 +79,10 @@ function Header({
 }) {
   const isReview = status.database === 'review_repository';
   const event = snapshot.event;
-  const connectedSources = snapshot.sources.filter(source => source.connectionStatus === 'connected').length;
-  const sourcesRequiringAction = snapshot.sources.length - connectedSources;
+  const liveFeeds = snapshot.sources.filter(source => (
+    source.connectionStatus ? source.connectionStatus === 'connected' : source.status !== 'unavailable'
+  )).length;
+  const totalFeeds = snapshot.sources.length;
   return (
     <header className="ops-header">
       <span className={`live-pill ${isReview ? 'live-pill--review' : 'live-pill--live'}`}>
@@ -89,23 +90,13 @@ function Header({
         {isReview ? 'Practice data' : 'Live'}
       </span>
       <div className="now-chip">
-        <span>Now coordinating</span>
+        <span>Window</span>
         <strong>{event.name}</strong>
       </div>
       <dl className="header-meta">
         <div>
-          <dt>Phase</dt>
-          <dd>{phaseLabel(event.phase)}</dd>
-        </div>
-        <div>
-          <dt>Owner</dt>
-          <dd>{event.commandOwner?.displayName || 'Unassigned'}</dd>
-        </div>
-        <div>
           <dt>Feeds</dt>
-          <dd className={sourcesRequiringAction ? 'text-warning' : 'text-positive'}>
-            {connectedSources} connected{sourcesRequiringAction ? ` · ${sourcesRequiringAction} need attention` : ''}
-          </dd>
+          <dd>{liveFeeds} of {totalFeeds} live</dd>
         </div>
       </dl>
       <OperatingWindowChip
