@@ -1,19 +1,26 @@
 /* Dual palette: Auburn navy + orange. Cream is ink, not a third hue. */
+/**
+ * CIVIC INSTRUMENT PANEL
+ * Widescreen operational narrative with civic-orange signal rails and cartographic depth.
+ */
 :root {
-  --nx-ground: #08111c;
-  --nx-surface: #0c1828;
-  --nx-raised: #122033;
-  --nx-ink: #f3ede4;
-  --nx-mute: #8b93a0;
-  --nx-faint: #5c6573;
-  --nx-line: rgba(243, 237, 228, 0.10);
-  --nx-accent: #e87722;
-  --nx-accent-ink: #08111c;
-  --nx-accent-dim: rgba(232, 119, 34, 0.16);
+  --nx-ground: #070b10;
+  --nx-surface: #0c131b;
+  --nx-raised: #121d28;
+  --nx-ink: #f4f0e8;
+  --nx-mute: #94a1ad;
+  --nx-faint: #5e6b77;
+  --nx-line: rgba(197, 214, 229, 0.13);
+  --nx-accent: #f2a33a;
+  --nx-accent-ink: #080b0f;
+  --nx-accent-dim: rgba(242, 163, 58, 0.14);
+  --nx-verified: #69d9a8;
+  --nx-danger: #ff6b6f;
+  --nx-ease: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 html, body { margin: 0; height: 100%; background: var(--nx-ground); overflow: hidden; }
-body { color: var(--nx-ink); font-family: "Source Sans 3", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; touch-action: manipulation; }
+body { color: var(--nx-ink); font-family: "Source Sans 3 Variable", "Source Sans 3", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; touch-action: manipulation; }
 *, *::before, *::after { box-sizing: border-box; min-width: 0; }
 a { color: var(--nx-accent); text-decoration: none; }
 a:hover { color: var(--nx-ink); }
@@ -23,10 +30,24 @@ button,
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
+  transition: transform 160ms var(--nx-ease), background 180ms var(--nx-ease), border-color 180ms var(--nx-ease), color 180ms var(--nx-ease), opacity 180ms var(--nx-ease);
 }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 0.35rem solid var(--nx-accent);
+  outline-offset: 0.5rem;
+}
+
+button:active:not(:disabled) { transform: scale(0.985); }
 
 .nxw-tab {
   min-height: 7rem;
+  position: relative;
+  overflow: hidden;
 }
 .nxw-tab:active,
 .nxw-desk:active,
@@ -41,6 +62,7 @@ button,
   text-align: left;
   font: inherit;
   color: inherit;
+  transition: transform 180ms var(--nx-ease), border-color 180ms var(--nx-ease), background 180ms var(--nx-ease);
 }
 
 .nxw-desk__open {
@@ -58,8 +80,8 @@ button,
   border-color: var(--nx-accent);
   color: var(--nx-accent);
 }
-@keyframes nx-live { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }
-@keyframes nx-await { 0% { box-shadow: 0 0 0 0 rgba(232,119,34,0.45); } 70% { box-shadow: 0 0 0 1.25rem rgba(232,119,34,0); } 100% { box-shadow: 0 0 0 0 rgba(232,119,34,0); } }
+@keyframes nx-live { 0% { opacity: 1; transform: scale(0.9); } 50% { opacity: 0.42; transform: scale(1.15); } 100% { opacity: 1; transform: scale(0.9); } }
+@keyframes nx-await { 0% { box-shadow: 0 0 0 0 rgba(242,163,58,0.38); } 70% { box-shadow: 0 0 0 1.25rem rgba(242,163,58,0); } 100% { box-shadow: 0 0 0 0 rgba(242,163,58,0); } }
 @keyframes nx-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 .nxw-h1:hover,
@@ -75,4 +97,348 @@ button,
 .nxw-h7:hover,
 .nxw-h8:hover {
   background: var(--nx-raised) !important;
+}
+
+/* Civic Instrument Panel — command wall composition */
+.nx-wall {
+  isolation: isolate;
+  background:
+    linear-gradient(90deg, rgba(242, 163, 58, 0.025) 0.0625rem, transparent 0.0625rem),
+    linear-gradient(rgba(242, 163, 58, 0.02) 0.0625rem, transparent 0.0625rem),
+    var(--nx-ground) !important;
+  background-size: 12rem 12rem !important;
+}
+
+.nx-wall::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, var(--nx-ground) 0%, transparent 45%, var(--nx-ground) 100%),
+    url('/manus-storage/nexus-contour-field_28efc343.jpg') center / cover no-repeat;
+  opacity: 0.10;
+  mix-blend-mode: screen;
+}
+
+.nx-wall-header {
+  position: relative;
+  background: rgba(5, 8, 12, 0.88);
+  backdrop-filter: blur(2.5rem);
+  box-shadow: 0 2rem 8rem rgba(0, 0, 0, 0.18);
+}
+
+.nx-wall-header::before {
+  content: "STATE / LIVE OPERATING PICTURE";
+  position: absolute;
+  right: 3rem;
+  bottom: 1rem;
+  color: rgba(244, 240, 232, 0.16);
+  font-family: "JetBrains Mono Variable", "JetBrains Mono", monospace;
+  font-size: 1rem;
+  letter-spacing: 0.18em;
+}
+
+.nx-wall-brandrow { min-height: 5.5rem; }
+
+.nx-wall-mark {
+  position: relative;
+  min-width: 5.5rem;
+  min-height: 5.5rem;
+  justify-content: center;
+  border: 0.0625rem solid rgba(242, 163, 58, 0.38);
+  border-radius: 0.85rem;
+  background: rgba(242, 163, 58, 0.08);
+}
+
+.nx-wall-mark::before,
+.nx-wall-mark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3.2rem;
+  height: 0.7rem;
+  border-radius: 0.15rem;
+  background: var(--nx-accent);
+}
+
+.nx-wall-mark::before { transform: translate(-50%, -50%) rotate(45deg); }
+.nx-wall-mark::after { transform: translate(-50%, -50%) rotate(-45deg); }
+.nx-wall-mark img { position: relative; z-index: 1; }
+
+.nx-wall-wordmark i {
+  color: var(--nx-accent);
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+.nx-wall-kpi {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(18, 29, 40, 0.96), rgba(8, 14, 20, 0.92)) !important;
+  box-shadow: 0 1rem 4rem rgba(0, 0, 0, 0.16);
+}
+
+.nx-wall-kpi::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.35rem;
+  background: linear-gradient(var(--nx-accent), rgba(242, 163, 58, 0.08));
+}
+
+.nx-wall-main { background: rgba(7, 11, 16, 0.46); }
+
+.nx-wall-picture {
+  gap: 1.25rem;
+  padding: 1.25rem;
+  background: linear-gradient(180deg, rgba(18, 29, 40, 0.26), transparent);
+}
+
+.nx-wall-priority {
+  border: 0.0625rem solid var(--nx-line) !important;
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, rgba(16, 25, 35, 0.98), rgba(8, 13, 19, 0.98)) !important;
+  box-shadow: 0 2rem 8rem rgba(0, 0, 0, 0.22);
+}
+
+.nx-wall-priority > div { border-left-color: var(--nx-accent) !important; }
+
+.nx-wall-map {
+  border: 0.0625rem solid var(--nx-line);
+  border-radius: 1.25rem;
+  background: #05080c;
+  box-shadow: inset 0 0 8rem rgba(0, 0, 0, 0.42), 0 2rem 8rem rgba(0, 0, 0, 0.18);
+}
+
+.nx-wall-map::before {
+  content: "";
+  position: absolute;
+  z-index: 500;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(7, 11, 16, 0.46), transparent 42%),
+    url('/manus-storage/nexus-mobility-map_cefdfb06.jpg') center / cover no-repeat;
+  opacity: 0.15;
+  mix-blend-mode: screen;
+}
+
+.nx-wall-nav {
+  position: relative;
+  border-top-color: rgba(197, 214, 229, 0.14) !important;
+  background: rgba(8, 13, 19, 0.94) !important;
+  backdrop-filter: blur(2rem);
+}
+
+.nx-wall-nav::before {
+  content: "02 / OPERATIONAL WORKSPACES";
+  position: absolute;
+  left: 2rem;
+  top: -2.35rem;
+  color: var(--nx-faint);
+  font-family: "JetBrains Mono Variable", "JetBrains Mono", monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.16em;
+}
+
+.nx-wall-nav .nxw-tab {
+  border-radius: 0.75rem;
+  background: linear-gradient(145deg, rgba(18, 29, 40, 0.92), rgba(10, 16, 23, 0.92)) !important;
+}
+
+.nx-wall-nav .nxw-tab::after {
+  content: "";
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.2rem;
+  width: 1rem;
+  height: 1rem;
+  border-right: 0.2rem solid currentColor;
+  border-bottom: 0.2rem solid currentColor;
+  opacity: 0.26;
+}
+
+.nx-wall-nav .nxw-tab:hover {
+  transform: translateY(-0.2rem);
+  border-color: rgba(242, 163, 58, 0.34) !important;
+}
+
+.nx-wall-desks {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--nx-line) !important;
+  background: rgba(5, 8, 12, 0.92) !important;
+}
+
+.nx-wall-desks::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(5, 8, 12, 0.96), rgba(5, 8, 12, 0.72), rgba(5, 8, 12, 0.96)), url('/manus-storage/nexus-agency-coordination_a15e1a79.jpg') center / cover no-repeat;
+  opacity: 0.20;
+}
+
+.nx-wall-desks .nxw-desk {
+  border-radius: 0.9rem;
+  background: rgba(10, 16, 23, 0.86) !important;
+  backdrop-filter: blur(1rem);
+}
+
+.nx-wall-desks .nxw-desk:hover {
+  transform: translateY(-0.25rem);
+  border-color: rgba(242, 163, 58, 0.44) !important;
+  background: rgba(18, 29, 40, 0.94) !important;
+}
+
+.nx-wall-record {
+  position: relative;
+  border-top: 0.0625rem solid var(--nx-line);
+  background: linear-gradient(90deg, rgba(7, 11, 16, 0.98), rgba(12, 19, 27, 0.98)) !important;
+}
+
+.nx-wall-record::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0.45rem;
+  background: var(--nx-accent);
+}
+
+.nx-wall-config {
+  border-radius: 1.25rem;
+  overflow: hidden;
+  box-shadow: 0 4rem 12rem rgba(0, 0, 0, 0.48);
+}
+
+.nx-wall-evidence {
+  isolation: isolate;
+  padding: 2rem 3rem 2.5rem !important;
+  gap: 1.75rem !important;
+  background:
+    linear-gradient(90deg, rgba(7, 11, 16, 0.95) 0%, rgba(7, 11, 16, 0.72) 44%, rgba(7, 11, 16, 0.96) 100%),
+    url('/manus-storage/nexus-evidence-lineage_c2d30e5c.jpg') center / cover no-repeat;
+}
+
+.nx-wall-evidence::before {
+  content: "03 / RECORD LINEAGE";
+  position: absolute;
+  z-index: 2;
+  right: 3rem;
+  top: 1.4rem;
+  color: rgba(242, 163, 58, 0.42);
+  font-family: "JetBrains Mono Variable", "JetBrains Mono", monospace;
+  font-size: 1.35rem;
+  letter-spacing: 0.17em;
+}
+
+.nx-wall-evidence__header {
+  min-height: 6rem;
+  padding: 0 1rem 1.25rem;
+  border-bottom: 0.0625rem solid var(--nx-line);
+}
+
+.nx-wall-evidence__header > span:first-child {
+  max-width: 110rem;
+  font-family: "Archivo Variable", Archivo, sans-serif !important;
+  font-size: 2.65rem !important;
+  letter-spacing: -0.015em !important;
+  text-transform: none !important;
+  color: var(--nx-ink) !important;
+}
+
+.nx-wall-evidence__header > span:not(:first-child) {
+  font-size: 1.55rem !important;
+}
+
+.nx-wall-evidence__body {
+  grid-template-columns: minmax(0, 1fr) minmax(36rem, 44rem) !important;
+  gap: 1.5rem !important;
+}
+
+.nx-wall-lineage {
+  gap: 1rem !important;
+  padding: 1rem;
+  border: 0.0625rem solid var(--nx-line);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(90deg, rgba(242, 163, 58, 0.025) 0.0625rem, transparent 0.0625rem),
+    linear-gradient(rgba(242, 163, 58, 0.02) 0.0625rem, transparent 0.0625rem),
+    rgba(5, 8, 12, 0.82);
+  background-size: 8rem 8rem;
+  box-shadow: inset 0 0 7rem rgba(0, 0, 0, 0.26);
+}
+
+.nx-wall-lineage__column {
+  position: relative;
+  padding: 0.75rem;
+  border-right: 0.0625rem solid rgba(197, 214, 229, 0.08);
+}
+
+.nx-wall-lineage__column:last-child { border-right: 0; }
+.nx-wall-lineage__column:nth-child(n+3) .nx-wall-lineage__cards { align-content: center !important; }
+
+.nx-wall-lineage__stage {
+  min-height: 6.5rem;
+  align-content: center;
+  padding: 0.75rem 0.5rem 1rem !important;
+}
+
+.nx-wall-lineage__stage > span:nth-child(2) {
+  font-family: "Archivo Variable", Archivo, sans-serif;
+  font-size: 2.25rem !important;
+  letter-spacing: 0.04em !important;
+  color: var(--nx-ink) !important;
+}
+
+.nx-wall-lineage__cards { gap: 0.85rem !important; }
+
+.nx-wall-lineage__card {
+  min-height: 8.5rem !important;
+  padding: 1rem 1.1rem !important;
+  border-radius: 0 0.75rem 0.75rem 0;
+  box-shadow: 0 1.25rem 3.5rem rgba(0, 0, 0, 0.18);
+  transition: transform 180ms var(--nx-ease), background 180ms var(--nx-ease), border-color 180ms var(--nx-ease);
+}
+
+.nx-wall-lineage__card:hover {
+  transform: translateY(-0.2rem);
+  background: var(--nx-raised) !important;
+}
+
+.nx-wall-lineage__card > span:nth-child(2) {
+  font-family: "Source Sans 3 Variable", "Source Sans 3", sans-serif !important;
+  font-size: 1.9rem !important;
+  line-height: 1.22 !important;
+}
+
+.nx-wall-lineage__inspector {
+  border: 0.0625rem solid var(--nx-line) !important;
+  border-left: 0.45rem solid var(--nx-accent) !important;
+  border-radius: 0 1.1rem 1.1rem 0;
+  padding: 2rem !important;
+  background: linear-gradient(160deg, rgba(18, 29, 40, 0.96), rgba(8, 14, 20, 0.96)) !important;
+}
+
+.nx-wall-lineage__inspector > span:first-child {
+  font-family: "Archivo Variable", Archivo, sans-serif;
+  font-size: 2.5rem !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  color: var(--nx-ink) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,10 +1,16 @@
+/**
+ * CIVIC INSTRUMENT PANEL
+ * Workflow as municipal route map: large lane labels, scaled nodes, and spatial accountability.
+ */
 .nx-workflow {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: minmax(200px, 18vw) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 20vw) minmax(0, 1fr);
   min-height: 0;
-  background: var(--nx-ground);
+  background:
+    linear-gradient(90deg, rgba(7, 11, 16, 0.98), rgba(7, 11, 16, 0.72)),
+    url('/manus-storage/nexus-agency-coordination_a15e1a79.jpg') center / cover no-repeat;
   color: var(--nx-ink);
   font-size: 14px;
 }
@@ -13,25 +19,39 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
-  padding: 16px 14px 18px;
+  padding: 26px 22px 24px;
   border-right: 1px solid var(--nx-line);
-  background: var(--nx-surface);
+  background: rgba(12, 19, 27, 0.94);
   min-height: 0;
 }
 
 .nx-workflow__rail h2 {
   margin: 0;
   font-family: Archivo, sans-serif;
-  font-size: 15px;
+  max-width: 320px;
+  font-size: clamp(24px, 2vw, 34px);
+  font-weight: 620;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.nx-workflow__index {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--nx-accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .nx-workflow__rail p {
   margin: 6px 0 0;
   color: var(--nx-mute);
-  line-height: 1.35;
-  font-size: 12px;
+  max-width: 340px;
+  line-height: 1.5;
+  font-size: 13px;
 }
 
 .nx-workflow__list {
@@ -59,10 +79,11 @@
 .nx-workflow__chip {
   display: grid;
   gap: 2px;
-  min-height: 48px;
-  padding: 10px 12px;
+  min-height: 54px;
+  padding: 11px 13px;
   text-align: left;
-  background: var(--nx-raised);
+  border-radius: 0 7px 7px 0;
+  background: rgba(18, 29, 40, 0.88);
   border: 1px solid var(--nx-line);
   color: inherit;
   cursor: grab;
@@ -80,7 +101,7 @@
 
 .nx-workflow__chip strong {
   font-family: Archivo, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -98,6 +119,7 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+  border-left: 1px solid rgba(242, 163, 58, 0.16);
 }
 
 .nx-workflow__pane .react-flow {
@@ -106,7 +128,7 @@
 }
 
 .nx-workflow .react-flow {
-  background: var(--nx-ground);
+  background: rgba(5, 8, 12, 0.70);
 }
 
 .nx-workflow .react-flow__controls {
@@ -126,20 +148,21 @@
 }
 
 .nx-wf-lane {
-  min-width: 168px;
+  min-width: 205px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--nx-faint);
+  color: var(--nx-accent);
 }
 
 .nx-wf-node {
-  min-width: 176px;
-  max-width: 220px;
-  padding: 11px 12px 12px;
-  background: var(--nx-surface);
+  min-width: 205px;
+  max-width: 245px;
+  padding: 13px 15px 14px;
+  border-radius: 0 8px 8px 0;
+  background: rgba(12, 19, 27, 0.96);
   border: 1px solid var(--nx-line);
   color: var(--nx-ink);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
@@ -162,7 +185,7 @@
 .nx-wf-node__title {
   display: block;
   font-family: Archivo, sans-serif;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -172,7 +195,7 @@
   display: block;
   margin-top: 4px;
   color: var(--nx-mute);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.3;
 }
 

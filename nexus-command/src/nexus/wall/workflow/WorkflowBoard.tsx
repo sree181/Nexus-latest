@@ -18,6 +18,10 @@ import {
   type NodeTypes,
   type XYPosition,
 } from '@xyflow/react';
+/**
+ * CIVIC INSTRUMENT PANEL
+ * The workflow is a dominant route map: sources → desks → stakeholder → accountable record.
+ */
 import '@xyflow/react/dist/style.css';
 import './workflow.css';
 import {
@@ -67,8 +71,8 @@ const DnDContext = createContext<{
 
 const edgeDefaults: Partial<Edge> = {
   type: 'smoothstep',
-  style: { stroke: '#e87722', strokeWidth: 2 },
-  markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#e87722' },
+  style: { stroke: '#f2a33a', strokeWidth: 2.5 },
+  markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#f2a33a' },
 };
 
 function haystack(feeds: WorkflowFeed[]): string {
@@ -152,35 +156,35 @@ const nodeTypes = {
 function buildGraph(feeds: WorkflowFeed[], stakeholder: string): { nodes: WorkflowNode[]; edges: Edge[] } {
   const live = haystack(feeds);
   const lanes: LaneNode[] = [
-    { id: 'lane-sources', type: 'lane', position: { x: 24, y: -8 }, data: { label: 'Sources' }, draggable: false, selectable: false, connectable: false },
-    { id: 'lane-agents', type: 'lane', position: { x: 320, y: -8 }, data: { label: 'Agents' }, draggable: false, selectable: false, connectable: false },
-    { id: 'lane-sign', type: 'lane', position: { x: 620, y: -8 }, data: { label: 'Stakeholder' }, draggable: false, selectable: false, connectable: false },
-    { id: 'lane-record', type: 'lane', position: { x: 900, y: -8 }, data: { label: 'Decision' }, draggable: false, selectable: false, connectable: false },
+    { id: 'lane-sources', type: 'lane', position: { x: 24, y: -12 }, data: { label: '01 / Sources' }, draggable: false, selectable: false, connectable: false },
+    { id: 'lane-agents', type: 'lane', position: { x: 350, y: -12 }, data: { label: '02 / Desks' }, draggable: false, selectable: false, connectable: false },
+    { id: 'lane-sign', type: 'lane', position: { x: 690, y: -12 }, data: { label: '03 / Stakeholder' }, draggable: false, selectable: false, connectable: false },
+    { id: 'lane-record', type: 'lane', position: { x: 1000, y: -12 }, data: { label: '04 / Decision' }, draggable: false, selectable: false, connectable: false },
   ];
   const nodes: WorkflowNode[] = [
     ...lanes,
     ...WORKFLOW_SOURCES.map((item, index): SourceNode => ({
       id: item.id,
       type: 'source',
-      position: { x: 24, y: 36 + index * 92 },
+      position: { x: 24, y: 42 + index * 80 },
       data: { label: item.label, note: item.agency, live: sourceIsLive(item, live) },
     })),
     ...WORKFLOW_AGENTS.map((item, index): AgentNode => ({
       id: item.id,
       type: 'agent',
-      position: { x: 320, y: 60 + index * 108 },
+      position: { x: 350, y: 60 + index * 96 },
       data: { label: item.label, note: item.role },
     })),
     {
       id: 'stakeholder',
       type: 'stakeholder',
-      position: { x: 620, y: 292 },
+      position: { x: 690, y: 265 },
       data: { label: stakeholder || 'Named stakeholder', note: 'Signs the recommendation' },
     },
     {
       id: 'decision',
       type: 'decision',
-      position: { x: 900, y: 292 },
+      position: { x: 1000, y: 265 },
       data: { label: 'Decision', note: 'Recorded, not actuated' },
     },
   ];
@@ -239,8 +243,9 @@ function Sidebar() {
   return (
     <aside className="nx-workflow__rail">
       <div>
-        <h2>Workflow</h2>
-        <p>Drag a box onto the canvas, or tap one then tap the pane. Sources feed only the desks that may read them. The stakeholder signs. That record is the decision.</p>
+        <span className="nx-workflow__index">06 / Workflow</span>
+        <h2>Route every signal to an accountable decision.</h2>
+        <p>Sources feed only the desks permitted to read them. A named stakeholder signs; the resulting record is the decision.</p>
       </div>
       <div className="nx-workflow__list">
         {PALETTE_GROUPS.map(group => (
@@ -323,6 +328,7 @@ function Canvas({ feeds, stakeholder }: BoardProps) {
         nodeTypes={nodeTypes}
         defaultEdgeOptions={edgeDefaults}
         fitView
+        fitViewOptions={{ padding: 0.06, minZoom: 0.65, maxZoom: 1.15 }}
         minZoom={0.25}
         maxZoom={1.6}
         colorMode="dark"

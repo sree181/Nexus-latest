@@ -1,11 +1,14 @@
+/**
+ * CIVIC INSTRUMENT PANEL
+ * Logic stays intentionally separate from the class-based presentation layer.
+ * Preserve accountable decision semantics, readable states, and responsive behavior.
+ */
 import React from 'react';
 import NexusDeskTemplate from './NexusDeskTemplate.jsx';
 import './nexusDesk.css';
 import { OperationalApiError, operationalApi } from '../../operationalApi';
 import { getLive, reloadLive, subscribeLive } from '../liveStore';
 import { buildLiveView } from '../liveView';
-
-const DESIGN_WIDTH = 1920;
 
 export default class NexusDesk extends React.Component {
   state = {
@@ -21,8 +24,6 @@ export default class NexusDesk extends React.Component {
   };
 
   componentDidMount() {
-    this.__prevRootFontSize = document.documentElement.style.fontSize;
-    document.documentElement.style.fontSize = 'calc(100vw / ' + DESIGN_WIDTH + ' * 16)';
     this.unsub = subscribeLive(() => this.setState({ live: getLive() }));
     this.timer = setInterval(() => this.setState({ now: new Date() }), 1000);
   }
@@ -30,7 +31,6 @@ export default class NexusDesk extends React.Component {
   componentWillUnmount() {
     if (this.unsub) this.unsub();
     clearInterval(this.timer);
-    document.documentElement.style.fontSize = this.__prevRootFontSize || '';
   }
 
   view() {
@@ -98,6 +98,7 @@ export default class NexusDesk extends React.Component {
     const dissentName = view.desks.find(item => item.statusLabel === 'Dissent')?.name;
     return {
       clock: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
+      date: d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
       view,
       reason: this.state.reason,
       confirmed: this.state.confirmed,
@@ -108,7 +109,7 @@ export default class NexusDesk extends React.Component {
       confirmLabel: dissentName
         ? `I have read the dissent from ${dissentName} and the stated limitations.`
         : 'I reviewed the cited sources, any feed warnings, and the stated limitations.',
-      approveLabel: view.busy ? 'Recording…' : (view.canDecide ? 'Approve · record responsibility' : 'Nothing to approve'),
+      approveLabel: view.busy ? 'Recording…' : (view.canDecide ? 'Approve and record responsibility' : 'Nothing to approve'),
       onReason: ev => this.setState({ reason: ev.target.value }),
       onConfirm: () => this.setState({ confirmed: !this.state.confirmed }),
       onSelect: id => this.setState({ selectedIncidentId: id, confirmed: false, message: null }),

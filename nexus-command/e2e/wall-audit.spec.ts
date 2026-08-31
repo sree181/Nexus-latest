@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * Smoke the Claude Design wall at the authored 3840×2160 canvas.
+ * Smoke the Civic Instrument Panel wall at the authored 3840×2160 canvas.
  * Copy and layout live in the React port; this checks that the product mounts, fills the panel, and switches screens.
  */
 test.use({ viewport: { width: 3840, height: 2160 } });
@@ -36,8 +36,8 @@ test('frame fills 3840x2160 with no scroll', async ({ page }) => {
 test('operations screen shows the product name and desks', async ({ page }) => {
   await open(page);
   await expect(page.getByText('Mobility command')).toBeVisible();
-  await expect(page.getByText('ATLAS', { exact: true })).toBeVisible();
-  await expect(page.getByText('AQUA', { exact: true })).toBeVisible();
+  await expect(page.getByText('ATLAS', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('AQUA', { exact: true }).first()).toBeVisible();
   await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();
 });
 
@@ -51,7 +51,7 @@ test('workflow tab shows sources, agents, stakeholder, and decision', async ({ p
   await open(page);
   await page.getByRole('button', { name: /Workflow/ }).click();
   await expect(page.locator('[data-screen-label="Workflow"]')).toBeVisible();
-  await expect(page.getByText('TomTom flow')).toBeVisible();
+  await expect(page.getByText('TomTom flow').first()).toBeVisible();
   await expect(page.getByText('ATLAS', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Stakeholder').first()).toBeVisible();
   await expect(page.getByText('Decision').first()).toBeVisible();
