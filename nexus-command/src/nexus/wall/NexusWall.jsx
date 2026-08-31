@@ -807,6 +807,7 @@ class NexusWallLogic extends React.Component {
     vals.saveDesk = () => void this.commitDesk();
     vals.deskSteward = desk ? desk.role : '';
     vals.deskAvatar = code && DESK_AVATARS[code] ? `/avatars/${DESK_AVATARS[code]}.jpg` : '';
+    vals.deskLogo = code ? `/icons/desks/${code}.svg` : '';
 
     const dtabs = { identity: 'Role', prompt: 'Prompt', model: 'Model', tools: 'Tools', policies: 'Policies' };
     for (const key of Object.keys(dtabs)) {

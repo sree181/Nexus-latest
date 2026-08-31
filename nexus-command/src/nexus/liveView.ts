@@ -319,6 +319,7 @@ export interface WallDeskTile {
   name: string;
   role: string;
   avatar: string;
+  logo: string;
   status: string;
   statusColor: string;
   markFill: string | null;
@@ -1010,6 +1011,7 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
         name: deskCallsign(code),
         role: WALL_ROLES[code] ?? code,
         avatar: AVATARS[code],
+        logo: `/icons/desks/${code}.svg`,
         status,
         statusColor: row.statusColor,
         markFill: row.markFill,

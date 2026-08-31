@@ -781,13 +781,16 @@ export default function NexusWallTemplate({ vals }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '1.25rem', padding: '1rem 1.5rem', minHeight: '0', overflow: 'hidden' }}>
               {(vals.wallDesks || []).map(tile => (
               <div key={tile.code} style={{ background: vals[`bg_${tile.code}`], border: '0.0625rem solid rgba(255,255,255,0.12)', borderTop: `0.375rem solid ${vals[`gut_${tile.code}`]}`, padding: '1.125rem 1.375rem', display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: '0.625rem', alignContent: 'space-between', minWidth: '0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.125rem', minWidth: '0' }}>
-                  <img src={tile.avatar} alt="" style={{ width: '4.5rem', height: '4.5rem', objectFit: 'cover', flex: 'none', filter: 'grayscale(0.25)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: '0' }}>
+                  <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <img src={tile.avatar} alt="" style={{ width: '4.25rem', height: '4.25rem', objectFit: 'cover', display: 'block' }} />
+                    <img src={tile.logo} alt="" style={{ width: '4.25rem', height: '4.25rem', display: 'block' }} />
+                  </span>
                   <span style={{ display: 'grid', gap: '0.125rem', minWidth: '0' }}>
-                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.375rem', fontWeight: '700', letterSpacing: '0.06em', color: 'var(--nx-ink)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '700', letterSpacing: '0.02em', color: 'var(--nx-ink)', whiteSpace: 'nowrap' }}>
                       {tile.name}
                     </span>
-                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {tile.role}
                     </span>
                   </span>
@@ -884,7 +887,10 @@ export default function NexusWallTemplate({ vals }) {
           <div style={{ position: 'absolute', inset: '0', zIndex: '50', background: 'rgba(3,4,6,0.88)', display: 'grid', placeItems: 'center', padding: '4rem' }}>
             <div data-screen-label="Desk configuration" style={{ width: '100%', height: '100%', background: '#0E1116', border: '0.0625rem solid rgba(255,255,255,0.22)', display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr) auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', padding: '1.75rem 2.5rem', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', background: '#12161C' }}>
-                <img src={vals.deskAvatar} alt="" style={{ width: '7rem', height: '7rem', objectFit: 'cover', flex: 'none', filter: 'grayscale(0.2)' }} />
+                <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <img src={vals.deskAvatar} alt="" style={{ width: '7rem', height: '7rem', objectFit: 'cover', display: 'block' }} />
+                  <img src={vals.deskLogo} alt="" style={{ width: '7rem', height: '7rem', display: 'block' }} />
+                </span>
                 <span style={{ display: 'grid', gap: '0.25rem', minWidth: '0' }}>
                   <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '3rem', fontWeight: '700', letterSpacing: '0.08em', color: 'var(--nx-ink)' }}>
                     DESK {vals.deskCode}
