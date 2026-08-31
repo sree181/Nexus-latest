@@ -1,4 +1,5 @@
 import React from 'react';
+import WorkflowBoard from './workflow/WorkflowBoard';
 
 /* Generated from Nexus Wall.dc.html — presentation only. All values come from NexusWall.renderVals(). */
 export default function NexusWallTemplate({ vals }) {
@@ -66,57 +67,69 @@ export default function NexusWallTemplate({ vals }) {
         {vals.isOps ? (
           <>
             <div style={{ position: 'absolute', inset: '0', display: 'grid', gridTemplateColumns: '92rem minmax(0, 1fr)' }}>
-              <section data-screen-label="Priority card" style={{ background: 'var(--nx-surface)', borderRight: '0.0625rem solid var(--nx-line)', display: 'grid', gridTemplateRows: 'minmax(0, 1fr)', overflow: 'hidden' }}>
-                <div style={{ display: 'grid', alignContent: 'center', gap: '1.75rem', minHeight: '0', padding: '2.5rem 2.75rem', borderLeft: '0.5rem solid var(--nx-accent)' }}>
-                  <div style={{ display: 'grid', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                      <span style={{ flex: 'none', color: 'var(--nx-accent)', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.06em', lineHeight: '1' }}>
-                        {vals.sevLabel}
-                      </span>
-                      <span style={{ fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
-                        {vals.incidentIdLine}
-                      </span>
+              <section data-screen-label="Priority card" style={{ background: 'var(--nx-surface)', borderRight: '0.0625rem solid var(--nx-line)', display: 'grid', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', minHeight: '0', height: '100%', borderLeft: '0.5rem solid var(--nx-accent)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', padding: '1.75rem 2.5rem 1.5rem', borderBottom: '0.0625rem solid var(--nx-line)' }}>
+                    <span style={{ flex: 'none', background: 'var(--nx-accent)', color: 'var(--nx-accent-ink)', padding: '0.5rem 0.875rem', fontFamily: 'Archivo, sans-serif', fontSize: '1.375rem', fontWeight: '700', letterSpacing: '0.1em', lineHeight: '1' }}>
+                      {vals.sevLabel}
+                    </span>
+                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', color: 'var(--nx-mute)', letterSpacing: '0.04em' }}>
+                      {vals.incidentIdLine}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', alignContent: 'start', gap: '2rem', minHeight: '0', overflow: 'auto', padding: '2.25rem 2.5rem' }}>
+                    <div style={{ display: 'grid', gap: '0.875rem' }}>
+                      <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3rem', fontWeight: '650', lineHeight: '1.12', letterSpacing: '-0.03em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                        {vals.incidentTitle}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.25rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--nx-faint)' }}>
+                          Owner
+                        </span>
+                        <span>{vals.incidentOwner}</span>
+                      </div>
                     </div>
-                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3rem', fontWeight: '650', lineHeight: '1.15', letterSpacing: '-0.03em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
-                      {vals.incidentTitle}
-                    </div>
-                    <div style={{ fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
-                      {vals.incidentOwner}
+                    <div style={{ display: 'grid', gap: '0.75rem', background: 'var(--nx-raised)', padding: '1.5rem 1.75rem', borderTop: '0.25rem solid var(--nx-accent)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.25rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
+                          Ask
+                        </span>
+                        {(vals.recVersionLabel || vals.recMeta) ? (
+                          <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.375rem', color: 'var(--nx-mute)' }}>
+                            {[vals.recVersionLabel, vals.recMeta].filter(Boolean).join(' · ')}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '500', lineHeight: '1.3', letterSpacing: '-0.015em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                        {vals.recAction}
+                      </div>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gap: '0.875rem' }}>
-                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '500', lineHeight: '1.3', letterSpacing: '-0.015em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
-                      {vals.recAction}
-                    </div>
-                    {(vals.recVersionLabel || vals.recMeta) ? (
-                      <span style={{ fontSize: '1.5rem', color: 'var(--nx-faint)' }}>
-                        {[vals.recVersionLabel, vals.recMeta].filter(Boolean).join(' · ')}
-                      </span>
+                  <div style={{ display: 'grid', gap: '1rem', padding: '1.5rem 2.5rem 1.75rem', borderTop: '0.0625rem solid var(--nx-line)', background: 'var(--nx-raised)' }}>
+                    {vals.awaiting ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--nx-accent)', color: 'var(--nx-accent-ink)', padding: '0.875rem 1.25rem' }}>
+                        <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.75rem', fontWeight: '700', lineHeight: '1' }}>
+                          {vals.awaitBanner}
+                        </span>
+                        <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '600', fontVariantNumeric: 'tabular-nums', lineHeight: '1' }}>
+                          {vals.awaitClock}
+                        </span>
+                      </div>
                     ) : null}
+                    {vals.signed ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--nx-ink)', color: 'var(--nx-ground)', padding: '0.875rem 1.25rem' }}>
+                        <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.75rem', fontWeight: '700', lineHeight: '1' }}>
+                          {vals.signedBanner}
+                        </span>
+                        <span style={{ marginLeft: 'auto', fontSize: '1.625rem', fontWeight: '600', lineHeight: '1' }}>
+                          {vals.signedMeta}
+                        </span>
+                      </div>
+                    ) : null}
+                    <button className="nxw-h1" type="button" onClick={vals.togglePriority} style={{ justifySelf: 'stretch', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '0.125rem solid var(--nx-accent)', color: 'var(--nx-accent)', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '650', lineHeight: '1', padding: '0.875rem 1.25rem', cursor: 'pointer' }}>
+                      {vals.priorityLabel}
+                    </button>
                   </div>
-                  {vals.awaiting ? (
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', color: 'var(--nx-accent)' }}>
-                      <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.875rem', fontWeight: '700' }}>
-                        {vals.awaitBanner}
-                      </span>
-                      <span style={{ marginLeft: 'auto', fontSize: '1.75rem', fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>
-                        {vals.awaitClock}
-                      </span>
-                    </div>
-                  ) : null}
-                  {vals.signed ? (
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', color: 'var(--nx-ink)' }}>
-                      <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.875rem', fontWeight: '700' }}>
-                        {vals.signedBanner}
-                      </span>
-                      <span style={{ marginLeft: 'auto', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
-                        {vals.signedMeta}
-                      </span>
-                    </div>
-                  ) : null}
-                  <button className="nxw-h1" type="button" onClick={vals.togglePriority} style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '0', color: 'var(--nx-accent)', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', lineHeight: '1', padding: '0', cursor: 'pointer' }}>
-                    {vals.priorityLabel}
-                  </button>
                 </div>
               </section>
               {vals.priorityOpen ? (
@@ -721,8 +734,11 @@ export default function NexusWallTemplate({ vals }) {
             </div>
           </>
         ) : null}
+        {vals.isWorkflow ? (
+          <WorkflowBoard feeds={vals.feeds} stakeholder={vals.operatorName} />
+        ) : null}
       </main>
-      <nav data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 3rem', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.5rem' }}>
+      <nav data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 2rem', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
         <button type="button" onClick={vals.goOps} style={{ height: '5.5rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeOps}`, color: vals.inkOps, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             01
@@ -761,6 +777,14 @@ export default function NexusWallTemplate({ vals }) {
           </span>
           <span style={{ fontSize: '2.5rem', fontWeight: '600' }}>
             Commitments
+          </span>
+        </button>
+        <button type="button" onClick={vals.goWorkflow} style={{ height: '5.5rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeWorkflow}`, color: vals.inkWorkflow, fontFamily: 'inherit', textAlign: 'left', padding: '0 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }}>
+          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
+            06
+          </span>
+          <span style={{ fontSize: '2.5rem', fontWeight: '600' }}>
+            Workflow
           </span>
         </button>
       </nav>

@@ -46,3 +46,13 @@ test('reach band switches to evidence lineage', async ({ page }) => {
   await page.getByRole('button', { name: /Evidence lineage/ }).click();
   await expect(page.getByText('arrows read left to right')).toBeVisible();
 });
+
+test('workflow tab shows sources, agents, stakeholder, and decision', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: /Workflow/ }).click();
+  await expect(page.locator('[data-screen-label="Workflow"]')).toBeVisible();
+  await expect(page.getByText('TomTom flow')).toBeVisible();
+  await expect(page.getByText('ATLAS', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Stakeholder').first()).toBeVisible();
+  await expect(page.getByText('Decision').first()).toBeVisible();
+});

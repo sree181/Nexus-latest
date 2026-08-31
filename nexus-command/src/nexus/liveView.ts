@@ -990,6 +990,8 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
       lag: lagLabel(item),
       dot: feedDot(item),
       muted: (item.connectionStatus ?? 'connected') !== 'connected' || item.status !== 'healthy',
+      connectorCode: item.connectorCode ?? null,
+      sourceCode: item.sourceCode,
     })),
     commitmentPreview: incidentCommitments.slice(0, 6).map((item: Commitment) => ({
       id: item.commitmentId,

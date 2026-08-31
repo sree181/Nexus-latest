@@ -3,7 +3,7 @@ export { default as NexusDesk } from './desk/NexusDesk.jsx';
 
 export type NexusWallProps = {
   displayMode?: 'wall' | 'walk-up';
-  screen?: 'operations' | 'deliberation' | 'evidence' | 'decision' | 'commitments';
+  screen?: 'operations' | 'deliberation' | 'evidence' | 'decision' | 'commitments' | 'workflow';
   witnessState?: 'awaiting signature' | 'signed';
   reachOverlay?: boolean;
 };

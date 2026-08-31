@@ -12,7 +12,7 @@ window.L = L;
 /* Ported from Nexus Wall.dc.html. Behaviour, timers, map wiring, data and copy are unchanged.
    renderVals() is the only bridge between logic and markup. */
 
-const SCREENS = ['operations', 'deliberation', 'evidence', 'decision', 'commitments'];
+const SCREENS = ['operations', 'deliberation', 'evidence', 'decision', 'commitments', 'workflow'];
 
 /* Desk copy, boundaries, roles and prompts lifted from server/operational/agents/*
    (desks.ts boundaries, atlas/catalog.ts and aqua/catalog.ts defaults, DeskConfigDialog copy). */
@@ -623,12 +623,14 @@ class NexusWallLogic extends React.Component {
       goEvidence: this.go('evidence'),
       goDecision: this.go('decision'),
       goCommit: this.go('commitments'),
+      goWorkflow: this.go('workflow'),
       isOps: s === 'operations',
       isDelib: s === 'deliberation',
       isEvidence: s === 'evidence',
-      showDesks: s !== 'evidence' && s !== 'deliberation',
+      showDesks: s !== 'evidence' && s !== 'deliberation' && s !== 'workflow',
       isDecision: s === 'decision',
       isCommit: s === 'commitments',
+      isWorkflow: s === 'workflow',
       awaiting: (this.props.witnessState ?? 'awaiting signature') === 'awaiting signature',
       signed: (this.props.witnessState ?? 'awaiting signature') === 'signed',
       reachOverlay: this.props.reachOverlay === true,
@@ -816,7 +818,7 @@ class NexusWallLogic extends React.Component {
       vals[`edge${suffix}`] = on ? '#E87722' : 'transparent';
       vals[`ink${suffix}`] = on ? '#F3EDE4' : '#8B93A0';
     }
-    const keys = { operations: 'Ops', deliberation: 'Delib', evidence: 'Evidence', decision: 'Decision', commitments: 'Commit' };
+    const keys = { operations: 'Ops', deliberation: 'Delib', evidence: 'Evidence', decision: 'Decision', commitments: 'Commit', workflow: 'Workflow' };
     for (const name of SCREENS) {
       const active = s === name;
       vals[`edge${keys[name]}`] = active ? '#E87722' : 'transparent';
@@ -861,6 +863,7 @@ class NexusWallLogic extends React.Component {
       operatorName: live.operatorName,
       operatorRole: live.operatorRole,
       agencyName: live.agencyName,
+      feeds: live.feeds,
       commitmentPreview: live.commitmentPreview,
       hasCommitments: live.commitmentPreview.length > 0,
       noCommitments: live.commitmentPreview.length === 0,

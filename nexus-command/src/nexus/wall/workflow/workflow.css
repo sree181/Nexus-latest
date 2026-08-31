@@ -1,0 +1,199 @@
+.nx-workflow {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(200px, 18vw) minmax(0, 1fr);
+  min-height: 0;
+  background: var(--nx-ground);
+  color: var(--nx-ink);
+  font-size: 14px;
+}
+
+.nx-workflow__rail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 14px 18px;
+  border-right: 1px solid var(--nx-line);
+  background: var(--nx-surface);
+  min-height: 0;
+}
+
+.nx-workflow__rail h2 {
+  margin: 0;
+  font-family: Archivo, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.nx-workflow__rail p {
+  margin: 6px 0 0;
+  color: var(--nx-mute);
+  line-height: 1.35;
+  font-size: 12px;
+}
+
+.nx-workflow__list {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.nx-workflow__group {
+  display: grid;
+  gap: 6px;
+}
+
+.nx-workflow__group-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nx-faint);
+}
+
+.nx-workflow__chip {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--nx-raised);
+  border: 1px solid var(--nx-line);
+  color: inherit;
+  cursor: grab;
+}
+
+.nx-workflow__chip:active {
+  cursor: grabbing;
+}
+
+.nx-workflow__chip--armed {
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-dim);
+}
+
+.nx-workflow__chip strong {
+  font-family: Archivo, sans-serif;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.nx-workflow__chip span {
+  color: var(--nx-mute);
+  font-size: 11px;
+}
+
+.nx-workflow__chip--source { border-left: 3px solid var(--nx-mute); }
+.nx-workflow__chip--agent { border-left: 3px solid var(--nx-accent); }
+.nx-workflow__chip--stakeholder,
+.nx-workflow__chip--decision { border-left: 3px solid var(--nx-ink); }
+
+.nx-workflow__pane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.nx-workflow__pane .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.nx-workflow .react-flow {
+  background: var(--nx-ground);
+}
+
+.nx-workflow .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--nx-line);
+  overflow: hidden;
+}
+
+.nx-workflow .react-flow__controls-button {
+  background: var(--nx-surface);
+  border-bottom: 1px solid var(--nx-line);
+  fill: var(--nx-ink);
+}
+
+.nx-workflow .react-flow__node-lane {
+  pointer-events: none;
+}
+
+.nx-wf-lane {
+  min-width: 168px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nx-faint);
+}
+
+.nx-wf-node {
+  min-width: 176px;
+  max-width: 220px;
+  padding: 11px 12px 12px;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-line);
+  color: var(--nx-ink);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.nx-workflow .react-flow__node.selected .nx-wf-node {
+  border-color: var(--nx-accent);
+}
+
+.nx-wf-node__kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--nx-mute);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nx-wf-node__title {
+  display: block;
+  font-family: Archivo, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.nx-wf-node__note {
+  display: block;
+  margin-top: 4px;
+  color: var(--nx-mute);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.nx-wf-node--source { border-top: 3px solid var(--nx-mute); }
+.nx-wf-node--source.nx-wf-node--live { border-top-color: var(--nx-accent); }
+.nx-wf-node--agent { border-top: 3px solid var(--nx-accent); }
+.nx-wf-node--stakeholder,
+.nx-wf-node--decision { border-top: 3px solid var(--nx-accent); background: var(--nx-accent-dim); }
+
+.nx-wf-node--live .nx-wf-node__kicker { color: var(--nx-accent); }
+
+.nx-workflow .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: var(--nx-accent);
+  border: 0;
+}
+
+.nx-workflow .react-flow__edge-path {
+  stroke: var(--nx-accent);
+  stroke-width: 2;
+}
+
+.nx-workflow .react-flow__attribution {
+  display: none;
+}
