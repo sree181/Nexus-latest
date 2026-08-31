@@ -908,7 +908,7 @@ export default class NexusWall extends NexusWallLogic {
     /* The design is authored in rem against a 3840px canvas; scaling the root font size
        reproduces it at any viewport. Drop this if your shell already scales the route. */
     this.__prevRootFontSize = document.documentElement.style.fontSize;
-    document.documentElement.style.fontSize = 'calc(100vw / ' + DESIGN_WIDTH + ' * 16)';
+    document.documentElement.style.fontSize = 'calc(min(100vw * 16 / ' + DESIGN_WIDTH + ', 100vh * 16 / 2160))';
     if (super.componentDidMount) super.componentDidMount();
   }
   componentWillUnmount() {

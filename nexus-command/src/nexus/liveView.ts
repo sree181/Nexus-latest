@@ -96,6 +96,12 @@ function firstClause(text: string): string {
   return text.split(/[.!?]/)[0]?.trim() || text.trim();
 }
 
+function cardTitle(text: string, max = 160): string {
+  const clause = firstClause(text);
+  if (clause.length <= max) return clause;
+  return `${clause.slice(0, max).replace(/\s+\S*$/, '')}…`;
+}
+
 export function findingStance(finding: AgentFinding | undefined): 'contributed' | 'abstained' | 'dissent' | 'none' {
   if (!finding) return 'none';
   if (finding.conflicts.length > 0) return 'dissent';
@@ -484,7 +490,7 @@ export function buildLineage(
       id,
       kicker: shortId(item.evidenceId),
       kickerTone: '#8A929C',
-      title: item.summary,
+      title: cardTitle(item.summary),
       tone: '#2FD98A',
       bg: '#10141A',
     };
@@ -529,7 +535,7 @@ export function buildLineage(
       id,
       kicker: `${row.name} · ${row.statusLabel.toUpperCase()}`,
       kickerTone: linTone(row.statusLabel),
-      title: row.line,
+      title: cardTitle(row.line),
       tone: linTone(row.statusLabel),
       bg: row.statusLabel === 'Dissent' ? 'rgba(240,180,41,0.07)' : '#10141A',
     };

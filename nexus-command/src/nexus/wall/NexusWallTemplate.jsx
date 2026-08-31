@@ -4,7 +4,7 @@ import React from 'react';
 export default function NexusWallTemplate({ vals }) {
   return (
     <>
-    <div data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: '#06070A', position: 'relative', overflow: 'hidden' }}>
+    <div data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: '#06070A', position: 'relative', overflow: 'hidden' }}>
       <header data-screen-label="Stratum 1 — state" style={{ padding: '2rem 3rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1.5rem', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
         <div style={{ display: 'flex', alignItems: 'stretch', gap: '2.5rem' }}>
           <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
@@ -548,15 +548,15 @@ export default function NexusWallTemplate({ vals }) {
                   mode {vals.modeLive} · every edge is a citation, not an inference
                 </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 34rem', gap: '2rem', minHeight: '0' }}>
-                <div ref={vals.linRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '2rem', minHeight: '0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(22rem, 28rem)', gap: '2rem', minHeight: '0', overflow: 'hidden' }}>
+                <div ref={vals.linRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '1.25rem', minHeight: '0', minWidth: '0', height: '100%', overflow: 'hidden' }}>
                   <svg width="100%" height="100%" style={{ position: 'absolute', inset: '0', zIndex: '0', pointerEvents: 'none', overflow: 'visible' }}>
                     <path d={vals.linDim} fill="rgba(154,161,171,0.20)" stroke="rgba(154,161,171,0.30)" strokeWidth="1"></path>
                     <path d={vals.linHot} fill="rgba(240,180,41,0.34)" stroke="rgba(240,180,41,0.85)" strokeWidth="1.5"></path>
                   </svg>
                   {(vals.lineageColumns || []).map(col => (
-                  <div key={col.key} style={{ display: 'grid', gridAutoRows: 'minmax(0, 1fr)', gap: '0.5rem', alignContent: 'stretch', minWidth: '0' }}>
-                    <div style={{ height: 'min-content', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto auto', alignItems: 'baseline', columnGap: '0.75rem', paddingBottom: '0.25rem', borderBottom: `0.1875rem solid ${col.headerTone}`, marginBottom: '0.375rem' }}>
+                  <div key={col.key} style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '0.5rem', minWidth: '0', minHeight: '0', height: '100%', overflow: 'hidden' }}>
+                    <div style={{ height: 'min-content', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto auto', alignItems: 'baseline', columnGap: '0.5rem', paddingBottom: '0.25rem', borderBottom: `0.1875rem solid ${col.headerTone}` }}>
                       <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#A3AAB4' }}>
                         {col.n}
                       </span>
@@ -577,21 +577,23 @@ export default function NexusWallTemplate({ vals }) {
                         </span>
                       ) : null}
                     </div>
+                    <div style={{ display: 'grid', gridAutoRows: 'min-content', gap: '0.5rem', alignContent: 'start', minHeight: '0', overflow: 'auto' }}>
                     {col.cards.map(card => (
-                      <button key={card.id} type="button" data-lin={card.id} onClick={vals[`sel_${card.id}`]} style={{ position: 'relative', zIndex: '1', textAlign: 'left', fontFamily: 'inherit', color: 'inherit', cursor: 'pointer', background: card.bg, border: '0', borderLeft: `0.375rem solid ${vals[`bd_${card.id}`] || card.tone}`, padding: '0.5rem 1rem', display: 'grid', alignContent: 'center', gap: '0.1875rem', minHeight: '0', overflow: 'hidden', justifySelf: 'start', width: '84%' }}>
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', lineHeight: '1.12', letterSpacing: '0.06em', textWrap: 'pretty', color: card.kickerTone }}>
+                      <button key={card.id} type="button" data-lin={card.id} onClick={vals[`sel_${card.id}`]} style={{ position: 'relative', zIndex: '1', textAlign: 'left', fontFamily: 'inherit', color: 'inherit', cursor: 'pointer', background: card.bg, border: '0', borderLeft: `0.375rem solid ${vals[`bd_${card.id}`] || card.tone}`, padding: '0.5rem 0.75rem', display: 'grid', alignContent: 'start', gap: '0.125rem', minHeight: '0', minWidth: '0', width: '100%', overflow: 'hidden' }}>
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', lineHeight: '1.12', letterSpacing: '0.06em', color: card.kickerTone, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {card.kicker}
                         </span>
-                        <span style={{ fontSize: '2rem', lineHeight: '1.14', color: '#E6E4DF', textWrap: 'pretty' }}>
+                        <span style={{ fontSize: '1.75rem', lineHeight: '1.14', color: '#E6E4DF', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                           {card.title}
                         </span>
                         {card.meta ? (
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#6F7783', textWrap: 'pretty' }}>
+                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', color: '#6F7783', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {card.meta}
                           </span>
                         ) : null}
                       </button>
                     ))}
+                    </div>
                   </div>
                   ))}
                 </div>
