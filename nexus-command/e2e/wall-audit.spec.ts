@@ -35,7 +35,7 @@ test('frame fills 3840x2160 with no scroll', async ({ page }) => {
 
 test('operations screen shows the product name and desks', async ({ page }) => {
   await open(page);
-  await expect(page.getByText('NEXUS COORDINATE')).toBeVisible();
+  await expect(page.getByText('Mobility command')).toBeVisible();
   await expect(page.getByText('ATLAS', { exact: true })).toBeVisible();
   await expect(page.getByText('AQUA', { exact: true })).toBeVisible();
   await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();

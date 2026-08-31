@@ -159,10 +159,12 @@ describe('priority card copy', () => {
   it('uses briefing language instead of raw identifiers and model strings', () => {
     const view = buildLiveView(bundle(), null, Date.parse('2026-08-31T09:42:00Z'));
     expect(view.sevLabel).toBe('HIGH');
-    expect(view.incidentIdLine).toMatch(/^Active · detected \d{2}:\d{2}Z$/);
+    expect(view.incidentIdLine).toMatch(/^Active · \d{2}:\d{2}Z$/);
     expect(view.incidentIdLine).not.toMatch(/i1/);
-    expect(view.recVersionLabel).toBe('Recommendation v3');
-    expect(view.recMeta).toMatch(/^Composed by Nexus · expires \d{2}:\d{2}Z$/);
-    expect(view.awaitClock).toBe('J. Ruffin · 30 min');
+    expect(view.recVersionLabel).toBe('v3');
+    expect(view.recMeta).toMatch(/^\d{2}:\d{2}Z$/);
+    expect(view.awaitBanner).toBe('Awaiting');
+    expect(view.awaitClock).toBe('30 min');
+    expect(view.incidentOwner).toBe('J. Ruffin');
   });
 });

@@ -4,271 +4,154 @@ import React from 'react';
 export default function NexusWallTemplate({ vals }) {
   return (
     <>
-    <div data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: '#06070A', position: 'relative', overflow: 'hidden' }}>
-      <header data-screen-label="Stratum 1 — state" style={{ padding: '2rem 3rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1.5rem', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
-        <div style={{ display: 'flex', alignItems: 'stretch', gap: '2.5rem' }}>
-          <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-            <span style={{ flex: 'none', background: '#F4F2ED', padding: '0.5rem 0.6875rem', display: 'flex', alignItems: 'center' }}>
-              <img src="/assets/auburn-shield.png" alt="Auburn University" style={{ height: '4.25rem', width: 'auto', display: 'block' }} />
+    <div data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: 'var(--nx-ground)', position: 'relative', overflow: 'hidden' }}>
+      <header data-screen-label="Stratum 1 — state" style={{ padding: '1.75rem 3rem 1.5rem', display: 'grid', gap: '1.25rem', borderBottom: '0.0625rem solid var(--nx-line)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          <span style={{ flex: 'none', background: 'var(--nx-ink)', padding: '0.4375rem 0.625rem', display: 'flex', alignItems: 'center' }}>
+            <img src="/assets/auburn-shield.png" alt="Auburn University" style={{ height: '3.5rem', width: 'auto', display: 'block' }} />
+          </span>
+          <span style={{ display: 'grid', gap: '0.125rem', minWidth: 0 }}>
+            <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.25rem', fontWeight: '700', letterSpacing: '-0.03em', lineHeight: '1', color: 'var(--nx-ink)', whiteSpace: 'nowrap' }}>
+              Nexus
             </span>
-            <span style={{ display: 'grid', gap: '0.0625rem' }}>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.2em', color: '#C9CDD4', whiteSpace: 'nowrap' }}>
-                AUBURN UNIVERSITY
-              </span>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', letterSpacing: '0.06em', color: '#6F7783', whiteSpace: 'nowrap' }}>
-                Harbert College of Business
-              </span>
+            <span style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap' }}>
+              Mobility command
             </span>
           </span>
-          <span style={{ flex: 'none', width: '0.0625rem', background: 'rgba(255,255,255,0.16)' }}></span>
-          <span style={{ display: 'grid', gap: '0.25rem', alignContent: 'center', minWidth: '0' }}>
-            <span style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '4rem', fontWeight: '700', letterSpacing: '0.09em', lineHeight: '1', color: '#F4F2ED', whiteSpace: 'nowrap' }}>
-              NEXUS COORDINATE
-            </span>
-            <span style={{ fontSize: '2rem', letterSpacing: '0.02em', color: '#8A929C', whiteSpace: 'nowrap' }}>
-              Auburn Mobility Operations · multi-agency incident coordination
-            </span>
-          </span>
-          <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
-            <a href="/" style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#F0B429', whiteSpace: 'nowrap' }}>
+          <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <a href="/" style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.75rem', fontWeight: '600', color: 'var(--nx-accent)', whiteSpace: 'nowrap' }}>
               Desk
             </a>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', border: '0.0625rem solid rgba(47,217,138,0.4)', padding: '0.4375rem 1.125rem' }}>
-              <span style={{ width: '1rem', height: '1rem', borderRadius: '50%', background: '#2FD98A', animation: 'nx-live 2s infinite' }}></span>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.2em', textTransform: 'uppercase', color: vals.modeColor || '#2FD98A' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', background: 'var(--nx-accent)', animation: 'nx-live 2s infinite' }}></span>
+              <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', color: 'var(--nx-accent)' }}>
                 {vals.modeLive || 'live'}
               </span>
             </span>
-            <span style={{ display: 'grid', justifyItems: 'end', gap: '0.125rem' }}>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '3.5rem', fontWeight: '500', lineHeight: '1', color: '#F4F2ED', fontVariantNumeric: 'tabular-nums' }}>
-                {vals.clock}
-              </span>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', letterSpacing: '0.14em', color: '#6F7783' }}>
-                {vals.dateLine}
-              </span>
+            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '3rem', fontWeight: '500', lineHeight: '1', color: 'var(--nx-ink)', fontVariantNumeric: 'tabular-nums' }}>
+              {vals.clock}
             </span>
           </span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '1.5rem' }}>
-          <div style={{ background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.10)', padding: '1.5rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto', gap: '1rem' }}>
-            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', letterSpacing: '0.12em', color: '#8A929C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              FEEDS AUTHORITATIVE
-            </span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.875rem' }}>
-              <span style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '4.75rem', fontWeight: '700', lineHeight: '0.9', color: '#2FD98A', fontVariantNumeric: 'tabular-nums' }}>
-                {vals.feedLive}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '1rem' }}>
+          {[
+            { label: 'Feeds', value: vals.feedLive, unit: `/ ${vals.feedTotal}`, color: 'var(--nx-ink)', note: vals.feedDegraded },
+            { label: 'Evidence', value: vals.evidenceCount, unit: '', color: 'var(--nx-ink)', note: vals.evidenceFrozen },
+            { label: 'Desks', value: vals.desksContributed, unit: vals.desksStaffed, color: 'var(--nx-ink)', note: vals.dissentLine },
+            { label: 'Window', value: vals.windowMinutes, unit: vals.windowUnit, color: vals.windowColor || 'var(--nx-accent)', note: vals.recStatusLine },
+            { label: 'Signed', value: vals.commitmentsExecuting, unit: vals.commitmentsAccepted, color: 'var(--nx-ink)', note: vals.blockedLine },
+          ].map((card) => (
+            <div key={card.label} style={{ background: 'var(--nx-surface)', border: '0.0625rem solid var(--nx-line)', padding: '1.125rem 1.5rem', display: 'grid', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.5rem', fontWeight: '600', color: 'var(--nx-mute)' }}>
+                {card.label}
               </span>
-              <span style={{ fontSize: '2rem', color: '#9AA1AB', whiteSpace: 'nowrap' }}>
-                / {vals.feedTotal}
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+                <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.75rem', fontWeight: '700', lineHeight: '0.95', color: card.color, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em' }}>
+                  {card.value}
+                </span>
+                {card.unit ? (
+                  <span style={{ fontSize: '1.75rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap' }}>
+                    {card.unit}
+                  </span>
+                ) : null}
               </span>
-            </span>
-            <span style={{ display: 'block', height: '0.375rem', background: 'rgba(255,255,255,0.10)' }}>
-              <span style={{ display: 'block', height: '100%', width: vals.feedBar, background: '#2FD98A' }}></span>
-            </span>
-            <span style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#A3AAB4', whiteSpace: 'nowrap' }}>
-              <span>
-                {vals.feedDegraded}
+              <span style={{ fontSize: '1.5rem', color: 'var(--nx-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {card.note}
               </span>
-              <span>
-                {vals.feedOwners}
-              </span>
-            </span>
-          </div>
-          <div style={{ background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.10)', padding: '1.5rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto', gap: '1rem' }}>
-            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', letterSpacing: '0.12em', color: '#8A929C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              EVIDENCE IN SNAPSHOT
-            </span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.875rem' }}>
-              <span style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '4.75rem', fontWeight: '700', lineHeight: '0.9', color: '#2FD98A', fontVariantNumeric: 'tabular-nums' }}>
-                {vals.evidenceCount}
-              </span>
-              <span style={{ fontSize: '2rem', color: '#9AA1AB', whiteSpace: 'nowrap' }}>
-                rows
-              </span>
-            </span>
-            <span style={{ display: 'block', height: '0.375rem', background: 'rgba(255,255,255,0.10)' }}>
-              <span style={{ display: 'block', height: '100%', width: '100%', background: '#2FD98A' }}></span>
-            </span>
-            <span style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#A3AAB4', whiteSpace: 'nowrap' }}>
-              <span>
-                {vals.evidenceFrozen}
-              </span>
-              <span>
-                immutable
-              </span>
-            </span>
-          </div>
-          <div style={{ background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.10)', padding: '1.5rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto', gap: '1rem' }}>
-            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', letterSpacing: '0.12em', color: '#8A929C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              DESKS CONTRIBUTED
-            </span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.875rem' }}>
-              <span style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '4.75rem', fontWeight: '700', lineHeight: '0.9', color: '#F4F2ED', fontVariantNumeric: 'tabular-nums' }}>
-                {vals.desksContributed}
-              </span>
-              <span style={{ fontSize: '2rem', color: '#9AA1AB', whiteSpace: 'nowrap' }}>
-                {vals.desksStaffed}
-              </span>
-            </span>
-            <span style={{ display: 'block', height: '0.375rem', background: 'rgba(255,255,255,0.10)' }}>
-              <span style={{ display: 'block', height: '100%', width: vals.desksBar, background: '#8A929C' }}></span>
-            </span>
-            <span style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#A3AAB4', whiteSpace: 'nowrap' }}>
-              <span>
-                {vals.dissentLine}
-              </span>
-              <span>
-                {vals.abstainLine}
-              </span>
-            </span>
-          </div>
-          <div style={{ background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.10)', padding: '1.5rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto', gap: '1rem' }}>
-            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', letterSpacing: '0.12em', color: '#8A929C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              DECISION WINDOW
-            </span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.875rem' }}>
-              <span style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '4.75rem', fontWeight: '700', lineHeight: '0.9', color: vals.windowColor || '#F0B429', fontVariantNumeric: 'tabular-nums' }}>
-                {vals.windowMinutes}
-              </span>
-              <span style={{ fontSize: '2rem', color: '#9AA1AB', whiteSpace: 'nowrap' }}>
-                {vals.windowUnit}
-              </span>
-            </span>
-            <span style={{ display: 'block', height: '0.375rem', background: 'rgba(255,255,255,0.10)' }}>
-              <span style={{ display: 'block', height: '100%', width: vals.windowBar, background: vals.windowColor || '#F0B429' }}></span>
-            </span>
-            <span style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#A3AAB4', whiteSpace: 'nowrap' }}>
-              <span>
-                {vals.recStatusLine}
-              </span>
-              <span>
-                {vals.recExpires}
-              </span>
-            </span>
-          </div>
-          <div style={{ background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.10)', padding: '1.5rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto', gap: '1rem' }}>
-            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', letterSpacing: '0.12em', color: '#8A929C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              COMMITMENTS EXECUTING
-            </span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.875rem' }}>
-              <span style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '4.75rem', fontWeight: '700', lineHeight: '0.9', color: '#FF4D4F', fontVariantNumeric: 'tabular-nums' }}>
-                {vals.commitmentsExecuting}
-              </span>
-              <span style={{ fontSize: '2rem', color: '#9AA1AB', whiteSpace: 'nowrap' }}>
-                {vals.commitmentsAccepted}
-              </span>
-            </span>
-            <span style={{ display: 'block', height: '0.375rem', background: 'rgba(255,255,255,0.10)' }}>
-              <span style={{ display: 'block', height: '100%', width: '25%', background: '#FF4D4F' }}></span>
-            </span>
-            <span style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#A3AAB4', whiteSpace: 'nowrap' }}>
-              <span>
-                {vals.blockedLine}
-              </span>
-              <span>
-                {vals.commitmentsFrom}
-              </span>
-            </span>
-          </div>
+            </div>
+          ))}
         </div>
       </header>
       <main data-screen-label="Stratum 2 — the picture" style={{ position: 'relative', overflow: 'hidden', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
         {vals.isOps ? (
           <>
             <div style={{ position: 'absolute', inset: '0', display: 'grid', gridTemplateColumns: '92rem minmax(0, 1fr)' }}>
-              <section data-screen-label="Priority card" style={{ background: '#0B0E13', borderRight: '0.1875rem solid rgba(255,255,255,0.16)', display: 'grid', gridTemplateRows: 'minmax(0, 1fr)', overflow: 'hidden' }}>
-                <div style={{ display: 'grid', alignContent: 'center', gap: '0', minHeight: '0' }}>
-                  <div style={{ display: 'grid', gap: '1.25rem', padding: '2.5rem 3rem 2rem', borderLeft: `0.625rem solid ${vals.sevBg}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-                      <span style={{ flex: 'none', background: vals.sevBg, color: '#06070A', padding: '0.4375rem 0.875rem', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.08em', lineHeight: '1', whiteSpace: 'nowrap' }}>
+              <section data-screen-label="Priority card" style={{ background: 'var(--nx-surface)', borderRight: '0.0625rem solid var(--nx-line)', display: 'grid', gridTemplateRows: 'minmax(0, 1fr)', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', alignContent: 'center', gap: '1.75rem', minHeight: '0', padding: '2.5rem 2.75rem', borderLeft: '0.5rem solid var(--nx-accent)' }}>
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                      <span style={{ flex: 'none', color: 'var(--nx-accent)', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.06em', lineHeight: '1' }}>
                         {vals.sevLabel}
                       </span>
-                      <span style={{ fontSize: '1.875rem', fontWeight: '500', color: '#A3AAB4', lineHeight: '1.3' }}>
+                      <span style={{ fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
                         {vals.incidentIdLine}
                       </span>
                     </div>
-                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.25rem', fontWeight: '650', lineHeight: '1.18', letterSpacing: '-0.02em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3rem', fontWeight: '650', lineHeight: '1.15', letterSpacing: '-0.03em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                       {vals.incidentTitle}
                     </div>
-                    <div style={{ fontSize: '2rem', lineHeight: '1.35', color: '#9AA1AB' }}>
+                    <div style={{ fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
                       {vals.incidentOwner}
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gap: '1.25rem', padding: '2rem 3rem 2.25rem', borderTop: '0.0625rem solid rgba(255,255,255,0.12)', borderLeft: '0.625rem solid #F0B429' }}>
-                    <div style={{ display: 'grid', gap: '0.4375rem' }}>
-                      <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.04em', color: '#F0B429' }}>
-                        {vals.recVersionLabel}
-                      </span>
-                      <span style={{ fontSize: '1.75rem', lineHeight: '1.35', color: '#8A929C' }}>
-                        {vals.recMeta}
-                      </span>
-                    </div>
-                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '500', lineHeight: '1.32', letterSpacing: '-0.01em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                  <div style={{ display: 'grid', gap: '0.875rem' }}>
+                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '500', lineHeight: '1.3', letterSpacing: '-0.015em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                       {vals.recAction}
                     </div>
-                    {vals.awaiting ? (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', background: '#F0B429', color: '#06070A', padding: '0.875rem 1.5rem' }}>
-                          <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '700', lineHeight: '1.2' }}>
-                            {vals.awaitBanner}
-                          </span>
-                          <span style={{ marginLeft: 'auto', fontSize: '1.75rem', fontWeight: '600', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
-                            {vals.awaitClock}
-                          </span>
-                        </div>
-                      </>
+                    {(vals.recVersionLabel || vals.recMeta) ? (
+                      <span style={{ fontSize: '1.5rem', color: 'var(--nx-faint)' }}>
+                        {[vals.recVersionLabel, vals.recMeta].filter(Boolean).join(' · ')}
+                      </span>
                     ) : null}
-                    {vals.signed ? (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', border: '0.125rem solid rgba(47,217,138,0.5)', background: 'rgba(47,217,138,0.12)', color: '#2FD98A', padding: '0.875rem 1.5rem' }}>
-                          <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '700', lineHeight: '1.2' }}>
-                            {vals.signedBanner}
-                          </span>
-                          <span style={{ marginLeft: 'auto', fontSize: '1.75rem', fontWeight: '600', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
-                            {vals.signedMeta}
-                          </span>
-                        </div>
-                      </>
-                    ) : null}
-                    <button className="nxw-h1" type="button" onClick={vals.togglePriority} style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.24)', color: '#E6E4DF', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', letterSpacing: '0.02em', lineHeight: '1', padding: '0.875rem 1.375rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-                      {vals.priorityLabel}
-                    </button>
                   </div>
+                  {vals.awaiting ? (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', color: 'var(--nx-accent)' }}>
+                      <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.875rem', fontWeight: '700' }}>
+                        {vals.awaitBanner}
+                      </span>
+                      <span style={{ marginLeft: 'auto', fontSize: '1.75rem', fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>
+                        {vals.awaitClock}
+                      </span>
+                    </div>
+                  ) : null}
+                  {vals.signed ? (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', color: 'var(--nx-ink)' }}>
+                      <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.875rem', fontWeight: '700' }}>
+                        {vals.signedBanner}
+                      </span>
+                      <span style={{ marginLeft: 'auto', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
+                        {vals.signedMeta}
+                      </span>
+                    </div>
+                  ) : null}
+                  <button className="nxw-h1" type="button" onClick={vals.togglePriority} style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '0', color: 'var(--nx-accent)', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', lineHeight: '1', padding: '0', cursor: 'pointer' }}>
+                    {vals.priorityLabel}
+                  </button>
                 </div>
               </section>
               {vals.priorityOpen ? (
                 <>
                   <div style={{ position: 'absolute', inset: '0', zIndex: '20', background: 'rgba(4,5,8,0.9)', display: 'grid', placeItems: 'center', padding: '2.5rem 4rem' }}>
-                    <div data-screen-label="Priority card expanded" style={{ width: '100%', maxWidth: '210rem', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.22)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.15fr)' }}>
-                      <div style={{ display: 'grid', alignContent: 'start', gap: '1.5rem', padding: '2.5rem 3rem', borderRight: '0.0625rem solid rgba(255,255,255,0.12)', borderLeft: '0.625rem solid #FF4D4F' }}>
+                    <div data-screen-label="Priority card expanded" style={{ width: '100%', maxWidth: '210rem', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.22)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.15fr)' }}>
+                      <div style={{ display: 'grid', alignContent: 'start', gap: '1.5rem', padding: '2.5rem 3rem', borderRight: '0.0625rem solid rgba(255,255,255,0.12)', borderLeft: '0.625rem solid var(--nx-accent)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-                          <span style={{ flex: 'none', background: vals.sevBg, color: '#06070A', padding: '0.4375rem 0.875rem', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.08em', lineHeight: '1', whiteSpace: 'nowrap' }}>
+                          <span style={{ flex: 'none', background: vals.sevBg, color: 'var(--nx-ground)', padding: '0.4375rem 0.875rem', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.08em', lineHeight: '1', whiteSpace: 'nowrap' }}>
                             {vals.sevLabel}
                           </span>
-                          <span style={{ fontSize: '1.875rem', fontWeight: '500', color: '#A3AAB4', lineHeight: '1.3' }}>
+                          <span style={{ fontSize: '1.875rem', fontWeight: '500', color: 'var(--nx-mute)', lineHeight: '1.3' }}>
                             {vals.incidentIdLine}
                           </span>
                         </div>
-                        <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.25rem', fontWeight: '650', lineHeight: '1.18', letterSpacing: '-0.02em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                        <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.25rem', fontWeight: '650', lineHeight: '1.18', letterSpacing: '-0.02em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                           {vals.incidentTitle}
                         </div>
-                        <div style={{ fontSize: '2rem', lineHeight: '1.35', color: '#9AA1AB' }}>
+                        <div style={{ fontSize: '2rem', lineHeight: '1.35', color: 'var(--nx-mute)' }}>
                           {vals.incidentOwner}
                         </div>
                         <div style={{ display: 'grid', gap: '1.125rem', paddingTop: '1.5rem', borderTop: '0.0625rem solid rgba(255,255,255,0.12)' }}>
                           <div style={{ display: 'grid', gap: '0.4375rem' }}>
-                            <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.04em', color: '#F0B429' }}>
+                            <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.04em', color: 'var(--nx-accent)' }}>
                               {vals.recVersionLabel}
                             </span>
-                            <span style={{ fontSize: '1.75rem', lineHeight: '1.35', color: '#8A929C' }}>
+                            <span style={{ fontSize: '1.75rem', lineHeight: '1.35', color: 'var(--nx-mute)' }}>
                               {vals.recMeta}
                             </span>
                           </div>
-                          <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '500', lineHeight: '1.32', letterSpacing: '-0.01em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                          <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '500', lineHeight: '1.32', letterSpacing: '-0.01em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                             {vals.recAction}
                           </div>
                           {vals.awaiting ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', background: '#F0B429', color: '#06070A', padding: '0.875rem 1.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', background: 'var(--nx-accent)', color: 'var(--nx-ground)', padding: '0.875rem 1.5rem' }}>
                               <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '700', lineHeight: '1.2' }}>
                                 {vals.awaitBanner}
                               </span>
@@ -281,39 +164,39 @@ export default function NexusWallTemplate({ vals }) {
                       </div>
                       <div style={{ display: 'grid', alignContent: 'start', gap: '1.5rem', padding: '2.5rem 3rem', background: '#090C11' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                          <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.04em', color: '#8A929C', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.04em', color: 'var(--nx-mute)', whiteSpace: 'nowrap' }}>
                             The basis
                           </span>
-                          <button className="nxw-h2" type="button" onClick={vals.togglePriority} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.24)', color: '#E6E4DF', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', letterSpacing: '0.02em', lineHeight: '1', padding: '0.75rem 1.25rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                          <button className="nxw-h2" type="button" onClick={vals.togglePriority} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.24)', color: 'var(--nx-ink)', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', letterSpacing: '0.02em', lineHeight: '1', padding: '0.75rem 1.25rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
                             Close
                           </button>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '16rem minmax(0, 1fr)', gap: '1.125rem 2rem', alignItems: 'start' }}>
-                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: 'var(--nx-faint)', paddingTop: '0.125rem' }}>
                             Snapshot
                           </span>
-                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#E6E4DF' }}>
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: 'var(--nx-ink)' }}>
                             {vals.snapshotBasis}
                           </span>
-                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: 'var(--nx-faint)', paddingTop: '0.125rem' }}>
                             Desks
                           </span>
-                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#E6E4DF' }}>
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: 'var(--nx-ink)' }}>
                             {vals.deskStrip}
                           </span>
-                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#F0B429', paddingTop: '0.125rem' }}>
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: 'var(--nx-accent)', paddingTop: '0.125rem' }}>
                             Dissent
                           </span>
-                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#E6E4DF', textWrap: 'pretty' }}>
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: 'var(--nx-ink)', textWrap: 'pretty' }}>
                             {vals.dissentNote}
                           </span>
-                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: 'var(--nx-faint)', paddingTop: '0.125rem' }}>
                             Limitation
                           </span>
                           <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#B6BAC1', textWrap: 'pretty' }}>
                             {vals.limitations}
                           </span>
-                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: 'var(--nx-faint)', paddingTop: '0.125rem' }}>
                             Signing
                           </span>
                           <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#B6BAC1', textWrap: 'pretty' }}>
@@ -326,11 +209,11 @@ export default function NexusWallTemplate({ vals }) {
                 </>
               ) : null}
               <div data-screen-label="Incident map" style={{ position: 'relative', zIndex: '0', isolation: 'isolate', overflow: 'hidden' }}>
-                <div ref={vals.mapRef} style={{ position: 'absolute', inset: '0', background: '#06070A', filter: 'brightness(0.45) saturate(0.62)' }}></div>
+                <div ref={vals.mapRef} style={{ position: 'absolute', inset: '0', background: 'var(--nx-ground)', filter: 'brightness(0.45) saturate(0.62)' }}></div>
                 {vals.isWalkUp ? (
                   <>
-                    <button type="button" onClick={vals.resetMap} style={{ position: 'absolute', right: '2.5rem', bottom: '2.5rem', background: 'rgba(6,7,10,0.86)', border: '0.0625rem solid rgba(255,255,255,0.28)', color: '#F4F2ED', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', letterSpacing: '0.12em', padding: '0.875rem 1.75rem', cursor: 'pointer' }}>
-                      RESET VIEW
+                    <button type="button" onClick={vals.resetMap} style={{ position: 'absolute', right: '2.5rem', bottom: '2.5rem', background: 'rgba(6,7,10,0.86)', border: '0.0625rem solid rgba(255,255,255,0.28)', color: 'var(--nx-ink)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', letterSpacing: '0.12em', padding: '0.875rem 1.75rem', cursor: 'pointer' }}>
+                      Reset
                     </button>
                   </>
                 ) : null}
@@ -338,17 +221,17 @@ export default function NexusWallTemplate({ vals }) {
                   {vals.hasProbes ? (
                     <>
                       <div style={{ display: 'grid', gap: '0.5rem', justifyItems: 'end' }}>
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', letterSpacing: '0.14em', color: '#6F7783' }}>
-                          FLOW PROBES
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', letterSpacing: '0.14em', color: 'var(--nx-faint)' }}>
+                          Probes
                         </span>
                         {(vals.probeList || []).map((probe, $index) => (
                           <React.Fragment key={$index}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(6,7,10,0.86)', padding: '0.4375rem 1.125rem', whiteSpace: 'nowrap' }}>
                               <span style={{ width: '1.25rem', height: '1.25rem', borderRadius: '50%', background: probe.tone }}></span>
-                              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#E6E4DF' }}>
+                              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-ink)' }}>
                                 {probe.name}
                               </span>
-                              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#A3AAB4' }}>
+                              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
                                 {probe.read}
                               </span>
                               <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', color: probe.markTone }}>
@@ -362,11 +245,11 @@ export default function NexusWallTemplate({ vals }) {
                   ) : null}
                   {vals.geoBlocked ? (
                     <>
-                      <div style={{ background: 'rgba(6,7,10,0.92)', borderLeft: '0.5rem solid #FF9799', padding: '1.125rem 1.75rem', display: 'grid', gap: '0.5rem', justifyItems: 'start' }}>
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.14em', color: '#FF9799', whiteSpace: 'nowrap' }}>
+                      <div style={{ background: 'rgba(6,7,10,0.92)', borderLeft: '0.5rem solid var(--nx-accent)', padding: '1.125rem 1.75rem', display: 'grid', gap: '0.5rem', justifyItems: 'start' }}>
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.14em', color: 'var(--nx-accent)', whiteSpace: 'nowrap' }}>
                           ROAD GEOMETRY UNREACHABLE
                         </span>
-                        <span style={{ fontSize: '1.875rem', lineHeight: '1.22', color: '#E6E4DF', textWrap: 'pretty' }}>
+                        <span style={{ fontSize: '1.875rem', lineHeight: '1.22', color: 'var(--nx-ink)', textWrap: 'pretty' }}>
                           Closed run, cross streets, jurisdiction and alternative are not drawn. This frame shows the operating area and live flow probes only.
                         </span>
                       </div>
@@ -374,46 +257,46 @@ export default function NexusWallTemplate({ vals }) {
                   ) : null}
                 </div>
                 <div style={{ position: 'absolute', left: '3rem', right: '3rem', bottom: '2.25rem', display: 'grid', gap: '0.875rem', justifyItems: 'start' }}>
-                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#6F7783', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-faint)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {vals.geoStatus}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '2.25rem', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingRight: '2.25rem', borderRight: '0.0625rem solid rgba(255,255,255,0.16)' }}>
-                      <span style={{ fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.16em', color: '#8A929C' }}>
+                      <span style={{ fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.16em', color: 'var(--nx-mute)' }}>
                         N
                       </span>
-                      <span style={{ display: 'block', width: '12rem', height: '0.375rem', background: '#8A929C' }}></span>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#8A929C' }}>
+                      <span style={{ display: 'block', width: '12rem', height: '0.375rem', background: 'var(--nx-mute)' }}></span>
+                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
                         {vals.mapScale}
                       </span>
                     </span>
                     {vals.layClosed ? (
                       <>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: '#C9CDD4' }}>
-                          <span style={{ width: '3rem', height: '0.625rem', background: '#FF4D4F' }}></span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
+                          <span style={{ width: '3rem', height: '0.625rem', background: 'var(--nx-accent)' }}></span>
                           Closed westbound
                         </span>
                       </>
                     ) : null}
                     {vals.layCross ? (
                       <>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: '#C9CDD4' }}>
-                          <span style={{ width: '1.5rem', height: '1.5rem', border: '0.3125rem solid #FF9799', transform: 'rotate(45deg)' }}></span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
+                          <span style={{ width: '1.5rem', height: '1.5rem', border: '0.3125rem solid var(--nx-accent)', transform: 'rotate(45deg)' }}></span>
                           Cross street on the closed run
                         </span>
                       </>
                     ) : null}
                     {vals.layDetour ? (
                       <>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: '#C9CDD4' }}>
-                          <span style={{ width: '3rem', height: '0.5rem', background: 'repeating-linear-gradient(to right, #F0B429 0 0.875rem, transparent 0.875rem 1.5rem)' }}></span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
+                          <span style={{ width: '3rem', height: '0.5rem', background: 'repeating-linear-gradient(to right, var(--nx-accent) 0 0.875rem, transparent 0.875rem 1.5rem)' }}></span>
                           Alternative · computed, not in record
                         </span>
                       </>
                     ) : null}
                     {vals.layState ? (
                       <>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: '#C9CDD4' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
                           <span style={{ width: '3rem', height: '0.375rem', background: '#7C6BF0' }}></span>
                           ALDOT route
                         </span>
@@ -421,15 +304,15 @@ export default function NexusWallTemplate({ vals }) {
                     ) : null}
                     {vals.layCity ? (
                       <>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: '#C9CDD4' }}>
-                          <span style={{ width: '3rem', height: '0.375rem', background: '#2FD98A' }}></span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
+                          <span style={{ width: '3rem', height: '0.375rem', background: 'var(--nx-accent)' }}></span>
                           City street
                         </span>
                       </>
                     ) : null}
                     {vals.layTransit ? (
                       <>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: '#C9CDD4' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
                           <span style={{ width: '3rem', height: '0.375rem', background: 'repeating-linear-gradient(to right, #4CC9F0 0 0.5rem, transparent 0.5rem 1rem)' }}></span>
                           Transit route
                         </span>
@@ -437,8 +320,8 @@ export default function NexusWallTemplate({ vals }) {
                     ) : null}
                     {vals.layFlow ? (
                       <>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: '#C9CDD4' }}>
-                          <span style={{ width: '1.75rem', height: '1.75rem', borderRadius: '50%', border: '0.25rem solid #F0B429' }}></span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
+                          <span style={{ width: '1.75rem', height: '1.75rem', borderRadius: '50%', border: '0.25rem solid var(--nx-accent)' }}></span>
                           Flow probe
                         </span>
                       </>
@@ -453,10 +336,10 @@ export default function NexusWallTemplate({ vals }) {
           <>
             <div style={{ position: 'absolute', inset: '0', padding: '2.5rem 3rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#8A929C' }}>
+                <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                   Deliberation · one evidence snapshot, six desks
                 </span>
-                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', color: '#8A929C' }}>
+                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
                   snapshot sha256 {vals.hashShort} · {vals.evidenceFrozen} · immutable
                 </span>
               </div>
@@ -467,13 +350,13 @@ export default function NexusWallTemplate({ vals }) {
                     <div style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.06em', color: row.nameColor, whiteSpace: 'nowrap' }}>
                       {row.name}
                     </div>
-                    <div style={{ fontSize: '1.625rem', color: '#8A929C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {row.role}
                     </div>
                     <div style={{ fontSize: '1.875rem', color: row.lineColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {row.line}
                     </div>
-                    <div style={{ fontSize: '1.625rem', color: '#9AA1AB', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {row.note}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', whiteSpace: 'nowrap' }}>
@@ -482,7 +365,7 @@ export default function NexusWallTemplate({ vals }) {
                         {row.statusAt}
                       </span>
                     </div>
-                    <div style={{ fontSize: '1.5rem', color: '#8A929C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: '\'JetBrains Mono\', monospace', textAlign: 'right' }}>
+                    <div style={{ fontSize: '1.5rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: '\'JetBrains Mono\', monospace', textAlign: 'right' }}>
                       {row.meta}
                     </div>
                   </div>
@@ -492,12 +375,12 @@ export default function NexusWallTemplate({ vals }) {
                   <div style={{ position: 'absolute', left: '50%', top: '6%', bottom: '6%', width: '0.125rem', background: 'rgba(255,255,255,0.18)' }}></div>
                   <div style={{ position: 'absolute', left: '50%', top: '50%', width: '2.5rem', height: '0.125rem', background: 'rgba(255,255,255,0.18)' }}></div>
                 </div>
-                <div style={{ background: 'rgba(240,180,41,0.06)', border: '0.0625rem solid rgba(240,180,41,0.35)', padding: '1.5rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '1rem' }}>
+                <div style={{ background: 'rgba(232,119,34,0.06)', border: '0.0625rem solid rgba(232,119,34,0.35)', padding: '1.5rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.25rem' }}>
-                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', fontWeight: '700', letterSpacing: '0.08em', color: '#F0B429' }}>
+                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', fontWeight: '700', letterSpacing: '0.08em', color: 'var(--nx-accent)' }}>
                       NEXUS
                     </span>
-                    <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8A929C' }}>
+                    <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                       Coordinator · composes, never authors
                     </span>
                   </div>
@@ -506,29 +389,29 @@ export default function NexusWallTemplate({ vals }) {
                   </div>
                   <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
                   <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                       Playbook
                     </span>
-                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#F4F2ED' }}>
+                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: 'var(--nx-ink)' }}>
                       {vals.playbookLine}
                     </span>
-                    <span style={{ fontSize: '1.75rem', color: '#9AA1AB', lineHeight: '1.3' }}>
+                    <span style={{ fontSize: '1.75rem', color: 'var(--nx-mute)', lineHeight: '1.3' }}>
                       NEXUS may not author an action outside this playbook.
                     </span>
                   </div>
                   <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#F0B429' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
                       Dissent carried forward
                     </span>
-                    <span style={{ fontSize: '1.875rem', color: '#F4F2ED', lineHeight: '1.25' }}>
+                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-ink)', lineHeight: '1.25' }}>
                       {vals.dissentNote}
                     </span>
                   </div>
                   <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                       Silence recorded
                     </span>
-                    <span style={{ fontSize: '1.875rem', color: '#9AA1AB', lineHeight: '1.25' }}>
+                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', lineHeight: '1.25' }}>
                       {vals.silenceLine}
                     </span>
                   </div>
@@ -541,13 +424,13 @@ export default function NexusWallTemplate({ vals }) {
           <>
             <div style={{ position: 'absolute', inset: '0', padding: '0.75rem 3rem 1rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#8A929C' }}>
+                <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                   Evidence lineage · flow of the record, left to right, append-only
                 </span>
-                <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#A3AAB4' }}>
+                <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
                   {vals.linHint}
                 </span>
-                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#8A929C' }}>
+                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
                   mode {vals.modeLive} · every edge is a citation, not an inference
                 </span>
               </div>
@@ -555,23 +438,23 @@ export default function NexusWallTemplate({ vals }) {
                 <div ref={vals.linRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '1.25rem', minHeight: '0', minWidth: '0', height: '100%', overflow: 'hidden' }}>
                   <svg width="100%" height="100%" style={{ position: 'absolute', inset: '0', zIndex: '0', pointerEvents: 'none', overflow: 'visible' }}>
                     <path d={vals.linDim} fill="rgba(154,161,171,0.20)" stroke="rgba(154,161,171,0.30)" strokeWidth="1"></path>
-                    <path d={vals.linHot} fill="rgba(240,180,41,0.34)" stroke="rgba(240,180,41,0.85)" strokeWidth="1.5"></path>
+                    <path d={vals.linHot} fill="rgba(232,119,34,0.34)" stroke="rgba(232,119,34,0.85)" strokeWidth="1.5"></path>
                   </svg>
                   {(vals.lineageColumns || []).map(col => (
                   <div key={col.key} style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '0.5rem', minWidth: '0', minHeight: '0', height: '100%', overflow: 'hidden' }}>
                     <div style={{ height: 'min-content', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto auto', alignItems: 'baseline', columnGap: '0.5rem', paddingBottom: '0.25rem', borderBottom: `0.1875rem solid ${col.headerTone}` }}>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#A3AAB4' }}>
+                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
                         {col.n}
                       </span>
-                      <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#C9CDD4' }}>
+                      <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         {col.label}
                       </span>
                       {col.subtitle ? (
-                        <span style={{ gridColumn: '1 / -1', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#A3AAB4' }}>
+                        <span style={{ gridColumn: '1 / -1', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
                           {col.subtitle}
                         </span>
                       ) : null}
-                      <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: '#F4F2ED', fontVariantNumeric: 'tabular-nums' }}>
+                      <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: 'var(--nx-ink)', fontVariantNumeric: 'tabular-nums' }}>
                         {col.cards.filter(card => card.id !== 'c-none' && card.id !== 'v-none' && card.id !== 'd-gate').length || (col.cards.length && col.cards[0].id !== 'c-none' && col.cards[0].id !== 'v-none' ? col.cards.length : 0)}
                       </span>
                       {col.key !== 'verification' ? (
@@ -586,11 +469,11 @@ export default function NexusWallTemplate({ vals }) {
                         <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', lineHeight: '1.12', letterSpacing: '0.06em', color: card.kickerTone, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {card.kicker}
                         </span>
-                        <span style={{ fontSize: '1.75rem', lineHeight: '1.14', color: '#E6E4DF', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        <span style={{ fontSize: '1.75rem', lineHeight: '1.14', color: 'var(--nx-ink)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                           {card.title}
                         </span>
                         {card.meta ? (
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', color: '#6F7783', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', color: 'var(--nx-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {card.meta}
                           </span>
                         ) : null}
@@ -600,13 +483,13 @@ export default function NexusWallTemplate({ vals }) {
                   </div>
                   ))}
                 </div>
-                <div style={{ background: '#0B0E13', borderLeft: '0.375rem solid #2A3038', padding: '1.25rem 1.5rem', display: 'grid', gridAutoRows: 'min-content', gap: '0.875rem', minHeight: '0', overflow: 'hidden' }}>
-                  <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                <div style={{ background: 'var(--nx-surface)', borderLeft: '0.375rem solid #2A3038', padding: '1.25rem 1.5rem', display: 'grid', gridAutoRows: 'min-content', gap: '0.875rem', minHeight: '0', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                     Inspector
                   </span>
                   {vals.linEmpty ? (
                     <>
-                      <span style={{ fontSize: '1.875rem', color: '#9AA1AB', lineHeight: '1.28' }}>
+                      <span style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', lineHeight: '1.28' }}>
                         Select any record to trace what it was built from and what it feeds. The lit path is the citation chain — nothing else is implied.
                       </span>
                     </>
@@ -618,39 +501,39 @@ export default function NexusWallTemplate({ vals }) {
                           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', letterSpacing: '0.08em', color: vals.linTone }}>
                             {vals.linStage}
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', fontWeight: '700', color: '#F4F2ED', lineHeight: '1.1', wordBreak: 'break-all' }}>
+                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', fontWeight: '700', color: 'var(--nx-ink)', lineHeight: '1.1', wordBreak: 'break-all' }}>
                             {vals.linId}
                           </span>
                         </div>
                         <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
                         <div style={{ display: 'grid', gridTemplateColumns: '11rem minmax(0, 1fr)', gap: '0.375rem 1rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem' }}>
-                          <span style={{ color: '#8A929C' }}>
+                          <span style={{ color: 'var(--nx-mute)' }}>
                             source
                           </span>
-                          <span style={{ color: '#E6E4DF' }}>
+                          <span style={{ color: 'var(--nx-ink)' }}>
                             {vals.linSrc}
                           </span>
-                          <span style={{ color: '#8A929C' }}>
+                          <span style={{ color: 'var(--nx-mute)' }}>
                             recorded
                           </span>
-                          <span style={{ color: '#E6E4DF' }}>
+                          <span style={{ color: 'var(--nx-ink)' }}>
                             {vals.linAt}
                           </span>
-                          <span style={{ color: '#8A929C' }}>
+                          <span style={{ color: 'var(--nx-mute)' }}>
                             built from
                           </span>
-                          <span style={{ color: '#E6E4DF' }}>
+                          <span style={{ color: 'var(--nx-ink)' }}>
                             {vals.linUp}
                           </span>
-                          <span style={{ color: '#8A929C' }}>
+                          <span style={{ color: 'var(--nx-mute)' }}>
                             feeds
                           </span>
-                          <span style={{ color: '#E6E4DF' }}>
+                          <span style={{ color: 'var(--nx-ink)' }}>
                             {vals.linDown}
                           </span>
                         </div>
                         <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
-                        <span style={{ fontSize: '1.75rem', color: '#E6E4DF', lineHeight: '1.26', textWrap: 'pretty' }}>
+                        <span style={{ fontSize: '1.75rem', color: 'var(--nx-ink)', lineHeight: '1.26', textWrap: 'pretty' }}>
                           {vals.linNote}
                         </span>
                       </div>
@@ -665,16 +548,16 @@ export default function NexusWallTemplate({ vals }) {
           <>
             <div style={{ position: 'absolute', inset: '0', padding: '1.5rem 3rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#8A929C' }}>
+                <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                   The decision · the wall witnesses, the desk signs
                 </span>
-                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', color: '#F0B429' }}>
+                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', color: 'var(--nx-accent)' }}>
                   {vals.recExpiresRemaining}
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 72rem 76rem', gap: '2rem' }}>
                 <div style={{ display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                     What is being decided
                   </span>
                   <div style={{ fontSize: '2.625rem', fontWeight: '600', lineHeight: '1.14', textWrap: 'pretty' }}>
@@ -682,24 +565,24 @@ export default function NexusWallTemplate({ vals }) {
                   </div>
                   <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
                   <div style={{ display: 'grid', gap: '0.375rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                       Expected effect
                     </span>
-                    <span style={{ fontSize: '1.875rem', color: '#F4F2ED', lineHeight: '1.24' }}>
+                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-ink)', lineHeight: '1.24' }}>
                       {vals.expectedEffect}
                     </span>
                   </div>
                   <div style={{ display: 'grid', gap: '0.375rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#F0B429' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
                       Stated limitations
                     </span>
-                    <span style={{ fontSize: '1.875rem', color: '#9AA1AB', lineHeight: '1.24' }}>
+                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', lineHeight: '1.24' }}>
                       {vals.limitations}
                     </span>
                   </div>
                 </div>
-                <div style={{ background: '#0B0E13', padding: '1.25rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                <div style={{ background: 'var(--nx-surface)', padding: '1.25rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
+                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                     Who must agree
                   </span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '0.75rem 1.5rem', alignItems: 'center' }}>
@@ -709,7 +592,7 @@ export default function NexusWallTemplate({ vals }) {
                           <div style={{ fontSize: '2.125rem', fontWeight: '600' }}>
                             {party.agency}
                           </div>
-                          <div style={{ fontSize: '1.625rem', color: '#8A929C' }}>
+                          <div style={{ fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
                             {party.role}
                           </div>
                         </div>
@@ -724,54 +607,54 @@ export default function NexusWallTemplate({ vals }) {
                   </div>
                   <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
                   <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                       What approval does
                     </span>
-                    <span style={{ fontSize: '1.75rem', color: '#F4F2ED', lineHeight: '1.24' }}>
+                    <span style={{ fontSize: '1.75rem', color: 'var(--nx-ink)', lineHeight: '1.24' }}>
                       Creates accountable agency commitments. It does not change a signal, close a road, or dispatch a crew.
                     </span>
                   </div>
                 </div>
-                <div style={{ background: 'rgba(240,180,41,0.07)', border: '0.0625rem solid rgba(240,180,41,0.4)', padding: '1.25rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#F0B429' }}>
+                <div style={{ background: 'rgba(232,119,34,0.07)', border: '0.0625rem solid rgba(232,119,34,0.4)', padding: '1.25rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
+                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
                     How it will be signed
                   </span>
                   <div>
                     <div style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '3.25rem', fontWeight: '700', lineHeight: '1.05' }}>
                       {vals.operatorName}
                     </div>
-                    <div style={{ fontSize: '1.875rem', color: '#9AA1AB', marginTop: '0.375rem' }}>
+                    <div style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', marginTop: '0.375rem' }}>
                       {vals.operatorRole}
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '20rem minmax(0, 1fr)', gap: '0.625rem 1.5rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem' }}>
-                    <span style={{ color: '#8A929C' }}>
+                    <span style={{ color: 'var(--nx-mute)' }}>
                       expected version
                     </span>
                     <span>
                       {vals.recVersion}
                     </span>
-                    <span style={{ color: '#8A929C' }}>
+                    <span style={{ color: 'var(--nx-mute)' }}>
                       expected state
                     </span>
                     <span>
                       {vals.recState}
                     </span>
-                    <span style={{ color: '#8A929C' }}>
+                    <span style={{ color: 'var(--nx-mute)' }}>
                       snapshot sha256
                     </span>
                     <span>
                       {vals.hashShort}
                     </span>
-                    <span style={{ color: '#8A929C' }}>
+                    <span style={{ color: 'var(--nx-mute)' }}>
                       decided at
                     </span>
                     <span>
                       {vals.decidedAt}
                     </span>
                   </div>
-                  <div style={{ height: '0.0625rem', background: 'rgba(240,180,41,0.25)' }}></div>
-                  <div style={{ fontSize: '1.75rem', color: '#F4F2ED', lineHeight: '1.24' }}>
+                  <div style={{ height: '0.0625rem', background: 'rgba(232,119,34,0.25)' }}></div>
+                  <div style={{ fontSize: '1.75rem', color: 'var(--nx-ink)', lineHeight: '1.24' }}>
                     The wall cannot sign. It records who did, when, against which frozen evidence — and refuses the write if any of it has moved.
                   </div>
                 </div>
@@ -783,19 +666,19 @@ export default function NexusWallTemplate({ vals }) {
           <>
             <div style={{ position: 'absolute', inset: '0', padding: '2.5rem 3rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#8A929C' }}>
+                <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                   {vals.commitmentsHeader}
                 </span>
-                <span style={{ marginLeft: 'auto', fontSize: '2rem', color: '#9AA1AB' }}>
-                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', color: '#2FD98A' }}>
+                <span style={{ marginLeft: 'auto', fontSize: '2rem', color: 'var(--nx-mute)' }}>
+                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', color: 'var(--nx-accent)' }}>
                     {vals.commitmentsExecuting}
                   </span>
                   {' '}in progress ·{' '}
-                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', color: '#F4F2ED' }}>
+                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', color: 'var(--nx-ink)' }}>
                     {vals.commitmentsAcceptedCount}
                   </span>
                   {' '}accepted ·{' '}
-                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', color: '#FF9799' }}>
+                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', color: 'var(--nx-accent)' }}>
                     {vals.blockedCount}
                   </span>
                   {' '}blocked
@@ -803,17 +686,17 @@ export default function NexusWallTemplate({ vals }) {
               </div>
               <div style={{ display: 'grid', gridAutoRows: 'minmax(0, 1fr)', gap: '1rem' }}>
                 {vals.noCommitments ? (
-                  <div style={{ background: '#0B0E13', borderLeft: '0.375rem solid #8A929C', padding: '1.75rem', fontSize: '2.125rem', color: '#9AA1AB', lineHeight: '1.3' }}>
+                  <div style={{ background: 'var(--nx-surface)', borderLeft: '0.375rem solid var(--nx-mute)', padding: '1.75rem', fontSize: '2.125rem', color: 'var(--nx-mute)', lineHeight: '1.3' }}>
                     None yet. They appear after a named person signs, not before.
                   </div>
                 ) : null}
                 {(vals.commitmentPreview || []).map(row => (
-                  <div key={row.id} style={{ background: '#0B0E13', borderLeft: `0.375rem solid ${row.border}`, padding: '1.75rem', display: 'grid', gridTemplateColumns: '34rem minmax(0, 1fr) 84rem', columnGap: '2.5rem', alignItems: 'center' }}>
+                  <div key={row.id} style={{ background: 'var(--nx-surface)', borderLeft: `0.375rem solid ${row.border}`, padding: '1.75rem', display: 'grid', gridTemplateColumns: '34rem minmax(0, 1fr) 84rem', columnGap: '2.5rem', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontSize: '2.25rem', fontWeight: '600' }}>
                         {row.agency}
                       </div>
-                      <div style={{ fontSize: '1.625rem', color: '#8A929C', marginTop: '0.25rem' }}>
+                      <div style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', marginTop: '0.25rem' }}>
                         Owner {row.owner} · {row.due}
                       </div>
                     </div>
@@ -821,7 +704,7 @@ export default function NexusWallTemplate({ vals }) {
                       <div style={{ fontSize: '2.125rem', lineHeight: '1.22' }}>
                         {row.outcome}
                       </div>
-                      <div style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', color: '#8A929C', marginTop: '0.375rem' }}>
+                      <div style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', color: 'var(--nx-mute)', marginTop: '0.375rem' }}>
                         {row.note}
                       </div>
                     </div>
@@ -840,7 +723,7 @@ export default function NexusWallTemplate({ vals }) {
         ) : null}
       </main>
       <nav data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 3rem', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.5rem' }}>
-        <button type="button" onClick={vals.goOps} style={{ height: '5.5rem', background: '#1A1F27', border: '0', borderTop: `0.5rem solid ${vals.edgeOps}`, color: vals.inkOps, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" onClick={vals.goOps} style={{ height: '5.5rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeOps}`, color: vals.inkOps, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             01
           </span>
@@ -848,7 +731,7 @@ export default function NexusWallTemplate({ vals }) {
             Operations
           </span>
         </button>
-        <button type="button" onClick={vals.goDelib} style={{ height: '5.5rem', background: '#1A1F27', border: '0', borderTop: `0.5rem solid ${vals.edgeDelib}`, color: vals.inkDelib, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" onClick={vals.goDelib} style={{ height: '5.5rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeDelib}`, color: vals.inkDelib, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             02
           </span>
@@ -856,7 +739,7 @@ export default function NexusWallTemplate({ vals }) {
             Deliberation
           </span>
         </button>
-        <button type="button" onClick={vals.goEvidence} style={{ height: '5.5rem', background: '#1A1F27', border: '0', borderTop: `0.5rem solid ${vals.edgeEvidence}`, color: vals.inkEvidence, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" onClick={vals.goEvidence} style={{ height: '5.5rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeEvidence}`, color: vals.inkEvidence, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             03
           </span>
@@ -864,7 +747,7 @@ export default function NexusWallTemplate({ vals }) {
             Evidence lineage
           </span>
         </button>
-        <button type="button" onClick={vals.goDecision} style={{ height: '5.5rem', background: '#1A1F27', border: '0', borderTop: `0.5rem solid ${vals.edgeDecision}`, color: vals.inkDecision, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" onClick={vals.goDecision} style={{ height: '5.5rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeDecision}`, color: vals.inkDecision, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             04
           </span>
@@ -872,7 +755,7 @@ export default function NexusWallTemplate({ vals }) {
             The decision
           </span>
         </button>
-        <button type="button" onClick={vals.goCommit} style={{ height: '5.5rem', background: '#1A1F27', border: '0', borderTop: `0.5rem solid ${vals.edgeCommit}`, color: vals.inkCommit, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" onClick={vals.goCommit} style={{ height: '5.5rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeCommit}`, color: vals.inkCommit, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             05
           </span>
@@ -886,19 +769,13 @@ export default function NexusWallTemplate({ vals }) {
           <section data-screen-label="Desks panel" style={{ borderTop: '0.1875rem solid rgba(255,255,255,0.18)', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', display: 'grid', gridTemplateRows: '4.5rem minmax(0, 1fr)', background: '#08090C' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0 1.5rem', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', background: '#0E1116' }}>
               <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.18em' }}>
-                DESKS
+                Desks
               </span>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#A3AAB4' }}>
+              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
                 {vals.deskStrip}
               </span>
-              <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', color: '#8A929C' }}>
+              <span style={{ marginLeft: 'auto', fontSize: '1.5rem', color: 'var(--nx-faint)' }}>
                 {vals.snapshotLine}
-              </span>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#A3AAB4', borderLeft: '0.0625rem solid rgba(255,255,255,0.16)', paddingLeft: '1.5rem' }}>
-                SORT at ↓
-              </span>
-              <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.12em', color: '#F0B429', borderLeft: '0.0625rem solid rgba(255,255,255,0.16)', paddingLeft: '1.5rem', whiteSpace: 'nowrap' }}>
-                {vals.modeLabel}
               </span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '1.25rem', padding: '1rem 1.5rem', minHeight: '0', overflow: 'hidden' }}>
@@ -907,10 +784,10 @@ export default function NexusWallTemplate({ vals }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.125rem', minWidth: '0' }}>
                   <img src={tile.avatar} alt="" style={{ width: '4.5rem', height: '4.5rem', objectFit: 'cover', flex: 'none', filter: 'grayscale(0.25)' }} />
                   <span style={{ display: 'grid', gap: '0.125rem', minWidth: '0' }}>
-                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.375rem', fontWeight: '700', letterSpacing: '0.06em', color: '#F4F2ED', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.375rem', fontWeight: '700', letterSpacing: '0.06em', color: 'var(--nx-ink)', whiteSpace: 'nowrap' }}>
                       {tile.name}
                     </span>
-                    <span style={{ fontSize: '1.875rem', color: '#C9CDD4', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {tile.role}
                     </span>
                   </span>
@@ -922,11 +799,11 @@ export default function NexusWallTemplate({ vals }) {
                   </span>
                 </div>
                 <div style={{ display: 'grid', gap: '0.5rem', minWidth: '0' }}>
-                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: '#A3AAB4', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                     {tile.meta}
                   </span>
-                  <button className="nxw-h3" type="button" onClick={vals[`open_${tile.code}`]} style={{ height: '3.75rem', background: '#1A1F27', border: '0.0625rem solid rgba(255,255,255,0.22)', color: '#F4F2ED', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.12em', cursor: 'pointer' }}>
-                    CONFIGURE
+                  <button className="nxw-h3" type="button" onClick={vals[`open_${tile.code}`]} style={{ height: '3.25rem', background: 'transparent', border: '0.0625rem solid var(--nx-line)', color: 'var(--nx-ink)', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '600', cursor: 'pointer' }}>
+                    Open
                   </button>
                 </div>
               </div>
@@ -941,16 +818,16 @@ export default function NexusWallTemplate({ vals }) {
             {vals.deskClosed ? (
               <>
                 <div style={{ height: '100%' }}>
-                  <footer data-screen-label="Stratum 6 — the record" style={{ padding: '1rem 3rem 0.5rem', display: 'grid', gridTemplateRows: 'auto auto', gap: '1rem', background: '#06070A', overflow: 'hidden' }}>
+                  <footer data-screen-label="Stratum 6 — the record" style={{ padding: '1rem 3rem 0.5rem', display: 'grid', gridTemplateRows: 'auto auto', gap: '1rem', background: 'var(--nx-ground)', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                      <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         The record · last 90 minutes
                       </span>
                       <span style={{ display: 'flex', alignItems: 'baseline', gap: '2rem', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#FF9799' }}>
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-accent)' }}>
                           {vals.detectedLine}
                         </span>
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#F0B429' }}>
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-accent)' }}>
                           {vals.recAuthoredLine}
                         </span>
                       </span>
@@ -958,16 +835,16 @@ export default function NexusWallTemplate({ vals }) {
                     <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '15rem minmax(0, 1fr)', columnGap: '2rem', rowGap: '0.25rem', alignContent: 'start' }}>
                       <div style={{ position: 'absolute', left: '17rem', right: '0', top: '3.25rem', bottom: '2.25rem', pointerEvents: 'none' }}>
                         {vals.record?.detectedPct ? (
-                          <div style={{ position: 'absolute', left: vals.record.detectedPct, top: '0', bottom: '0', width: '0.125rem', background: 'rgba(255,77,79,0.55)' }}></div>
+                          <div style={{ position: 'absolute', left: vals.record.detectedPct, top: '0', bottom: '0', width: '0.125rem', background: 'rgba(232,119,34,0.55)' }}></div>
                         ) : null}
                         {vals.record?.recPct ? (
-                          <div style={{ position: 'absolute', left: vals.record.recPct, top: '0', bottom: '0', width: '0.125rem', background: 'rgba(240,180,41,0.6)' }}></div>
+                          <div style={{ position: 'absolute', left: vals.record.recPct, top: '0', bottom: '0', width: '0.125rem', background: 'rgba(232,119,34,0.6)' }}></div>
                         ) : null}
                       </div>
                       <span></span>
-                      <span style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#8A929C' }}>
+                      <span style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
                         {(vals.record?.ticks || []).map((tick, i) => (
-                          <span key={tick + i} style={{ color: i === (vals.record.ticks.length - 1) ? '#F4F2ED' : '#8A929C' }}>{tick}</span>
+                          <span key={tick + i} style={{ color: i === (vals.record.ticks.length - 1) ? 'var(--nx-ink)' : 'var(--nx-mute)' }}>{tick}</span>
                         ))}
                       </span>
                       {(vals.record?.lanes || []).map(lane => (
@@ -986,10 +863,10 @@ export default function NexusWallTemplate({ vals }) {
                           </div>
                         </React.Fragment>
                       ))}
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: '#8A929C', alignSelf: 'center' }}>
+                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: 'var(--nx-mute)', alignSelf: 'center' }}>
                         EVIDENCE
                       </span>
-                      <div style={{ position: 'relative', height: '1.75rem', background: '#0D1015', borderLeft: '0.1875rem solid #2FD98A' }}>
+                      <div style={{ position: 'relative', height: '1.75rem', background: '#0D1015', borderLeft: '0.1875rem solid var(--nx-accent)' }}>
                         {(vals.record?.evidenceMarks || []).map((mark, i) => (
                           <div key={i} style={{ position: 'absolute', left: mark.left, top: '0.375rem', width: '1.5%', height: '1.25rem', background: mark.color }}></div>
                         ))}
@@ -1009,10 +886,10 @@ export default function NexusWallTemplate({ vals }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', padding: '1.75rem 2.5rem', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', background: '#12161C' }}>
                 <img src={vals.deskAvatar} alt="" style={{ width: '7rem', height: '7rem', objectFit: 'cover', flex: 'none', filter: 'grayscale(0.2)' }} />
                 <span style={{ display: 'grid', gap: '0.25rem', minWidth: '0' }}>
-                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '3rem', fontWeight: '700', letterSpacing: '0.08em', color: '#F4F2ED' }}>
+                  <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '3rem', fontWeight: '700', letterSpacing: '0.08em', color: 'var(--nx-ink)' }}>
                     DESK {vals.deskCode}
                   </span>
-                  <span style={{ fontSize: '2rem', color: '#A3AAB4' }}>
+                  <span style={{ fontSize: '2rem', color: 'var(--nx-mute)' }}>
                     {vals.deskSteward} · {vals.deskMission}
                   </span>
                 </span>
@@ -1020,13 +897,13 @@ export default function NexusWallTemplate({ vals }) {
                   <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: vals.dirtyTone }}>
                     {vals.dirtyLabel}
                   </span>
-                  <button className="nxw-h9" type="button" onClick={vals.restoreDesk} style={{ padding: '0.875rem 2rem', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.22)', color: '#C9CDD4', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', cursor: 'pointer' }}>
+                  <button className="nxw-h9" type="button" onClick={vals.restoreDesk} style={{ padding: '0.875rem 2rem', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.22)', color: 'var(--nx-mute)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', cursor: 'pointer' }}>
                     RESTORE
                   </button>
-                  <button className="nxw-h10" type="button" onClick={vals.closeDesk} style={{ padding: '0.875rem 2rem', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.22)', color: '#C9CDD4', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', cursor: 'pointer' }}>
+                  <button className="nxw-h10" type="button" onClick={vals.closeDesk} style={{ padding: '0.875rem 2rem', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.22)', color: 'var(--nx-mute)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', cursor: 'pointer' }}>
                     CANCEL
                   </button>
-                  <button type="button" onClick={vals.saveDesk} style={{ padding: '0.875rem 2.5rem', background: '#2FD98A', border: '0', color: '#06070A', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', cursor: 'pointer' }}>
+                  <button type="button" onClick={vals.saveDesk} style={{ padding: '0.875rem 2.5rem', background: 'var(--nx-accent)', border: '0', color: 'var(--nx-ground)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', cursor: 'pointer' }}>
                     SAVE
                   </button>
                 </span>
@@ -1052,22 +929,22 @@ export default function NexusWallTemplate({ vals }) {
                 {vals.tabIdentity ? (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C', paddingTop: '0.5rem' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)', paddingTop: '0.5rem' }}>
                         Role
                       </span>
-                      <textarea rows="3" value={vals.edRole} onChange={vals.onRole} spellcheck="false" style={{ width: '100%', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.20)', color: '#F4F2ED', fontFamily: 'inherit', fontSize: '2rem', lineHeight: '1.3', padding: '0.875rem 1.125rem', resize: 'none' }}></textarea>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C', paddingTop: '0.5rem' }}>
+                      <textarea rows="3" value={vals.edRole} onChange={vals.onRole} spellcheck="false" style={{ width: '100%', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.20)', color: 'var(--nx-ink)', fontFamily: 'inherit', fontSize: '2rem', lineHeight: '1.3', padding: '0.875rem 1.125rem', resize: 'none' }}></textarea>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)', paddingTop: '0.5rem' }}>
                         Backstory
                       </span>
-                      <textarea rows="4" value={vals.edBackstory} onChange={vals.onBackstory} spellcheck="false" style={{ width: '100%', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.20)', color: '#F4F2ED', fontFamily: 'inherit', fontSize: '2rem', lineHeight: '1.3', padding: '0.875rem 1.125rem', resize: 'none' }}></textarea>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <textarea rows="4" value={vals.edBackstory} onChange={vals.onBackstory} spellcheck="false" style={{ width: '100%', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.20)', color: 'var(--nx-ink)', fontFamily: 'inherit', fontSize: '2rem', lineHeight: '1.3', padding: '0.875rem 1.125rem', resize: 'none' }}></textarea>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Allowed connectors
                       </span>
-                      <input type="text" value={vals.edConnectors} onChange={vals.onConnectors} spellcheck="false" style={{ width: '100%', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.20)', color: '#F4F2ED', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <input type="text" value={vals.edConnectors} onChange={vals.onConnectors} spellcheck="false" style={{ width: '100%', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.20)', color: 'var(--nx-ink)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Constraint
                       </span>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#F0B429', lineHeight: '1.3', borderLeft: '0.25rem solid #F0B429', paddingLeft: '1.25rem' }}>
+                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-accent)', lineHeight: '1.3', borderLeft: '0.25rem solid var(--nx-accent)', paddingLeft: '1.25rem' }}>
                         {vals.deskBoundary}
                       </span>
                     </div>
@@ -1076,14 +953,14 @@ export default function NexusWallTemplate({ vals }) {
                 {vals.tabPrompt ? (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C', paddingTop: '0.5rem' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)', paddingTop: '0.5rem' }}>
                         Prompt
                       </span>
-                      <textarea rows="8" value={vals.edPrompt} onChange={vals.onPrompt} spellcheck="false" style={{ width: '100%', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.20)', color: '#F4F2ED', fontFamily: 'inherit', fontSize: '2rem', lineHeight: '1.3', padding: '0.875rem 1.125rem', resize: 'none' }}></textarea>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <textarea rows="8" value={vals.edPrompt} onChange={vals.onPrompt} spellcheck="false" style={{ width: '100%', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.20)', color: 'var(--nx-ink)', fontFamily: 'inherit', fontSize: '2rem', lineHeight: '1.3', padding: '0.875rem 1.125rem', resize: 'none' }}></textarea>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Appended
                       </span>
-                      <span style={{ fontSize: '2rem', color: '#A3AAB4', lineHeight: '1.3' }}>
+                      <span style={{ fontSize: '2rem', color: 'var(--nx-mute)', lineHeight: '1.3' }}>
                         Locked rules about permitted feeds and field control are appended after this prompt on every run and cannot be edited here.
                       </span>
                     </div>
@@ -1092,7 +969,7 @@ export default function NexusWallTemplate({ vals }) {
                 {vals.showModel ? (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C', paddingTop: '0.5rem' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)', paddingTop: '0.5rem' }}>
                         Model
                       </span>
                       <span style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
@@ -1104,22 +981,22 @@ export default function NexusWallTemplate({ vals }) {
                           </React.Fragment>
                         ))}
                       </span>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Temperature
                       </span>
-                      <input type="text" value={vals.edTemp} onChange={vals.onTemp} spellcheck="false" style={{ width: '100%', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.20)', color: '#F4F2ED', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <input type="text" value={vals.edTemp} onChange={vals.onTemp} spellcheck="false" style={{ width: '100%', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.20)', color: 'var(--nx-ink)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Max turns
                       </span>
-                      <input type="text" value={vals.edTurns} onChange={vals.onTurns} spellcheck="false" style={{ width: '100%', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.20)', color: '#F4F2ED', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <input type="text" value={vals.edTurns} onChange={vals.onTurns} spellcheck="false" style={{ width: '100%', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.20)', color: 'var(--nx-ink)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Timeout (ms)
                       </span>
-                      <input type="text" value={vals.edTimeout} onChange={vals.onTimeout} spellcheck="false" style={{ width: '100%', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.20)', color: '#F4F2ED', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <input type="text" value={vals.edTimeout} onChange={vals.onTimeout} spellcheck="false" style={{ width: '100%', background: 'var(--nx-surface)', border: '0.0625rem solid rgba(255,255,255,0.20)', color: 'var(--nx-ink)', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', padding: '0.75rem 1.125rem' }} />
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Runtime
                       </span>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#A3AAB4' }}>
+                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
                         host groq · key set on the server, never returned to the wall
                       </span>
                     </div>
@@ -1134,10 +1011,10 @@ export default function NexusWallTemplate({ vals }) {
                             <button type="button" onClick={tool.toggle} style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', padding: '0.375rem 0', background: tool.bg, border: `0.125rem solid ${tool.border}`, color: tool.ink, cursor: 'pointer' }}>
                               {tool.state}
                             </button>
-                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#F0B429' }}>
+                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-accent)' }}>
                               {tool.req}
                             </span>
-                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#E6E4DF' }}>
+                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-ink)' }}>
                               {tool.name}
                             </span>
                             <span style={{ fontSize: '2rem', color: '#B6BAC1', lineHeight: '1.28' }}>
@@ -1147,10 +1024,10 @@ export default function NexusWallTemplate({ vals }) {
                         </React.Fragment>
                       ))}
                       <div style={{ display: 'grid', gridTemplateColumns: '34rem minmax(0, 1fr)', gap: '2rem', paddingTop: '1.25rem' }}>
-                        <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                        <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                           Locked action families
                         </span>
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#F0B429' }}>
+                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-accent)' }}>
                           {vals.deskFamilies}
                         </span>
                       </div>
@@ -1163,10 +1040,10 @@ export default function NexusWallTemplate({ vals }) {
                       {(vals.deskPolicies || []).map((policy, $index) => (
                         <React.Fragment key={$index}>
                           <div style={{ display: 'grid', gridTemplateColumns: '38rem 16rem minmax(0, 1fr)', gap: '2.5rem', alignItems: 'baseline', padding: '0.875rem 0', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
-                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#E6E4DF' }}>
+                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-ink)' }}>
                               {policy.id}
                             </span>
-                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#F0B429' }}>
+                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-accent)' }}>
                               {policy.jurisdiction}
                             </span>
                             <span style={{ fontSize: '2rem', color: '#B6BAC1', lineHeight: '1.28' }}>
@@ -1175,7 +1052,7 @@ export default function NexusWallTemplate({ vals }) {
                           </div>
                         </React.Fragment>
                       ))}
-                      <div style={{ paddingTop: '1.25rem', fontSize: '2rem', color: '#A3AAB4', lineHeight: '1.28' }}>
+                      <div style={{ paddingTop: '1.25rem', fontSize: '2rem', color: 'var(--nx-mute)', lineHeight: '1.28' }}>
                         Policy notes are reference. A note is never evidence and never opens an incident.
                       </div>
                     </div>
@@ -1184,30 +1061,30 @@ export default function NexusWallTemplate({ vals }) {
                 {vals.showRuleNotice ? (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Assessor
                       </span>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', color: '#E6E4DF' }}>
+                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', color: 'var(--nx-ink)' }}>
                         deterministic rule assessor · no model
                       </span>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Editable
                       </span>
                       <span style={{ fontSize: '2rem', color: '#B6BAC1', lineHeight: '1.3' }}>
                         Model, tools and policy notes become editable once a desk-level agent loop is enabled for {vals.deskCode} on the server. Role and prompt describe what the assessor evaluates today.
                       </span>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Constraint
                       </span>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#F0B429', lineHeight: '1.3', borderLeft: '0.25rem solid #F0B429', paddingLeft: '1.25rem' }}>
+                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-accent)', lineHeight: '1.3', borderLeft: '0.25rem solid var(--nx-accent)', paddingLeft: '1.25rem' }}>
                         {vals.deskBoundary}
                       </span>
                     </div>
                   </>
                 ) : null}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', padding: '1.25rem 2.5rem', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', background: '#0B0E13' }}>
-                <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#8A929C' }}>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '1.25rem 2.5rem', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', background: 'var(--nx-surface)' }}>
+                <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
                   Edits apply to the next run of this desk. They never alter a frozen snapshot or a signed decision.
                 </span>
               </div>

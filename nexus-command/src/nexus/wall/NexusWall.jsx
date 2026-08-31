@@ -643,7 +643,7 @@ class NexusWallLogic extends React.Component {
       goPolicies: () => this.setState({ deskTab: 'policies' }),
       togglePriority: () => this.setState({ priorityOpen: !this.state.priorityOpen }),
       priorityOpen: this.state.priorityOpen === true,
-      priorityLabel: this.state.priorityOpen ? 'Hide the basis' : 'Show the basis',
+      priorityLabel: this.state.priorityOpen ? 'Close' : 'Basis',
     };
 
     for (const code of Object.keys(DESK_PROFILES)) {
@@ -812,14 +812,14 @@ class NexusWallLogic extends React.Component {
     for (const key of Object.keys(dtabs)) {
       const on = t === key;
       const suffix = key === 'identity' ? 'Identity' : dtabs[key];
-      vals[`edge${suffix}`] = on ? '#F0B429' : 'transparent';
-      vals[`ink${suffix}`] = on ? '#F4F2ED' : '#A3AAB4';
+      vals[`edge${suffix}`] = on ? '#E87722' : 'transparent';
+      vals[`ink${suffix}`] = on ? '#F3EDE4' : '#8B93A0';
     }
     const keys = { operations: 'Ops', deliberation: 'Delib', evidence: 'Evidence', decision: 'Decision', commitments: 'Commit' };
     for (const name of SCREENS) {
       const active = s === name;
-      vals[`edge${keys[name]}`] = active ? '#F0B429' : 'transparent';
-      vals[`ink${keys[name]}`] = active ? '#F4F2ED' : '#A3AAB4';
+      vals[`edge${keys[name]}`] = active ? '#E87722' : 'transparent';
+      vals[`ink${keys[name]}`] = active ? '#F3EDE4' : '#8B93A0';
     }
     const live = buildLiveView(this.state.live || getLive(), null, this.state.now.getTime());
     Object.assign(vals, {
@@ -831,7 +831,7 @@ class NexusWallLogic extends React.Component {
       evidenceCount: live.evidenceCount,
       evidenceFrozen: live.evidenceFrozen,
       desksContributed: live.desksContributed,
-      desksStaffed: `/ ${live.desksStaffed} staffed`,
+      desksStaffed: `/ ${live.desksStaffed}`,
       desksBar: live.desksBar,
       dissentLine: `${live.dissentCount} dissent`,
       abstainLine: `${live.abstainedCount} abstained`,
@@ -869,7 +869,7 @@ class NexusWallLogic extends React.Component {
       commitmentsExecuting: live.commitmentsExecuting,
       commitmentsAcceptedCount: live.commitmentsAccepted,
       blockedCount: live.blockedCount,
-      commitmentsAccepted: `/ ${live.commitmentsAccepted} accepted`,
+      commitmentsAccepted: `/ ${live.commitmentsAccepted}`,
       blockedLine: `${live.blockedCount} blocked`,
       commitmentsFrom: live.commitmentsFrom,
       sevLabel: live.sevLabel,

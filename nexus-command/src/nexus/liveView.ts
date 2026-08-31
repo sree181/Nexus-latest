@@ -17,7 +17,7 @@ const HUE: Record<string, string> = {
   atlas: 'oklch(0.70 0.09 250)',
   aqua: 'oklch(0.70 0.09 195)',
   sentinel: 'oklch(0.70 0.09 300)',
-  phoenix: '#F0B429',
+  phoenix: '#E87722',
   forge: 'oklch(0.70 0.09 95)',
   echo: 'oklch(0.70 0.09 150)',
 };
@@ -87,12 +87,6 @@ function sentenceStatus(status: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
 }
 
-function composerLabel(model: string | null | undefined): string {
-  const value = (model || '').trim();
-  if (!value || /nexus|evidence-bound|composer|policy|detection/i.test(value)) return 'Nexus';
-  return value;
-}
-
 export function lagLabel(source: SourceHealth): string {
   if (source.connectionStatus === 'permission_required') return 'needs agreement';
   if (source.connectionStatus === 'configuration_required') return 'not set up';
@@ -106,10 +100,8 @@ export function lagLabel(source: SourceHealth): string {
 }
 
 export function feedDot(source: SourceHealth): string {
-  if (source.connectionStatus && source.connectionStatus !== 'connected') return '#F0B429';
-  if (source.status === 'healthy') return '#2FD98A';
-  if (source.status === 'delayed' || source.status === 'unverified') return '#F0B429';
-  return '#FF4D4F';
+  if (source.status === 'healthy' && (source.connectionStatus ?? 'connected') === 'connected') return '#F3EDE4';
+  return '#E87722';
 }
 
 function firstClause(text: string): string {
@@ -173,13 +165,13 @@ function deskRow(code: string, finding: AgentFinding | undefined): DeskRow {
     : '— · not staffed';
   if (stance === 'dissent' && finding) {
     return {
-      code, name, role, hue: '#F0B429',
+      code, name, role, hue: '#E87722',
       line: firstClause(finding.conflicts[0]?.concern || finding.interpretation || finding.observation),
       note: firstClause(finding.conflicts[0]?.basis || finding.interpretation),
-      statusLabel: 'Dissent', statusAt: `Dissent ${hhmm(finding.createdAt)}`, statusColor: '#F0B429',
+      statusLabel: 'Dissent', statusAt: `Dissent ${hhmm(finding.createdAt)}`, statusColor: '#E87722',
       meta: evMeta,
-      nameColor: '#F0B429', lineColor: '#F4F2ED', rowBg: 'rgba(240,180,41,0.08)',
-      markFill: '#F0B429', markBorder: null,
+      nameColor: '#E87722', lineColor: '#F4F2ED', rowBg: 'rgba(232,119,34,0.08)',
+      markFill: '#E87722', markBorder: null,
     };
   }
   if (stance === 'contributed' && finding) {
@@ -187,10 +179,10 @@ function deskRow(code: string, finding: AgentFinding | undefined): DeskRow {
       code, name, role, hue: HUE[code] ?? 'rgba(255,255,255,0.16)',
       line: firstClause(finding.observation || finding.interpretation),
       note: firstClause(finding.interpretation || finding.candidateAction),
-      statusLabel: 'Contributed', statusAt: `Contributed ${hhmm(finding.createdAt)}`, statusColor: '#2FD98A',
+      statusLabel: 'Contributed', statusAt: `Contributed ${hhmm(finding.createdAt)}`, statusColor: '#F3EDE4',
       meta: evMeta,
       nameColor: '#F4F2ED', lineColor: '#F4F2ED', rowBg: '#0B0E13',
-      markFill: '#2FD98A', markBorder: null,
+      markFill: '#F3EDE4', markBorder: null,
     };
   }
   if (stance === 'abstained' && finding) {
@@ -452,9 +444,9 @@ function commitmentBorder(state: CommitmentState): string {
 
 function ownerLine(incident: Incident | null, principal: PrincipalContext | null): string {
   const owner = incident?.commandOwner;
-  if (owner) return `${owner.agencyName} · ${owner.displayName} owns the record`;
-  if (principal) return `${principal.agencyName} · ${principal.displayName} is at the desk`;
-  return 'No named owner on this incident';
+  if (owner?.displayName) return owner.displayName;
+  if (principal?.displayName) return principal.displayName;
+  return 'Unassigned';
 }
 
 function joinNames(names: string[]): string {
@@ -784,14 +776,14 @@ export function buildRecord(
     const left = pos(finding?.createdAt);
     const marks: RecordMark[] = left == null ? [] : [{
       left: `${left}%`,
-      color: row.statusLabel === 'Dissent' ? '#F0B429' : row.statusLabel === 'Contributed' ? '#2FD98A' : '#5A6270',
+      color: row.statusLabel === 'Dissent' ? '#E87722' : row.statusLabel === 'Contributed' ? '#F3EDE4' : '#5C6573',
       hollow: row.statusLabel === 'Abstained',
     }];
     return { code: row.code, name: row.name, hue: row.hue, nameColor: row.nameColor, marks };
   });
   const evidenceMarks: RecordMark[] = (rec?.evidence ?? []).flatMap(item => {
     const left = pos(item.observedAt);
-    return left == null ? [] : [{ left: `${left}%`, color: '#2FD98A' }];
+    return left == null ? [] : [{ left: `${left}%`, color: '#F3EDE4' }];
   });
   return {
     ticks,
@@ -891,7 +883,7 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
 
   return {
     modeLabel: bundle.status?.mode === 'live' ? 'live' : (bundle.status?.mode || 'review'),
-    modeColor: bundle.status?.mode === 'live' ? '#2FD98A' : '#F0B429',
+    modeColor: '#E87722',
     eventName: snapshot?.event.name ?? 'Auburn Mobility Operations',
     packLine: snapshot?.event.scenarioPackCode ? `pack ${snapshot.event.scenarioPackCode}` : 'no pack',
     feedLive: liveFeeds,
@@ -906,10 +898,10 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
     desksBar: staffed ? `${Math.round((contributed / staffed) * 100)}%` : '0%',
     dissentCount: dissent,
     abstainedCount: abstained,
-    windowMinutes: left == null ? '—' : String(left),
-    windowUnit: left == null ? 'no expiry' : 'min left',
+    windowMinutes: left == null ? '—' : remainingLabel(left),
+    windowUnit: left == null ? '' : 'left',
     windowBar: left == null ? '0%' : `${Math.min(100, Math.round((left / 90) * 100))}%`,
-    windowColor: awaiting ? '#F0B429' : signed ? '#2FD98A' : '#8A929C',
+    windowColor: awaiting ? '#E87722' : '#F3EDE4',
     recStatusLine: rec ? `rec v${rec.version} ${rec.state.replace(/_/g, ' ')}` : 'no recommendation',
     recExpires: rec ? `expires ${hhmm(rec.expiresAt)}` : '—',
     recExpiresRemaining: rec
@@ -953,23 +945,21 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
     blockedCount: blocked,
     commitmentsFrom: incidentCommitments[0] ? `from ${hhmm(incidentCommitments[0].updatedAt)}` : 'none yet',
     sevLabel: incident ? severityLabel(incident.severity).toUpperCase() : '—',
-    sevBg: incident && (incident.severity === 'high' || incident.severity === 'critical') ? '#FF4D4F' : '#F0B429',
+    sevBg: '#E87722',
     incidentIdLine: incident
-      ? `${sentenceStatus(incident.status)} · detected ${hhmm(incident.detectedAt)}Z`
+      ? `${sentenceStatus(incident.status)} · ${hhmm(incident.detectedAt)}Z`
       : 'No open incident',
     incidentTitle: incident?.title ?? 'No incident requires a decision',
     incidentOwner: ownerLine(incident, principal),
-    recVersionLabel: rec ? `Recommendation v${rec.version}` : 'No recommendation',
-    recMeta: rec
-      ? `Composed by ${composerLabel(rec.generatedBy?.model)} · expires ${hhmm(rec.expiresAt)}Z`
-      : 'The playbook has not composed a next step.',
-    recAction: rec?.recommendedAction ?? 'Nothing to sign. The desks have not produced a recommendation.',
+    recVersionLabel: rec ? `v${rec.version}` : '',
+    recMeta: rec ? `${hhmm(rec.expiresAt)}Z` : '',
+    recAction: rec?.recommendedAction ?? 'Nothing to sign.',
     expectedEffect: rec?.expectedEffect ?? '—',
     limitations: rec?.limitations ?? '—',
     awaiting,
     signed,
-    awaitBanner: 'Awaiting signature',
-    awaitClock: `${principal?.displayName || 'Unsigned'} · ${remainingLabel(left)}`,
+    awaitBanner: 'Awaiting',
+    awaitClock: remainingLabel(left),
     signedBanner: rec ? `Approved · v${rec.version}` : 'Signed',
     signedMeta: `${incidentCommitments.length} commitment${incidentCommitments.length === 1 ? '' : 's'}`,
     deskStrip: `${staffed} staffed · ${contributed} contributed · ${abstained} abstained · ${dissent} dissent`,
@@ -1014,7 +1004,7 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
     wallDesks: DESK_ORDER.map(code => {
       const row = deskRow(code, byCode.get(code));
       const finding = byCode.get(code);
-      const status = row.statusLabel === 'Dissent' ? 'DISSENT' : row.statusLabel === 'Contributed' ? 'CONTRIB' : 'ABSTAIN';
+      const status = row.statusLabel === 'Dissent' ? 'Dissent' : row.statusLabel === 'Contributed' ? 'In' : '—';
       return {
         code,
         name: deskCallsign(code),
@@ -1024,9 +1014,7 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
         statusColor: row.statusColor,
         markFill: row.markFill,
         markBorder: row.markBorder,
-        meta: finding?.modelVersion
-          ? `${finding.modelVersion} · EV ${finding.citedEvidenceIds.length} · CONF ${finding.confidence ?? '—'}`
-          : `rule · EV ${finding?.citedEvidenceIds.length ?? '—'} · CONF ${finding?.confidence ?? '—'}`,
+        meta: finding ? `${finding.citedEvidenceIds.length} evidence` : '',
         gut: row.hue,
         openKey: `open_${code}`,
       };

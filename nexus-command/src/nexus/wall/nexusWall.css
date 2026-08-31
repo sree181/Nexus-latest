@@ -1,44 +1,37 @@
-/* Base styles and keyframes from Nexus Wall.dc.html.
-   Root font-size scaling is applied by NexusWall at runtime, not here. */
+/* Dual palette: Auburn navy + orange. Cream is ink, not a third hue. */
+:root {
+  --nx-ground: #08111c;
+  --nx-surface: #0c1828;
+  --nx-raised: #122033;
+  --nx-ink: #f3ede4;
+  --nx-mute: #8b93a0;
+  --nx-faint: #5c6573;
+  --nx-line: rgba(243, 237, 228, 0.10);
+  --nx-accent: #e87722;
+  --nx-accent-ink: #08111c;
+  --nx-accent-dim: rgba(232, 119, 34, 0.16);
+}
 
-  html, body { margin: 0; height: 100%; background: #06070A; overflow: hidden; }
-  body { color: #F4F2ED; font-family: "Source Sans 3", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-  *, *::before, *::after { box-sizing: border-box; min-width: 0; }
-  a { color: #F0B429; text-decoration: none; }
-  a:hover { color: #F4F2ED; }
-  @keyframes nx-live { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }
-  @keyframes nx-await { 0% { box-shadow: 0 0 0 0 rgba(240,180,41,0.55); } 70% { box-shadow: 0 0 0 1.25rem rgba(240,180,41,0); } 100% { box-shadow: 0 0 0 0 rgba(240,180,41,0); } }
-  @keyframes nx-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+html, body { margin: 0; height: 100%; background: var(--nx-ground); overflow: hidden; }
+body { color: var(--nx-ink); font-family: "Source Sans 3", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+*, *::before, *::after { box-sizing: border-box; min-width: 0; }
+a { color: var(--nx-accent); text-decoration: none; }
+a:hover { color: var(--nx-ink); }
+@keyframes nx-live { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }
+@keyframes nx-await { 0% { box-shadow: 0 0 0 0 rgba(232,119,34,0.45); } 70% { box-shadow: 0 0 0 1.25rem rgba(232,119,34,0); } 100% { box-shadow: 0 0 0 0 rgba(232,119,34,0); } }
+@keyframes nx-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
-
-/* Pseudo-state styles (authored as style-hover / style-active in the design). */
-.nxw-h1:hover {
-  background: #1A1F27 !important;
-}
-.nxw-h2:hover {
-  background: #1A1F27 !important;
-}
-.nxw-h3:hover {
-  background: #232A34 !important;
-}
-.nxw-h4:hover {
-  background: #232A34 !important;
-}
-.nxw-h5:hover {
-  background: #232A34 !important;
-}
-.nxw-h6:hover {
-  background: #232A34 !important;
-}
-.nxw-h7:hover {
-  background: #232A34 !important;
-}
-.nxw-h8:hover {
-  background: #232A34 !important;
-}
-.nxw-h9:hover {
-  background: #1A1F27 !important;
-}
+.nxw-h1:hover,
+.nxw-h2:hover,
+.nxw-h9:hover,
 .nxw-h10:hover {
-  background: #1A1F27 !important;
+  background: var(--nx-raised) !important;
+}
+.nxw-h3:hover,
+.nxw-h4:hover,
+.nxw-h5:hover,
+.nxw-h6:hover,
+.nxw-h7:hover,
+.nxw-h8:hover {
+  background: var(--nx-raised) !important;
 }
