@@ -58,6 +58,7 @@ export function createApp(
   if (options.serveStatic !== false) {
     const distPath = path.resolve(__dirname, '..', 'dist');
     app.use(express.static(distPath));
+    app.get('/wall', (_req, res) => res.sendFile(path.join(distPath, 'wall.html')));
     app.use((req, res, next) => {
       if (req.method === 'GET' && !req.path.startsWith('/api')) {
         res.sendFile(path.join(distPath, 'index.html'));
