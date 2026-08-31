@@ -40,7 +40,46 @@ const reviewPrincipal: PrincipalContext = {
   modes: ['live'],
 };
 
+/** Read-only display principal for the command wall. It cannot sign, ingest, or change a window. */
+const wallViewerPrincipal: PrincipalContext = {
+  principalId: '00000000-0000-4000-8000-000000000001',
+  externalSubject: 'wall-display',
+  displayName: 'Command wall',
+  agencyId: reviewPrincipal.agencyId,
+  agencyName: reviewPrincipal.agencyName,
+  roles: ['wall_viewer'],
+  scopes: [
+    'event:read',
+    'incident:read',
+    'recommendation:read',
+    'commitment:read',
+    'graph:read',
+  ],
+  modes: ['live'],
+};
+
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+export function wallDisplayIsPublic(): boolean {
+  return process.env.NEXUS_WALL_PUBLIC !== 'false';
+}
+
+function isAnonymousWallRead(req: Request): boolean {
+  if (!wallDisplayIsPublic() || req.method !== 'GET') return false;
+  const path = req.path;
+  return (
+    path === '/system/status'
+    || path === '/events/active'
+    || path === '/scenario-packs'
+    || path === '/weather-overlay'
+    || path === '/reference-layers'
+    || /^\/reference-layers\/[a-z0-9-]+$/.test(path)
+    || /^\/events\/[0-9a-f-]{36}\/snapshot$/.test(path)
+    || /^\/events\/[0-9a-f-]{36}\/graph$/.test(path)
+    || /^\/events\/[0-9a-f-]{36}\/stream$/.test(path)
+    || /^\/graph\/decision-lineage\/[0-9a-f-]{36}$/.test(path)
+  );
+}
 
 function getReviewModePrincipal(req: Request): PrincipalContext {
   const displayName = req.header('x-review-operator-name')?.trim();
@@ -75,6 +114,11 @@ export async function authenticateRequest(req: Request, _res: Response, next: Ne
 
     const authorization = req.header('authorization');
     if (!authorization?.startsWith('Bearer ')) {
+      if (isAnonymousWallRead(req)) {
+        req.principal = wallViewerPrincipal;
+        next();
+        return;
+      }
       throw new OperationalError(401, 'AUTHENTICATION_REQUIRED', 'A bearer token is required');
     }
 

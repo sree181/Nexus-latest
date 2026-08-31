@@ -12,7 +12,7 @@ const reach = params.get('reach') === '1';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthGate>
+    <AuthGate allowAnonymous>
       <NexusWall
         displayMode={mode}
         screen={screen}

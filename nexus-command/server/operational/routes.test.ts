@@ -87,9 +87,28 @@ describe('Nexus operational API', () => {
     const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
     const response = await request(app).get('/api/v1/auth/config').expect(200);
     expect(response.body.data.loginRequired).toBe(false);
+    expect(response.body.data.wallPublic).toBe(true);
     expect(response.body.data).toEqual(expect.objectContaining({
       configured: false,
       scopes: 'openid profile email',
     }));
+  });
+
+  it('lets the command wall read the snapshot without a bearer token, and still refuses unsigned decisions', async () => {
+    process.env.NEXUS_AUTH_MODE = 'oidc_jwt';
+    const app = createApp(new ReviewOperationalRepository(), { serveStatic: false });
+    const active = await request(app).get('/api/v1/events/active?mode=live').expect(200);
+    await request(app).get(`/api/v1/events/${active.body.data.eventId}/snapshot`).expect(200);
+    await request(app)
+      .post('/api/v1/recommendations/44444444-4444-4444-8444-444444444444/decisions')
+      .set('Idempotency-Key', 'wall-cannot-sign-001')
+      .send({
+        action: 'approve',
+        recommendationVersion: 3,
+        expectedState: 'awaiting_approval',
+        evidenceSnapshotHash: 'review-evidence-v3-7f2a',
+        reasonCode: 'EVIDENCE_AND_CONSTRAINTS_REVIEWED',
+      })
+      .expect(401);
   });
 });

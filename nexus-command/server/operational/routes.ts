@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { authenticateRequest, requireScope } from './auth.js';
+import { authenticateRequest, requireScope, wallDisplayIsPublic } from './auth.js';
 import type { OperationalMode } from './domain.js';
 import { OperationalError, validation } from './errors.js';
 import type { OperationalRepository } from './repository.js';
@@ -86,6 +86,7 @@ export function createOperationalRouter(repository: OperationalRepository, conne
       data: {
         configured: Boolean(issuer && clientId && audience),
         loginRequired: authMode !== 'review',
+        wallPublic: wallDisplayIsPublic(),
         issuer,
         clientId,
         audience,

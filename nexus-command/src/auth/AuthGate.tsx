@@ -14,7 +14,7 @@ export const AuthContext = createContext<AuthContextValue>({
   signOut: () => undefined,
 });
 
-export function AuthGate({ children }: { children: ReactNode }) {
+export function AuthGate({ children, allowAnonymous = false }: { children: ReactNode; allowAnonymous?: boolean }) {
   const [config, setConfig] = useState<AuthConfig | null>(null);
   const [signedIn, setSignedIn] = useState(Boolean(getAccessToken()));
   const [busy, setBusy] = useState(true);
@@ -46,7 +46,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           window.history.replaceState({}, document.title, window.location.pathname);
           setSignedIn(true);
         } else {
-          setSignedIn(!next.loginRequired || Boolean(getAccessToken()));
+          setSignedIn(!next.loginRequired || allowAnonymous || Boolean(getAccessToken()));
         }
       } catch (reason) {
         if (!cancelled) setError(reason instanceof Error ? reason.message : 'Identity configuration failed');
@@ -57,7 +57,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [allowAnonymous]);
 
   const signIn = useCallback(async () => {
     if (!config) return;
