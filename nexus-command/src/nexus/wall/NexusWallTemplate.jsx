@@ -30,6 +30,9 @@ export default function NexusWallTemplate({ vals }) {
             </span>
           </span>
           <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
+            <a href="/" style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#F0B429', whiteSpace: 'nowrap' }}>
+              Desk
+            </a>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', border: '0.0625rem solid rgba(47,217,138,0.4)', padding: '0.4375rem 1.125rem' }}>
               <span style={{ width: '1rem', height: '1rem', borderRadius: '50%', background: '#2FD98A', animation: 'nx-live 2s infinite' }}></span>
               <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.2em', textTransform: 'uppercase', color: vals.modeColor || '#2FD98A' }}>

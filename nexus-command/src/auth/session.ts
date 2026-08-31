@@ -1,6 +1,7 @@
 const ACCESS_TOKEN_KEY = 'nexus_access_token';
 const PKCE_VERIFIER_KEY = 'nexus_pkce_verifier';
 const PKCE_STATE_KEY = 'nexus_pkce_state';
+const RETURN_TO_KEY = 'nexus_return_to';
 
 export function getAccessToken(): string | null {
   return sessionStorage.getItem(ACCESS_TOKEN_KEY);
@@ -29,7 +30,20 @@ export function clearPkceChallenge(): void {
   sessionStorage.removeItem(PKCE_VERIFIER_KEY);
 }
 
+export function rememberReturnTo(path: string): void {
+  if (!path.startsWith('/') || path.startsWith('//')) return;
+  sessionStorage.setItem(RETURN_TO_KEY, path);
+}
+
+export function consumeReturnTo(): string | null {
+  const path = sessionStorage.getItem(RETURN_TO_KEY);
+  sessionStorage.removeItem(RETURN_TO_KEY);
+  if (!path || !path.startsWith('/') || path.startsWith('//')) return null;
+  return path.split('?')[0] || null;
+}
+
 export function clearSession(): void {
   setAccessToken(null);
   clearPkceChallenge();
+  sessionStorage.removeItem(RETURN_TO_KEY);
 }

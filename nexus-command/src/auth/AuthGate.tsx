@@ -1,6 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { beginOperatorSignIn, beginOperatorSignOut, completeOperatorSignIn, loadAuthConfig, type AuthConfig } from './oidcClient';
-import { clearSession, getAccessToken } from './session';
+import { clearSession, consumeReturnTo, getAccessToken } from './session';
 
 interface AuthContextValue {
   config: AuthConfig | null;
@@ -38,6 +38,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
         const state = params.get('state');
         if (code && state && next.loginRequired) {
           await completeOperatorSignIn(next, code, state);
+          const returnTo = consumeReturnTo();
+          if (returnTo && returnTo !== window.location.pathname) {
+            window.location.replace(returnTo);
+            return;
+          }
           window.history.replaceState({}, document.title, window.location.pathname);
           setSignedIn(true);
         } else {

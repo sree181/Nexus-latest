@@ -1,4 +1,4 @@
-import { clearPkceChallenge, expectedPkceState, getPkceVerifier, setAccessToken, setPkceChallenge } from './session';
+import { clearPkceChallenge, expectedPkceState, getPkceVerifier, rememberReturnTo, setAccessToken, setPkceChallenge } from './session';
 
 export interface AuthConfig {
   configured: boolean;
@@ -53,6 +53,7 @@ export async function beginOperatorSignIn(config: AuthConfig): Promise<void> {
   const verifier = randomUrlValue(32);
   const challenge = await sha256Base64Url(verifier);
   setPkceChallenge(state, verifier);
+  rememberReturnTo(window.location.pathname);
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: window.location.origin,

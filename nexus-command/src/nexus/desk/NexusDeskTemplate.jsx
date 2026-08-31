@@ -28,6 +28,9 @@ export default function NexusDeskTemplate({ vals }) {
         <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '0.75rem', letterSpacing: '0.12em', color: '#F0B429', textTransform: 'uppercase' }}>
           {v.packLine}
         </span>
+        <a href="/wall.html" style={{ fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#F0B429', whiteSpace: 'nowrap' }}>
+          Command wall
+        </a>
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ width: '0.4375rem', height: '0.4375rem', borderRadius: '50%', background: v.modeColor, animation: 'nx-live 2s infinite' }}></span>
           <span style={{ fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: v.modeColor }}>
