@@ -326,6 +326,10 @@ function Canvas({ feeds, stakeholder }: BoardProps) {
         minZoom={0.25}
         maxZoom={1.6}
         colorMode="dark"
+        panOnDrag
+        zoomOnPinch
+        preventScrolling
+        nodeDragThreshold={8}
         deleteKeyCode={['Backspace', 'Delete']}
         proOptions={{ hideAttribution: true }}
       >

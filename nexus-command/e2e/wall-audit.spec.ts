@@ -56,3 +56,14 @@ test('workflow tab shows sources, agents, stakeholder, and decision', async ({ p
   await expect(page.getByText('Stakeholder').first()).toBeVisible();
   await expect(page.getByText('Decision').first()).toBeVisible();
 });
+
+test('desk tiles and screen tabs are press targets', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Open ATLAS' }).click();
+  await expect(page.getByText(/DESK ATLAS/i)).toBeVisible();
+  await page.getByRole('button', { name: 'CANCEL' }).click();
+  for (const name of [/Deliberation/, /Evidence lineage/, /The decision/, /Commitments/, /Workflow/, /Operations/]) {
+    await page.getByRole('button', { name }).click();
+  }
+  await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();
+});

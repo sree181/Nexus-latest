@@ -59,12 +59,14 @@
 .nx-workflow__chip {
   display: grid;
   gap: 2px;
-  padding: 8px 10px;
+  min-height: 48px;
+  padding: 10px 12px;
   text-align: left;
   background: var(--nx-raised);
   border: 1px solid var(--nx-line);
   color: inherit;
   cursor: grab;
+  touch-action: manipulation;
 }
 
 .nx-workflow__chip:active {
@@ -183,8 +185,8 @@
 .nx-wf-node--live .nx-wf-node__kicker { color: var(--nx-accent); }
 
 .nx-workflow .react-flow__handle {
-  width: 8px;
-  height: 8px;
+  width: 16px;
+  height: 16px;
   background: var(--nx-accent);
   border: 0;
 }
