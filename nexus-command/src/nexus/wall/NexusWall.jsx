@@ -643,7 +643,7 @@ class NexusWallLogic extends React.Component {
       goPolicies: () => this.setState({ deskTab: 'policies' }),
       togglePriority: () => this.setState({ priorityOpen: !this.state.priorityOpen }),
       priorityOpen: this.state.priorityOpen === true,
-      priorityLabel: this.state.priorityOpen ? 'HIDE THE BASIS' : 'SHOW THE BASIS',
+      priorityLabel: this.state.priorityOpen ? 'Hide the basis' : 'Show the basis',
     };
 
     for (const code of Object.keys(DESK_PROFILES)) {

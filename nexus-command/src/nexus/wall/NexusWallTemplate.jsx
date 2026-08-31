@@ -178,41 +178,41 @@ export default function NexusWallTemplate({ vals }) {
             <div style={{ position: 'absolute', inset: '0', display: 'grid', gridTemplateColumns: '92rem minmax(0, 1fr)' }}>
               <section data-screen-label="Priority card" style={{ background: '#0B0E13', borderRight: '0.1875rem solid rgba(255,255,255,0.16)', display: 'grid', gridTemplateRows: 'minmax(0, 1fr)', overflow: 'hidden' }}>
                 <div style={{ display: 'grid', alignContent: 'center', gap: '0', minHeight: '0' }}>
-                  <div style={{ display: 'grid', gap: '1.5rem', padding: '2.5rem 3rem 2rem', borderLeft: `0.625rem solid ${vals.sevBg}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                      <span style={{ flex: 'none', background: vals.sevBg, color: '#06070A', padding: '0.375rem 1.25rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'grid', gap: '1.25rem', padding: '2.5rem 3rem 2rem', borderLeft: `0.625rem solid ${vals.sevBg}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                      <span style={{ flex: 'none', background: vals.sevBg, color: '#06070A', padding: '0.4375rem 0.875rem', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.08em', lineHeight: '1', whiteSpace: 'nowrap' }}>
                         {vals.sevLabel}
                       </span>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', letterSpacing: '0.06em', color: '#A3AAB4', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '1.875rem', fontWeight: '500', color: '#A3AAB4', lineHeight: '1.3' }}>
                         {vals.incidentIdLine}
                       </span>
                     </div>
-                    <div style={{ fontSize: '3.5rem', fontWeight: '600', lineHeight: '1.1', color: '#F4F2ED', textWrap: 'pretty' }}>
+                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.25rem', fontWeight: '650', lineHeight: '1.18', letterSpacing: '-0.02em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                       {vals.incidentTitle}
                     </div>
-                    <div style={{ fontSize: '2.125rem', color: '#9AA1AB' }}>
+                    <div style={{ fontSize: '2rem', lineHeight: '1.35', color: '#9AA1AB' }}>
                       {vals.incidentOwner}
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gap: '1.25rem', padding: '2rem 3rem', borderTop: '0.0625rem solid rgba(255,255,255,0.12)', borderLeft: '0.625rem solid #F0B429' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.5rem' }}>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.16em', color: '#F0B429', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'grid', gap: '1.25rem', padding: '2rem 3rem 2.25rem', borderTop: '0.0625rem solid rgba(255,255,255,0.12)', borderLeft: '0.625rem solid #F0B429' }}>
+                    <div style={{ display: 'grid', gap: '0.4375rem' }}>
+                      <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.04em', color: '#F0B429' }}>
                         {vals.recVersionLabel}
                       </span>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#8A929C', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '1.75rem', lineHeight: '1.35', color: '#8A929C' }}>
                         {vals.recMeta}
                       </span>
                     </div>
-                    <div style={{ fontSize: '2.5rem', fontWeight: '500', lineHeight: '1.2', color: '#F4F2ED', textWrap: 'pretty' }}>
+                    <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '500', lineHeight: '1.32', letterSpacing: '-0.01em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                       {vals.recAction}
                     </div>
                     {vals.awaiting ? (
                       <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', background: '#F0B429', color: '#06070A', padding: '1rem 1.75rem' }}>
-                          <span style={{ fontSize: '2.25rem', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', background: '#F0B429', color: '#06070A', padding: '0.875rem 1.5rem' }}>
+                          <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '700', lineHeight: '1.2' }}>
                             {vals.awaitBanner}
                           </span>
-                          <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                          <span style={{ marginLeft: 'auto', fontSize: '1.75rem', fontWeight: '600', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
                             {vals.awaitClock}
                           </span>
                         </div>
@@ -220,17 +220,17 @@ export default function NexusWallTemplate({ vals }) {
                     ) : null}
                     {vals.signed ? (
                       <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', border: '0.125rem solid rgba(47,217,138,0.5)', background: 'rgba(47,217,138,0.12)', color: '#2FD98A', padding: '1rem 1.75rem' }}>
-                          <span style={{ fontSize: '2.25rem', fontWeight: '700' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', border: '0.125rem solid rgba(47,217,138,0.5)', background: 'rgba(47,217,138,0.12)', color: '#2FD98A', padding: '0.875rem 1.5rem' }}>
+                          <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '700', lineHeight: '1.2' }}>
                             {vals.signedBanner}
                           </span>
-                          <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                          <span style={{ marginLeft: 'auto', fontSize: '1.75rem', fontWeight: '600', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
                             {vals.signedMeta}
                           </span>
                         </div>
                       </>
                     ) : null}
-                    <button className="nxw-h1" type="button" onClick={vals.togglePriority} style={{ justifySelf: 'start', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.24)', color: '#C9CDD4', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.12em', padding: '0.75rem 1.5rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                    <button className="nxw-h1" type="button" onClick={vals.togglePriority} style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.24)', color: '#E6E4DF', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', letterSpacing: '0.02em', lineHeight: '1', padding: '0.875rem 1.375rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
                       {vals.priorityLabel}
                     </button>
                   </div>
@@ -240,39 +240,39 @@ export default function NexusWallTemplate({ vals }) {
                 <>
                   <div style={{ position: 'absolute', inset: '0', zIndex: '20', background: 'rgba(4,5,8,0.9)', display: 'grid', placeItems: 'center', padding: '2.5rem 4rem' }}>
                     <div data-screen-label="Priority card expanded" style={{ width: '100%', maxWidth: '210rem', background: '#0B0E13', border: '0.0625rem solid rgba(255,255,255,0.22)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.15fr)' }}>
-                      <div style={{ display: 'grid', alignContent: 'start', gap: '1.75rem', padding: '2.5rem 3rem', borderRight: '0.0625rem solid rgba(255,255,255,0.12)', borderLeft: '0.625rem solid #FF4D4F' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                          <span style={{ flex: 'none', background: vals.sevBg, color: '#06070A', padding: '0.375rem 1.25rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'grid', alignContent: 'start', gap: '1.5rem', padding: '2.5rem 3rem', borderRight: '0.0625rem solid rgba(255,255,255,0.12)', borderLeft: '0.625rem solid #FF4D4F' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                          <span style={{ flex: 'none', background: vals.sevBg, color: '#06070A', padding: '0.4375rem 0.875rem', fontFamily: 'Archivo, sans-serif', fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.08em', lineHeight: '1', whiteSpace: 'nowrap' }}>
                             {vals.sevLabel}
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: '#A3AAB4', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '1.875rem', fontWeight: '500', color: '#A3AAB4', lineHeight: '1.3' }}>
                             {vals.incidentIdLine}
                           </span>
                         </div>
-                        <div style={{ fontSize: '3.5rem', fontWeight: '600', lineHeight: '1.1', color: '#F4F2ED', textWrap: 'pretty' }}>
+                        <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.25rem', fontWeight: '650', lineHeight: '1.18', letterSpacing: '-0.02em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                           {vals.incidentTitle}
                         </div>
-                        <div style={{ fontSize: '2.125rem', color: '#9AA1AB' }}>
+                        <div style={{ fontSize: '2rem', lineHeight: '1.35', color: '#9AA1AB' }}>
                           {vals.incidentOwner}
                         </div>
-                        <div style={{ display: 'grid', gap: '1rem', paddingTop: '1.5rem', borderTop: '0.0625rem solid rgba(255,255,255,0.12)' }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.5rem' }}>
-                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.16em', color: '#F0B429', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'grid', gap: '1.125rem', paddingTop: '1.5rem', borderTop: '0.0625rem solid rgba(255,255,255,0.12)' }}>
+                          <div style={{ display: 'grid', gap: '0.4375rem' }}>
+                            <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.04em', color: '#F0B429' }}>
                               {vals.recVersionLabel}
                             </span>
-                            <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#8A929C', whiteSpace: 'nowrap' }}>
-                              {vals.recExpires}
+                            <span style={{ fontSize: '1.75rem', lineHeight: '1.35', color: '#8A929C' }}>
+                              {vals.recMeta}
                             </span>
                           </div>
-                          <div style={{ fontSize: '2.5rem', fontWeight: '500', lineHeight: '1.2', color: '#F4F2ED', textWrap: 'pretty' }}>
+                          <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2.125rem', fontWeight: '500', lineHeight: '1.32', letterSpacing: '-0.01em', color: '#F4F2ED', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                             {vals.recAction}
                           </div>
                           {vals.awaiting ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', background: '#F0B429', color: '#06070A', padding: '1rem 1.75rem' }}>
-                              <span style={{ fontSize: '2.25rem', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', background: '#F0B429', color: '#06070A', padding: '0.875rem 1.5rem' }}>
+                              <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '700', lineHeight: '1.2' }}>
                                 {vals.awaitBanner}
                               </span>
-                              <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                              <span style={{ marginLeft: 'auto', fontSize: '1.75rem', fontWeight: '600', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
                                 {vals.awaitClock}
                               </span>
                             </div>
@@ -280,44 +280,44 @@ export default function NexusWallTemplate({ vals }) {
                         </div>
                       </div>
                       <div style={{ display: 'grid', alignContent: 'start', gap: '1.5rem', padding: '2.5rem 3rem', background: '#090C11' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                          <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8A929C', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                          <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.04em', color: '#8A929C', whiteSpace: 'nowrap' }}>
                             The basis
                           </span>
-                          <button className="nxw-h2" type="button" onClick={vals.togglePriority} style={{ marginLeft: 'auto', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.24)', color: '#C9CDD4', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.12em', padding: '0.625rem 1.5rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-                            CLOSE
+                          <button className="nxw-h2" type="button" onClick={vals.togglePriority} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', background: 'transparent', border: '0.0625rem solid rgba(255,255,255,0.24)', color: '#E6E4DF', fontFamily: 'Archivo, sans-serif', fontSize: '1.625rem', fontWeight: '600', letterSpacing: '0.02em', lineHeight: '1', padding: '0.75rem 1.25rem', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                            Close
                           </button>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '22rem minmax(0, 1fr)', gap: '1.25rem 2rem' }}>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', letterSpacing: '0.1em', color: '#6F7783' }}>
-                            SNAPSHOT
+                        <div style={{ display: 'grid', gridTemplateColumns: '16rem minmax(0, 1fr)', gap: '1.125rem 2rem', alignItems: 'start' }}>
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                            Snapshot
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#E6E4DF' }}>
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#E6E4DF' }}>
                             {vals.snapshotBasis}
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', letterSpacing: '0.1em', color: '#6F7783' }}>
-                            DESKS
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                            Desks
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: '#E6E4DF' }}>
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#E6E4DF' }}>
                             {vals.deskStrip}
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', letterSpacing: '0.1em', color: '#F0B429' }}>
-                            DISSENT
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#F0B429', paddingTop: '0.125rem' }}>
+                            Dissent
                           </span>
-                          <span style={{ fontSize: '1.875rem', lineHeight: '1.26', color: '#E6E4DF', textWrap: 'pretty' }}>
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#E6E4DF', textWrap: 'pretty' }}>
                             {vals.dissentNote}
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', letterSpacing: '0.1em', color: '#6F7783' }}>
-                            LIMITATION
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                            Limitation
                           </span>
-                          <span style={{ fontSize: '1.875rem', lineHeight: '1.26', color: '#B6BAC1', textWrap: 'pretty' }}>
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#B6BAC1', textWrap: 'pretty' }}>
                             {vals.limitations}
                           </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', letterSpacing: '0.1em', color: '#6F7783' }}>
-                            SIGNING
+                          <span style={{ fontSize: '1.625rem', fontWeight: '600', color: '#6F7783', paddingTop: '0.125rem' }}>
+                            Signing
                           </span>
-                          <span style={{ fontSize: '1.875rem', lineHeight: '1.26', color: '#B6BAC1', textWrap: 'pretty' }}>
-                            Requires a named human at the desk with expected version v3 and this snapshot hash. The wall cannot sign; approval records responsibility, not execution.
+                          <span style={{ fontSize: '1.875rem', lineHeight: '1.35', color: '#B6BAC1', textWrap: 'pretty' }}>
+                            Requires a named human at the desk with expected version {vals.recVersion} and this snapshot hash. The wall cannot sign; approval records responsibility, not execution.
                           </span>
                         </div>
                       </div>

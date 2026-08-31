@@ -73,6 +73,26 @@ export function minutesLeft(expiresAt: string | null | undefined, now = Date.now
   return Math.max(0, Math.round((t - now) / 60_000));
 }
 
+export function remainingLabel(minutes: number | null): string {
+  if (minutes == null) return '—';
+  if (minutes < 1) return 'due now';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
+function sentenceStatus(status: string): string {
+  const word = status.replace(/_/g, ' ');
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+function composerLabel(model: string | null | undefined): string {
+  const value = (model || '').trim();
+  if (!value || /nexus|evidence-bound|composer|policy|detection/i.test(value)) return 'Nexus';
+  return value;
+}
+
 export function lagLabel(source: SourceHealth): string {
   if (source.connectionStatus === 'permission_required') return 'needs agreement';
   if (source.connectionStatus === 'configuration_required') return 'not set up';
@@ -932,24 +952,26 @@ export function buildLiveView(bundle: LiveBundle, selectedIncidentId: string | n
     commitmentsAccepted: accepted || incidentCommitments.length,
     blockedCount: blocked,
     commitmentsFrom: incidentCommitments[0] ? `from ${hhmm(incidentCommitments[0].updatedAt)}` : 'none yet',
-    sevLabel: incident ? `SEV ${severityLabel(incident.severity).toUpperCase()}` : 'SEV —',
+    sevLabel: incident ? severityLabel(incident.severity).toUpperCase() : '—',
     sevBg: incident && (incident.severity === 'high' || incident.severity === 'critical') ? '#FF4D4F' : '#F0B429',
     incidentIdLine: incident
-      ? `${incident.incidentId.slice(0, 18).toUpperCase()} · ${incident.status.toUpperCase()} ${hhmm(incident.detectedAt)}Z`
-      : 'NO OPEN INCIDENT',
+      ? `${sentenceStatus(incident.status)} · detected ${hhmm(incident.detectedAt)}Z`
+      : 'No open incident',
     incidentTitle: incident?.title ?? 'No incident requires a decision',
     incidentOwner: ownerLine(incident, principal),
-    recVersionLabel: rec ? `RECOMMENDATION V${rec.version}` : 'NO RECOMMENDATION',
-    recMeta: rec ? `composed by ${rec.generatedBy?.model === 'nexus-composer' || !rec.generatedBy?.model ? 'NEXUS' : rec.generatedBy.model} · expires ${hhmm(rec.expiresAt)}` : 'The playbook has not composed a next step.',
+    recVersionLabel: rec ? `Recommendation v${rec.version}` : 'No recommendation',
+    recMeta: rec
+      ? `Composed by ${composerLabel(rec.generatedBy?.model)} · expires ${hhmm(rec.expiresAt)}Z`
+      : 'The playbook has not composed a next step.',
     recAction: rec?.recommendedAction ?? 'Nothing to sign. The desks have not produced a recommendation.',
     expectedEffect: rec?.expectedEffect ?? '—',
     limitations: rec?.limitations ?? '—',
     awaiting,
     signed,
     awaitBanner: 'Awaiting signature',
-    awaitClock: `${(principal?.displayName || 'UNSIGNED').toUpperCase()} · ${left == null ? '—' : `${left} MIN`}`,
+    awaitClock: `${principal?.displayName || 'Unsigned'} · ${remainingLabel(left)}`,
     signedBanner: rec ? `Approved · v${rec.version}` : 'Signed',
-    signedMeta: `${incidentCommitments.length} COMMITMENT${incidentCommitments.length === 1 ? '' : 'S'}`,
+    signedMeta: `${incidentCommitments.length} commitment${incidentCommitments.length === 1 ? '' : 's'}`,
     deskStrip: `${staffed} staffed · ${contributed} contributed · ${abstained} abstained · ${dissent} dissent`,
     snapshotLine: rec
       ? `SNAPSHOT ${shortHash(rec.evidenceSnapshotHash)} · ${hhmm(rec.createdAt)} · IMMUTABLE`

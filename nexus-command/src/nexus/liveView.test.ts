@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LiveBundle } from './liveStore';
-import { buildLiveView, findingStance, hhmm, shortHash } from './liveView';
+import { buildLiveView, findingStance, hhmm, remainingLabel, shortHash } from './liveView';
 import type { AgentFinding, OperationalSnapshot, Recommendation } from '../operationalTypes';
 
 const finding = (over: Partial<AgentFinding> = {}): AgentFinding => ({
@@ -146,5 +146,23 @@ describe('formatters', () => {
   });
   it('renders a clock from an iso stamp', () => {
     expect(hhmm('2026-08-31T09:12:00Z')).toMatch(/^\d{2}:\d{2}$/);
+  });
+  it('writes remaining time as hours and minutes', () => {
+    expect(remainingLabel(305)).toBe('5h 5m');
+    expect(remainingLabel(30)).toBe('30 min');
+    expect(remainingLabel(0)).toBe('due now');
+    expect(remainingLabel(null)).toBe('—');
+  });
+});
+
+describe('priority card copy', () => {
+  it('uses briefing language instead of raw identifiers and model strings', () => {
+    const view = buildLiveView(bundle(), null, Date.parse('2026-08-31T09:42:00Z'));
+    expect(view.sevLabel).toBe('HIGH');
+    expect(view.incidentIdLine).toMatch(/^Active · detected \d{2}:\d{2}Z$/);
+    expect(view.incidentIdLine).not.toMatch(/i1/);
+    expect(view.recVersionLabel).toBe('Recommendation v3');
+    expect(view.recMeta).toMatch(/^Composed by Nexus · expires \d{2}:\d{2}Z$/);
+    expect(view.awaitClock).toBe('J. Ruffin · 30 min');
   });
 });
