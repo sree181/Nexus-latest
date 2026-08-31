@@ -1,0 +1,44 @@
+/* Base styles and keyframes from Nexus Wall.dc.html.
+   Root font-size scaling is applied by NexusWall at runtime, not here. */
+
+  html, body { margin: 0; background: #06070A; overflow-x: hidden; }
+  body { color: #F4F2ED; font-family: "Source Sans 3", system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  *, *::before, *::after { box-sizing: border-box; min-width: 0; }
+  a { color: #F0B429; text-decoration: none; }
+  a:hover { color: #F4F2ED; }
+  @keyframes nx-live { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }
+  @keyframes nx-await { 0% { box-shadow: 0 0 0 0 rgba(240,180,41,0.55); } 70% { box-shadow: 0 0 0 1.25rem rgba(240,180,41,0); } 100% { box-shadow: 0 0 0 0 rgba(240,180,41,0); } }
+  @keyframes nx-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+
+/* Pseudo-state styles (authored as style-hover / style-active in the design). */
+.nxw-h1:hover {
+  background: #1A1F27 !important;
+}
+.nxw-h2:hover {
+  background: #1A1F27 !important;
+}
+.nxw-h3:hover {
+  background: #232A34 !important;
+}
+.nxw-h4:hover {
+  background: #232A34 !important;
+}
+.nxw-h5:hover {
+  background: #232A34 !important;
+}
+.nxw-h6:hover {
+  background: #232A34 !important;
+}
+.nxw-h7:hover {
+  background: #232A34 !important;
+}
+.nxw-h8:hover {
+  background: #232A34 !important;
+}
+.nxw-h9:hover {
+  background: #1A1F27 !important;
+}
+.nxw-h10:hover {
+  background: #1A1F27 !important;
+}

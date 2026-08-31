@@ -1,0 +1,13 @@
+/* Base styles and keyframes from Nexus Desk.dc.html.
+   Root font-size scaling is applied by NexusDesk at runtime, not here. */
+
+  html, body { margin: 0; background: #06070A; overflow-x: hidden; }
+  body { color: #F4F2ED; font-family: "Source Sans 3", system-ui, sans-serif; font-size: 0.9375rem; -webkit-font-smoothing: antialiased; }
+  *, *::before, *::after { box-sizing: border-box; min-width: 0; }
+  a { color: #F0B429; text-decoration: none; }
+  a:hover { color: #F4F2ED; }
+  @keyframes nx-live { 0% { opacity: 1; } 50% { opacity: 0.35; } 100% { opacity: 1; } }
+
+
+/* Pseudo-state styles (authored as style-hover / style-active in the design). */
+
