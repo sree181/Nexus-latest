@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, CircleSlash2 } from 'lucide-react';
+import EvidenceSankey from './EvidenceSankey';
 import WorkflowBoard from './workflow/WorkflowBoard';
 
 /* CIVIC INSTRUMENT PANEL: presentation only; all live values and handlers come from NexusWall.renderVals(). */
@@ -465,111 +466,45 @@ export default function NexusWallTemplate({ vals }) {
                 </span>
               </div>
               <div className="nx-wall-evidence__body" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(22rem, 28rem)', gap: '2rem', minHeight: '0', overflow: 'hidden' }}>
-                <div className="nx-wall-lineage" ref={vals.linRef} style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '1.25rem', minHeight: '0', minWidth: '0', height: '100%', overflow: 'hidden' }}>
-                  <svg width="100%" height="100%" style={{ position: 'absolute', inset: '0', zIndex: '0', pointerEvents: 'none', overflow: 'visible' }}>
-                    <path d={vals.linDim} fill="rgba(154,161,171,0.20)" stroke="rgba(154,161,171,0.30)" strokeWidth="1"></path>
-                    <path d={vals.linHot} fill="rgba(232,119,34,0.34)" stroke="rgba(232,119,34,0.85)" strokeWidth="1.5"></path>
-                  </svg>
-                  {(vals.lineageColumns || []).map(col => (
-                  <div className="nx-wall-lineage__column" key={col.key} style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '0.5rem', minWidth: '0', minHeight: '0', height: '100%', overflow: 'hidden' }}>
-                    <div className="nx-wall-lineage__stage" style={{ height: 'min-content', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto auto', alignItems: 'baseline', columnGap: '0.5rem', paddingBottom: '0.25rem', borderBottom: `0.1875rem solid ${col.headerTone}` }}>
-                      <span className="nx-wall-lineage__number" style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
-                        {col.n}
-                      </span>
-                      <span className="nx-wall-lineage__label" style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                        {col.label}
-                      </span>
-                      {col.subtitle ? (
-                        <span className="nx-wall-lineage__subtitle" style={{ gridColumn: '1 / -1', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
-                          {col.subtitle}
-                        </span>
-                      ) : null}
-                      <span className="nx-wall-lineage__count" style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: 'var(--nx-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                        {col.cards.filter(card => card.id !== 'c-none' && card.id !== 'v-none' && card.id !== 'd-gate').length || (col.cards.length && col.cards[0].id !== 'c-none' && col.cards[0].id !== 'v-none' ? col.cards.length : 0)}
-                      </span>
-                      {col.key !== 'verification' ? (
-                        <span className="nx-wall-lineage__arrow" style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: '#5A6270', marginLeft: '0.5rem' }}>
-                          &#8594;
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="nx-wall-lineage__cards" style={{ display: 'grid', gridAutoRows: 'min-content', gap: '0.5rem', alignContent: 'start', minHeight: '0', overflow: 'auto' }}>
-                    {col.cards.map(card => (
-                      <button className="nx-wall-lineage__card" key={card.id} type="button" data-lin={card.id} onClick={vals[`sel_${card.id}`]} style={{ position: 'relative', zIndex: '1', textAlign: 'left', fontFamily: 'inherit', color: 'inherit', cursor: 'pointer', background: card.bg, border: '0', borderLeft: `0.375rem solid ${vals[`bd_${card.id}`] || card.tone}`, padding: '0.5rem 0.75rem', display: 'grid', alignContent: 'start', gap: '0.125rem', minHeight: '0', minWidth: '0', width: '100%', overflow: 'hidden' }}>
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', lineHeight: '1.12', letterSpacing: '0.06em', color: card.kickerTone, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {card.kicker}
-                        </span>
-                        <span style={{ fontSize: '1.75rem', lineHeight: '1.14', color: 'var(--nx-ink)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                          {card.title}
-                        </span>
-                        {card.meta ? (
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', color: 'var(--nx-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {card.meta}
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
-                    </div>
-                  </div>
-                  ))}
-                </div>
-                <div className="nx-wall-lineage__inspector" style={{ background: 'var(--nx-surface)', borderLeft: '0.375rem solid #2A3038', padding: '1.25rem 1.5rem', display: 'grid', gridAutoRows: 'min-content', gap: '0.875rem', minHeight: '0', overflow: 'hidden' }}>
-                  <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                    Inspector
-                  </span>
+                <EvidenceSankey
+                  columns={vals.lineageColumns || []}
+                  nodes={vals.lineageNodes || {}}
+                  edges={vals.lineageEdges || []}
+                  weights={vals.lineageWeights || {}}
+                  selectedId={vals.lineageSelectedId || null}
+                  hotIds={vals.lineageHotIds || []}
+                  onSelect={vals.selectLineage}
+                />
+                <aside className="nx-wall-lineage__inspector" style={{ background: 'var(--nx-surface)', borderLeft: '0.375rem solid #2A3038', padding: '1.25rem 1.5rem', display: 'grid', gridAutoRows: 'min-content', gap: '0.875rem', minHeight: '0', overflow: 'hidden' }}>
+                  <header className="nx-lineage-inspector__header">
+                    <span>Record inspector</span>
+                    <small>Stage, stakeholder, citation inputs, and downstream effect</small>
+                  </header>
                   {vals.linEmpty ? (
-                    <>
-                      <span style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', lineHeight: '1.28' }}>
-                        Select any record to trace what it was built from and what it feeds. The lit path is the citation chain — nothing else is implied.
-                      </span>
-                    </>
+                    <div className="nx-lineage-inspector__empty">
+                      <strong>Select a record</strong>
+                      <span>Choose any node to isolate its complete citation path. Colored ribbons show recorded lineage, never inference.</span>
+                    </div>
                   ) : null}
                   {vals.linPicked ? (
-                    <>
-                      <div style={{ display: 'grid', gap: '0.875rem' }}>
-                        <div style={{ display: 'grid', gap: '0.25rem' }}>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', letterSpacing: '0.08em', color: vals.linTone }}>
-                            {vals.linStage}
-                          </span>
-                          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', fontWeight: '700', color: 'var(--nx-ink)', lineHeight: '1.1', wordBreak: 'break-all' }}>
-                            {vals.linId}
-                          </span>
-                        </div>
-                        <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '11rem minmax(0, 1fr)', gap: '0.375rem 1rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem' }}>
-                          <span style={{ color: 'var(--nx-mute)' }}>
-                            source
-                          </span>
-                          <span style={{ color: 'var(--nx-ink)' }}>
-                            {vals.linSrc}
-                          </span>
-                          <span style={{ color: 'var(--nx-mute)' }}>
-                            recorded
-                          </span>
-                          <span style={{ color: 'var(--nx-ink)' }}>
-                            {vals.linAt}
-                          </span>
-                          <span style={{ color: 'var(--nx-mute)' }}>
-                            built from
-                          </span>
-                          <span style={{ color: 'var(--nx-ink)' }}>
-                            {vals.linUp}
-                          </span>
-                          <span style={{ color: 'var(--nx-mute)' }}>
-                            feeds
-                          </span>
-                          <span style={{ color: 'var(--nx-ink)' }}>
-                            {vals.linDown}
-                          </span>
-                        </div>
-                        <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
-                        <span style={{ fontSize: '1.75rem', color: 'var(--nx-ink)', lineHeight: '1.26', textWrap: 'pretty' }}>
-                          {vals.linNote}
-                        </span>
+                    <article className="nx-lineage-inspector__record" style={{ '--record-tone': vals.linTone }}>
+                      <div className="nx-lineage-inspector__identity">
+                        <span>{vals.linStage}</span>
+                        <h2>{vals.linId}</h2>
                       </div>
-                    </>
+                      <dl>
+                        <dt>Stakeholder / source</dt><dd>{vals.linSrc}</dd>
+                        <dt>Recorded at</dt><dd>{vals.linAt}</dd>
+                        <dt>Citation inputs</dt><dd>{vals.linUp}</dd>
+                        <dt>Downstream records</dt><dd>{vals.linDown}</dd>
+                      </dl>
+                      <div className="nx-lineage-inspector__text">
+                        <span>{vals.linStage.startsWith('DECISION') ? 'Decision text' : 'Record text'}</span>
+                        <p>{vals.linNote}</p>
+                      </div>
+                    </article>
                   ) : null}
-                </div>
+                </aside>
               </div>
             </div>
           </>

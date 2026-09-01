@@ -61,6 +61,16 @@ test('reach band switches to evidence lineage', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: /Evidence lineage/ }).click();
   await expect(page.getByText('arrows read left to right')).toBeVisible();
+  await expect(page.getByLabel('Evidence lineage Sankey diagram')).toBeVisible();
+  await expect(page.locator('.nx-sankey__stage')).toHaveCount(7);
+  expect(await page.locator('[data-sankey-node]').count()).toBeGreaterThanOrEqual(7);
+  expect(await page.locator('[data-sankey-link]').count()).toBeGreaterThanOrEqual(4);
+  await page.locator('[data-sankey-node][data-stage="decision"]').click();
+  await expect(page.getByText('Decision text', { exact: true })).toBeVisible();
+  await expect(page.getByText('Stakeholder / source', { exact: true })).toBeVisible();
+  await expect(page.getByText('Citation inputs', { exact: true })).toBeVisible();
+  await page.locator('[data-sankey-node="c-none"]').click();
+  expect(await page.locator('.nx-sankey__links path.is-dimmed').count()).toBeGreaterThan(0);
 });
 
 test('Stage 2 differentiates agents, desks, findings, and participation without truncation', async ({ page }) => {

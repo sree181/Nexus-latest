@@ -778,6 +778,9 @@ class NexusWallLogic extends React.Component {
     LIN_EDGES = liveNow.lineage.edges;
     LIN_W = liveNow.lineage.weights;
     vals.lineageColumns = liveNow.lineage.columns;
+    vals.lineageNodes = liveNow.lineage.nodes;
+    vals.lineageEdges = liveNow.lineage.edges;
+    vals.lineageWeights = liveNow.lineage.weights;
     vals.record = liveNow.record;
     const paths = this.linPaths();
     vals.linDim = paths.dim;
@@ -785,6 +788,9 @@ class NexusWallLogic extends React.Component {
     vals.linDimArrow = paths.dimA;
     vals.linHotArrow = paths.hotA;
     const linHot = this.linClosure(LIN_SEL);
+    vals.lineageSelectedId = LIN_SEL;
+    vals.lineageHotIds = Array.from(linHot);
+    vals.selectLineage = id => this.pick(id)();
     for (const id of Object.keys(LIN_NODES)) {
       const card = LIN_NODES[id];
       vals[`sel_${id}`] = this.pick(id);

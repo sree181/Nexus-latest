@@ -89,3 +89,13 @@
 - [x] Distinguish Contributed and Abstained using accessible icons and restrained status colors
 - [x] Preserve all Stage 2 data, decisions, timestamps, navigation behavior, and right-side composition content
 - [x] Confirm every non-Deliberation surface is unchanged, run build/unit/browser validation, then push and verify deployment
+
+## Stage 3 Evidence Lineage Sankey
+
+- [x] Keep all changes confined to Stage 3 Evidence Lineage and preserve the existing lineage records and inspector behavior
+- [x] Replace the card-column lineage with a true Sankey layout using a dedicated visualization library
+- [x] Color-code stages and flows consistently across evidence, agents/findings, incident, recommendation, decision, commitments, and verification
+- [x] Make stage names, stakeholder/agent identity, decision text, commitments, and verification states explicit and readable
+- [x] Preserve click-to-inspect lineage tracing with clear active-path emphasis and subdued unrelated flows
+- [x] Validate Stage 3 at desktop and command-wall resolutions, run build/unit/browser suites, and confirm every other stage is unchanged
+- [ ] Push the contained Stage 3 update and verify Railway deployment
