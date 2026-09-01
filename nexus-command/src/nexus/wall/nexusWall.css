@@ -1240,6 +1240,349 @@ button:active:not(:disabled) { transform: scale(0.985); }
   border-width: 0.0625rem !important;
 }
 
+/* AGENT DESK WORKSPACE: shared by all six desks; surrounding wall surfaces remain untouched. */
+.nx-wall--desk-open .nx-wall-header { display: none !important; }
+
+.nx-wall--desk-open .nx-wall-nav {
+  position: fixed !important;
+  z-index: 1300 !important;
+  inset: 0 auto 0 0 !important;
+  width: 14rem !important;
+  height: 100dvh !important;
+  border-radius: 0 !important;
+  box-shadow: 1.25rem 0 3rem rgba(0, 0, 0, 0.24);
+  transition: width 180ms ease, padding 180ms ease;
+}
+
+.nx-wall--desk-rail-collapsed .nx-wall-nav {
+  width: 4.75rem !important;
+  padding: 0.75rem !important;
+}
+
+.nx-wall--desk-rail-collapsed .nx-wall-identity { display: none; }
+
+.nx-wall--desk-rail-collapsed .nx-wall-nav .nxw-tab {
+  place-items: center;
+  padding: 0.75rem 0 !important;
+  border-left-width: 0.2rem !important;
+}
+
+.nx-wall--desk-rail-collapsed .nx-wall-nav .nxw-tab > span:first-child {
+  font-size: 0.8rem !important;
+  opacity: 0.9 !important;
+}
+
+.nx-wall--desk-rail-collapsed .nx-wall-nav .nxw-tab > span:last-child,
+.nx-wall--desk-rail-collapsed .nx-wall-nav .nxw-tab::after { display: none; }
+
+.nx-desk-overlay {
+  position: fixed;
+  z-index: 1200;
+  inset: 0 0 0 14rem;
+  display: block;
+  background: #090d13;
+  transition: left 180ms ease;
+}
+
+.nx-wall--desk-rail-collapsed .nx-desk-overlay { left: 4.75rem; }
+
+.nx-desk-overlay .nx-wall-config {
+  border: 0 !important;
+  background:
+    linear-gradient(120deg, rgba(246, 128, 38, 0.035), transparent 36%),
+    #090d13 !important;
+  grid-template-columns: 18rem minmax(0, 1fr) !important;
+  grid-template-rows: auto minmax(0, 1fr) auto !important;
+}
+
+.nx-desk-header {
+  grid-column: 1 / -1;
+  gap: 1.25rem !important;
+  padding: 1.1rem 1.5rem !important;
+  background: rgba(14, 21, 30, 0.98) !important;
+  border-bottom: 0.0625rem solid rgba(194, 211, 225, 0.16) !important;
+}
+
+.nx-desk-header > span:nth-of-type(1) img {
+  width: 3.25rem !important;
+  height: 3.25rem !important;
+  border-radius: 0.35rem;
+}
+
+.nx-desk-header > span:nth-of-type(2) > span:first-child {
+  font-family: var(--nx-font-display) !important;
+  font-size: 1.55rem !important;
+  letter-spacing: -0.015em !important;
+}
+
+.nx-desk-header > span:nth-of-type(2) > span:last-child {
+  font-family: var(--nx-font-body) !important;
+  font-size: 0.92rem !important;
+  line-height: 1.25;
+}
+
+.nx-desk-header > span:last-child { gap: 0.65rem !important; }
+
+.nx-desk-header > span:last-child > span,
+.nx-desk-header > span:last-child > button {
+  font-size: 0.78rem !important;
+  letter-spacing: 0.06em !important;
+}
+
+.nx-desk-header > span:last-child > button {
+  min-height: 2.5rem;
+  padding: 0.65rem 1rem !important;
+  border-radius: 0.3rem;
+}
+
+.nx-desk-rail-toggle {
+  flex: none;
+  min-width: 7.5rem;
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 0.0625rem solid rgba(194, 211, 225, 0.22);
+  border-radius: 0.3rem;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--nx-mute);
+  font-family: var(--nx-font-body);
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.nx-desk-rail-toggle:hover,
+.nx-desk-rail-toggle:focus-visible {
+  border-color: var(--auburn-orange, var(--nx-accent));
+  color: var(--nx-ink);
+}
+
+.nx-desk-rail-toggle > span {
+  color: var(--auburn-orange, var(--nx-accent));
+  font-family: var(--nx-font-mono);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.nx-desk-tabs {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  display: grid !important;
+  align-content: start !important;
+  border: 0 !important;
+  border-right: 0.0625rem solid rgba(194, 211, 225, 0.14) !important;
+  background: rgba(12, 18, 26, 0.86);
+  padding: 1.25rem 0.85rem;
+}
+
+.nx-desk-tabs > button {
+  position: relative;
+  width: 100%;
+  min-height: 4.75rem;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-content: center;
+  gap: 0.15rem 0.7rem;
+  padding: 0.8rem 0.9rem !important;
+  border: 0 !important;
+  border-left: 0.18rem solid transparent !important;
+  border-radius: 0.3rem;
+  text-align: left;
+  letter-spacing: 0 !important;
+}
+
+.nx-desk-tabs > button:hover { background: rgba(255, 255, 255, 0.035) !important; }
+
+.nx-desk-tabs > button.is-active {
+  border-left-color: var(--auburn-orange, var(--nx-accent)) !important;
+  background: rgba(246, 128, 38, 0.08) !important;
+}
+
+.nx-desk-tabs > button > span {
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--auburn-orange, var(--nx-accent));
+  font-family: var(--nx-font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.nx-desk-tabs > button > strong {
+  color: var(--nx-ink);
+  font-family: var(--nx-font-body);
+  font-size: 0.95rem;
+  font-weight: 680;
+  line-height: 1.1;
+}
+
+.nx-desk-tabs > button > small {
+  color: var(--nx-mute);
+  font-family: var(--nx-font-body);
+  font-size: 0.72rem;
+  font-weight: 450;
+  line-height: 1.2;
+}
+
+.nx-desk-content {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding: 2rem 2.5rem 3rem !important;
+  scrollbar-color: rgba(246, 128, 38, 0.45) transparent;
+}
+
+.nx-desk-form {
+  width: min(100%, 112rem);
+  grid-template-columns: 15rem minmax(0, 1fr) !important;
+  gap: 1.35rem 2rem !important;
+  padding: 1.5rem;
+  border: 0.0625rem solid rgba(194, 211, 225, 0.14);
+  border-radius: 0.45rem;
+  background: rgba(13, 20, 29, 0.86);
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.16);
+}
+
+.nx-desk-section-head {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr);
+  gap: 0.85rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 0.0625rem solid rgba(194, 211, 225, 0.14);
+}
+
+.nx-desk-section-head > span {
+  color: var(--auburn-orange, var(--nx-accent));
+  font-family: var(--nx-font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding-top: 0.25rem;
+}
+
+.nx-desk-section-head h2 {
+  margin: 0;
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 1.45rem;
+  font-weight: 680;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.nx-desk-section-head p {
+  max-width: 58rem;
+  margin: 0.35rem 0 0;
+  color: var(--nx-mute);
+  font-family: var(--nx-font-body);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.nx-desk-form > span:not(.nx-desk-section-head) {
+  font-family: var(--nx-font-body) !important;
+  font-size: 0.86rem !important;
+  letter-spacing: 0.04em !important;
+}
+
+.nx-desk-form input,
+.nx-desk-form textarea {
+  border: 0.0625rem solid rgba(194, 211, 225, 0.2) !important;
+  border-radius: 0.3rem;
+  background: rgba(5, 11, 18, 0.9) !important;
+  color: var(--nx-ink) !important;
+  font-family: var(--nx-font-body) !important;
+  font-size: 0.95rem !important;
+  line-height: 1.5 !important;
+  padding: 0.8rem 0.9rem !important;
+  resize: vertical !important;
+}
+
+.nx-desk-form input:focus,
+.nx-desk-form textarea:focus {
+  outline: 0.125rem solid color-mix(in srgb, var(--auburn-orange, var(--nx-accent)) 58%, transparent);
+  outline-offset: 0.1rem;
+  border-color: var(--auburn-orange, var(--nx-accent)) !important;
+}
+
+.nx-desk-form--prompt textarea { min-height: 16rem; }
+
+.nx-desk-form--model button {
+  border-radius: 999px;
+  font-family: var(--nx-font-body) !important;
+  font-size: 0.86rem !important;
+  padding: 0.55rem 0.9rem !important;
+}
+
+.nx-desk-form--tools,
+.nx-desk-form--policies {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+
+.nx-desk-tool-row,
+.nx-desk-policy-row {
+  border-bottom-color: rgba(194, 211, 225, 0.1) !important;
+  padding: 0.9rem 0 !important;
+}
+
+.nx-desk-tool-row {
+  grid-template-columns: 6rem 5rem minmax(25rem, 0.7fr) minmax(30rem, 1.3fr) !important;
+  gap: 2.5rem !important;
+}
+
+.nx-desk-tool-row > * { min-width: 0; overflow-wrap: anywhere; }
+
+.nx-desk-tool-summary {
+  grid-template-columns: 25rem minmax(0, 1fr) !important;
+  gap: 2.5rem !important;
+  padding-top: 1.25rem !important;
+}
+
+.nx-desk-policy-row {
+  grid-template-columns: minmax(22rem, 0.8fr) 12rem minmax(30rem, 1.2fr) !important;
+  gap: 2.5rem !important;
+}
+
+.nx-desk-policy-row > * { min-width: 0; overflow-wrap: anywhere; }
+
+.nx-desk-policy-note { padding-top: 1.25rem !important; }
+
+.nx-desk-form--tools button,
+.nx-desk-form--tools span,
+.nx-desk-form--policies span,
+.nx-desk-form--policies > div:last-child {
+  font-size: 0.88rem !important;
+  line-height: 1.4 !important;
+}
+
+.nx-desk-footer {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-height: 3.5rem;
+  padding: 0.8rem 1.5rem !important;
+  border-top: 0.0625rem solid rgba(194, 211, 225, 0.14) !important;
+  background: rgba(10, 16, 24, 0.96) !important;
+}
+
+.nx-desk-footer span {
+  font-family: var(--nx-font-body) !important;
+  font-size: 0.8rem !important;
+}
+
+@media (max-width: 1100px) {
+  .nx-desk-overlay .nx-wall-config { grid-template-columns: 14rem minmax(0, 1fr) !important; }
+  .nx-desk-header > span:nth-of-type(2) > span:last-child { display: none; }
+  .nx-desk-form { grid-template-columns: 11rem minmax(0, 1fr) !important; }
+}
+
 @media (max-width: 1800px) {
   .nx-wall--ops .nx-wall-priority { width: 38rem; }
   .nx-wall--ops .nx-wall-header,
@@ -1247,6 +1590,35 @@ button:active:not(:disabled) { transform: scale(0.985); }
   .nx-wall--ops .nx-wall-desks { width: 30rem; }
   .nx-wall--ops .nx-wall-map [data-nx-overlays] { right: 32.5rem !important; width: 34rem !important; }
 }
+
+/* Agent Desk legibility at the wall's responsive root scale. */
+.nx-wall--desk-rail-collapsed .nx-wall-nav .nxw-tab > span:first-child { font-size: 1.15rem !important; }
+.nx-desk-header > span:nth-of-type(2) > span:first-child { font-size: 2.4rem !important; text-transform: uppercase; }
+.nx-desk-header > span:nth-of-type(2) > span:last-child { font-size: 1.45rem !important; }
+.nx-desk-header > span:last-child > span,
+.nx-desk-header > span:last-child > button { font-size: 1.25rem !important; }
+.nx-desk-header > span:last-child > button { min-height: 3.6rem; padding: 0.75rem 1.25rem !important; }
+.nx-desk-rail-toggle { min-width: 11rem; min-height: 3.6rem; font-size: 1.25rem; }
+.nx-desk-rail-toggle > span { font-size: 1.8rem; }
+.nx-desk-tabs > button { min-height: 7.25rem; }
+.nx-desk-tabs > button > span { font-size: 1.15rem; }
+.nx-desk-tabs > button > strong { font-size: 1.65rem; }
+.nx-desk-tabs > button > small { font-size: 1.15rem; }
+.nx-desk-content { padding: 3.5rem 4rem 5rem !important; }
+.nx-desk-form { width: min(100%, 145rem); }
+.nx-desk-section-head > span { font-size: 1.25rem; }
+.nx-desk-section-head h2 { font-size: 2.4rem; }
+.nx-desk-section-head p { font-size: 1.4rem; }
+.nx-desk-form > span:not(.nx-desk-section-head) { font-size: 1.45rem !important; }
+.nx-desk-form input,
+.nx-desk-form textarea { font-size: 1.7rem !important; }
+.nx-desk-form--prompt textarea { min-height: 21rem; }
+.nx-desk-form--model button { font-size: 1.4rem !important; }
+.nx-desk-form--tools button,
+.nx-desk-form--tools span,
+.nx-desk-form--policies span,
+.nx-desk-form--policies > div:last-child { font-size: 1.45rem !important; }
+.nx-desk-footer span { font-size: 1.3rem !important; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

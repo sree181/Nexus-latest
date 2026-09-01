@@ -186,7 +186,7 @@ const escapeHtml = value => String(value ?? '')
 const MODEL_CHOICES = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'llama3.2', 'custom'];
 
 class NexusWallLogic extends React.Component {
-  state = { screen: this.props.screen || 'operations', now: new Date(), desk: null, deskTab: 'identity', live: getLive(), profiles: {} };
+  state = { screen: this.props.screen || 'operations', now: new Date(), desk: null, deskTab: 'identity', deskRailCollapsed: false, live: getLive(), profiles: {} };
   linRef = React.createRef();
   mapRef = React.createRef();
 
@@ -691,7 +691,7 @@ class NexusWallLogic extends React.Component {
     }
     const drafts = { ...(this.state.drafts || {}) };
     delete drafts[code];
-    this.setState({ desk: null, drafts });
+    this.setState({ desk: null, deskRailCollapsed: false, drafts });
   }
 
   /* Draft edits live per desk until SAVE; RESTORE drops the draft back to source values. */
@@ -736,7 +736,9 @@ class NexusWallLogic extends React.Component {
       isWall: (this.props.displayMode ?? 'wall') !== 'walk-up',
       isWalkUp: (this.props.displayMode ?? 'wall') === 'walk-up',
       modeLabel: (this.props.displayMode ?? 'wall') === 'walk-up' ? 'VIEW walk-up' : 'VIEW wall',
-      closeDesk: () => this.setState({ desk: null }),
+      closeDesk: () => this.setState({ desk: null, deskRailCollapsed: false }),
+      toggleDeskRail: () => this.setState({ deskRailCollapsed: !this.state.deskRailCollapsed }),
+      deskRailCollapsed: this.state.deskRailCollapsed === true,
       goIdentity: () => this.setState({ deskTab: 'identity' }),
       goPrompt: () => this.setState({ deskTab: 'prompt' }),
       goModel: () => this.setState({ deskTab: 'model' }),
@@ -748,7 +750,7 @@ class NexusWallLogic extends React.Component {
     };
 
     for (const code of Object.keys(DESK_PROFILES)) {
-      vals[`open_${code}`] = () => this.setState({ desk: code, deskTab: 'identity' });
+      vals[`open_${code}`] = () => this.setState({ desk: code, deskTab: 'identity', deskRailCollapsed: false });
     }
 
     vals.linRef = this.linRef;

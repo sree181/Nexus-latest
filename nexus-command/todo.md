@@ -69,3 +69,13 @@
 - [x] Display “Nexus Coordinate” clearly beside the Auburn business-school logo using a map-complementary Auburn color treatment
 - [x] Confirm the map, markers, desks, timeline, navigation, and all other workspaces remain unchanged
 - [ ] Run visual, build, unit, and wall browser validation, then push and confirm Railway deployment
+
+## Full-Screen Agent Desks
+
+- [x] Make the shared Agent Desk overlay occupy the complete viewport for ATLAS, AQUA, SENTINEL, PHOENIX, FORGE, and ECHO
+- [x] Hide the wall’s top feeds/KPI strip whenever an Agent Desk is open
+- [x] Add an accessible collapse/expand control for the stages 1–6 navigation rail while a desk is open
+- [x] Reorganize Prompt, Model, Tools, and Policies into a professional structured configuration workspace inspired by CrewAI without copying it
+- [x] Preserve each agent’s existing content, fields, handlers, save/cancel behavior, and constraints
+- [x] Confirm map, markers, notification, branding, desks list, timeline, and non-desk workspaces remain unchanged
+- [x] Test every agent desk plus build, unit, and browser suites, then push and confirm Railway deployment

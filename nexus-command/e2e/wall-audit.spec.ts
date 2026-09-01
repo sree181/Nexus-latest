@@ -83,3 +83,36 @@ test('desk tiles and screen tabs are press targets', async ({ page }) => {
   }
   await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();
 });
+
+test('all six Agent Desks open full-screen with shared structured configuration', async ({ page }) => {
+  await open(page);
+  const desks = ['ATLAS', 'AQUA', 'SENTINEL', 'PHOENIX', 'FORGE', 'ECHO'];
+  for (const desk of desks) {
+    await page.getByRole('button', { name: `Open ${desk}` }).click();
+    const dialog = page.getByRole('dialog', { name: `${desk.toLowerCase()} Agent Desk` });
+    await expect(dialog).toBeVisible();
+    const bounds = await dialog.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.y).toBe(0);
+    expect(bounds!.height).toBe(2160);
+    await expect(page.locator('.nx-wall-header')).toBeHidden();
+
+    await page.getByRole('button', { name: /Prompt/ }).click();
+    await expect(page.getByRole('heading', { name: 'Instruction design' })).toBeVisible();
+
+    await page.getByRole('button', { name: /Model/ }).click();
+    await expect(page.getByRole('heading', { name: desk === 'ATLAS' || desk === 'AQUA' ? 'Runtime configuration' : 'Managed runtime' })).toBeVisible();
+
+    if (desk === 'ATLAS' || desk === 'AQUA') {
+      await page.getByRole('button', { name: /Tools/ }).click();
+      await expect(page.getByRole('heading', { name: 'Capabilities and access' })).toBeVisible();
+      await page.getByRole('button', { name: /Policies/ }).click();
+      await expect(page.getByRole('heading', { name: 'Guardrails and authority' })).toBeVisible();
+    }
+
+    const collapse = page.getByRole('button', { name: 'Hide stages' });
+    await collapse.click();
+    await expect(page.getByRole('button', { name: 'Show stages' })).toHaveAttribute('aria-expanded', 'false');
+    await page.getByRole('button', { name: 'CANCEL' }).click();
+  }
+});

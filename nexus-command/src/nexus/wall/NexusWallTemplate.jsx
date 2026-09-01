@@ -16,7 +16,7 @@ export default function NexusWallTemplate({ vals }) {
             : 'nx-wall--commitments';
   return (
     <>
-    <div className={`nx-wall ${screenClass}`} data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: 'var(--nx-ground)', position: 'relative', overflow: 'hidden' }}>
+    <div className={`nx-wall ${screenClass}${vals.deskOpen ? ' nx-wall--desk-open' : ''}${vals.deskRailCollapsed ? ' nx-wall--desk-rail-collapsed' : ''}`} data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: 'var(--nx-ground)', position: 'relative', overflow: 'hidden' }}>
       <header className="nx-wall-header" data-screen-label="Stratum 1 — state" style={{ padding: '1.75rem 3rem 1.5rem', display: 'grid', gap: '1.25rem', borderBottom: '0.0625rem solid var(--nx-line)' }}>
         <div className="nx-wall-brandrow" style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
           <span className="nx-wall-mark" style={{ flex: 'none', padding: '0.4375rem 0.625rem', display: 'flex', alignItems: 'center' }}>
@@ -749,7 +749,7 @@ export default function NexusWallTemplate({ vals }) {
           <WorkflowBoard feeds={vals.feeds} stakeholder={vals.operatorName} />
         ) : null}
       </main>
-      <nav className="nx-wall-nav" data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 2rem', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
+      <nav id="nx-stage-navigation" className="nx-wall-nav" data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 2rem', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
         {vals.isOps ? (
           <div className="nx-wall-identity" aria-label="Nexus Coordinate with Auburn University Harbert College of Business">
             <img src="https://harbert.auburn.edu/_resources/img/logos/logo2.svg" alt="Auburn University Harbert College of Business" />
@@ -928,9 +928,13 @@ export default function NexusWallTemplate({ vals }) {
       ) : null}
       {vals.deskOpen ? (
         <>
-          <div style={{ position: 'absolute', inset: '0', zIndex: '50', background: 'rgba(3,4,6,0.88)', display: 'grid', placeItems: 'center', padding: '4rem' }}>
+          <div className="nx-desk-overlay" role="dialog" aria-modal="true" aria-label={`${vals.deskCode} Agent Desk`}>
             <div className="nx-wall-config" data-screen-label="Desk configuration" style={{ width: '100%', height: '100%', background: '#0E1116', border: '0.0625rem solid rgba(255,255,255,0.22)', display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr) auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', padding: '1.75rem 2.5rem', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', background: '#12161C' }}>
+              <div className="nx-desk-header" style={{ display: 'flex', alignItems: 'center', gap: '2rem', padding: '1.75rem 2.5rem', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', background: '#12161C' }}>
+                <button className="nx-desk-rail-toggle" type="button" onClick={vals.toggleDeskRail} aria-expanded={!vals.deskRailCollapsed} aria-controls="nx-stage-navigation">
+                  <span aria-hidden="true">{vals.deskRailCollapsed ? '›' : '‹'}</span>
+                  {vals.deskRailCollapsed ? 'Show stages' : 'Hide stages'}
+                </button>
                 <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <img src={vals.deskAvatar} alt="" style={{ width: '7rem', height: '7rem', objectFit: 'cover', display: 'block' }} />
                   <img src={vals.deskLogo} alt="" style={{ width: '7rem', height: '7rem', display: 'block' }} />
@@ -958,27 +962,28 @@ export default function NexusWallTemplate({ vals }) {
                   </button>
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)' }}>
-                <button type="button" onClick={vals.goIdentity} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgeIdentity}`, color: vals.inkIdentity, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
-                  ROLE
+              <div className="nx-desk-tabs" aria-label="Agent configuration sections" style={{ display: 'flex', alignItems: 'stretch', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)' }}>
+                <button type="button" className={vals.tabIdentity ? 'is-active' : ''} aria-pressed={vals.tabIdentity} onClick={vals.goIdentity} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgeIdentity}`, color: vals.inkIdentity, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
+                  <span>01</span><strong>Role</strong><small>Identity and remit</small>
                 </button>
-                <button type="button" onClick={vals.goPrompt} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgePrompt}`, color: vals.inkPrompt, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
-                  PROMPT
+                <button type="button" className={vals.tabPrompt ? 'is-active' : ''} aria-pressed={vals.tabPrompt} onClick={vals.goPrompt} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgePrompt}`, color: vals.inkPrompt, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
+                  <span>02</span><strong>Prompt</strong><small>Instructions and context</small>
                 </button>
-                <button type="button" onClick={vals.goModel} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgeModel}`, color: vals.inkModel, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
-                  MODEL
+                <button type="button" className={vals.showModel ? 'is-active' : ''} aria-pressed={vals.showModel} onClick={vals.goModel} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgeModel}`, color: vals.inkModel, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
+                  <span>03</span><strong>Model</strong><small>Runtime parameters</small>
                 </button>
-                <button type="button" onClick={vals.goTools} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgeTools}`, color: vals.inkTools, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
-                  TOOLS
+                <button type="button" className={vals.showTools ? 'is-active' : ''} aria-pressed={vals.showTools} onClick={vals.goTools} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgeTools}`, color: vals.inkTools, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
+                  <span>04</span><strong>Tools</strong><small>Capabilities and access</small>
                 </button>
-                <button type="button" onClick={vals.goPolicies} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgePolicies}`, color: vals.inkPolicies, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
-                  POLICIES
+                <button type="button" className={vals.showPolicies ? 'is-active' : ''} aria-pressed={vals.showPolicies} onClick={vals.goPolicies} style={{ padding: '1.25rem 3rem', background: 'transparent', border: '0', borderBottom: `0.3125rem solid ${vals.edgePolicies}`, color: vals.inkPolicies, fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.14em', cursor: 'pointer' }}>
+                  <span>05</span><strong>Policies</strong><small>Guardrails and authority</small>
                 </button>
               </div>
-              <div style={{ minHeight: '0', overflow: 'auto', padding: '2.5rem' }}>
+              <div className="nx-desk-content" style={{ minHeight: '0', overflow: 'auto', padding: '2.5rem' }}>
                 {vals.tabIdentity ? (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                    <div className="nx-desk-form nx-desk-form--identity" style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                      <header className="nx-desk-section-head"><span>01</span><div><h2>Operational identity</h2><p>Define the agent’s remit, context, approved data sources, and non-negotiable boundary.</p></div></header>
                       <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)', paddingTop: '0.5rem' }}>
                         Role
                       </span>
@@ -1002,7 +1007,8 @@ export default function NexusWallTemplate({ vals }) {
                 ) : null}
                 {vals.tabPrompt ? (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                    <div className="nx-desk-form nx-desk-form--prompt" style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                      <header className="nx-desk-section-head"><span>02</span><div><h2>Instruction design</h2><p>Write the operating prompt while preserving locked system rules and field-control boundaries.</p></div></header>
                       <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)', paddingTop: '0.5rem' }}>
                         Prompt
                       </span>
@@ -1018,7 +1024,8 @@ export default function NexusWallTemplate({ vals }) {
                 ) : null}
                 {vals.showModel ? (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                    <div className="nx-desk-form nx-desk-form--model" style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                      <header className="nx-desk-section-head"><span>03</span><div><h2>Runtime configuration</h2><p>Select the approved model and constrain reasoning depth, latency, and operating temperature.</p></div></header>
                       <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)', paddingTop: '0.5rem' }}>
                         Model
                       </span>
@@ -1054,10 +1061,11 @@ export default function NexusWallTemplate({ vals }) {
                 ) : null}
                 {vals.showTools ? (
                   <>
-                    <div style={{ display: 'grid', gap: '0.5rem', alignContent: 'start' }}>
+                    <div className="nx-desk-form nx-desk-form--tools" style={{ display: 'grid', gap: '0.5rem', alignContent: 'start' }}>
+                      <header className="nx-desk-section-head"><span>04</span><div><h2>Capabilities and access</h2><p>Review the tools available to this agent and the connector requirements for each capability.</p></div></header>
                       {(vals.toolRows || []).map((tool, $index) => (
                         <React.Fragment key={$index}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '9rem 8rem 34rem minmax(0, 1fr)', gap: '2rem', alignItems: 'center', padding: '0.75rem 0', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
+                          <div className="nx-desk-tool-row" style={{ display: 'grid', gridTemplateColumns: '9rem 8rem 34rem minmax(0, 1fr)', gap: '2rem', alignItems: 'center', padding: '0.75rem 0', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
                             <button type="button" onClick={tool.toggle} style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', padding: '0.375rem 0', background: tool.bg, border: `0.125rem solid ${tool.border}`, color: tool.ink, cursor: 'pointer' }}>
                               {tool.state}
                             </button>
@@ -1073,7 +1081,7 @@ export default function NexusWallTemplate({ vals }) {
                           </div>
                         </React.Fragment>
                       ))}
-                      <div style={{ display: 'grid', gridTemplateColumns: '34rem minmax(0, 1fr)', gap: '2rem', paddingTop: '1.25rem' }}>
+                      <div className="nx-desk-tool-summary" style={{ display: 'grid', gridTemplateColumns: '34rem minmax(0, 1fr)', gap: '2rem', paddingTop: '1.25rem' }}>
                         <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                           Locked action families
                         </span>
@@ -1086,10 +1094,11 @@ export default function NexusWallTemplate({ vals }) {
                 ) : null}
                 {vals.showPolicies ? (
                   <>
-                    <div style={{ display: 'grid', gap: '0.5rem', alignContent: 'start' }}>
+                    <div className="nx-desk-form nx-desk-form--policies" style={{ display: 'grid', gap: '0.5rem', alignContent: 'start' }}>
+                      <header className="nx-desk-section-head"><span>05</span><div><h2>Guardrails and authority</h2><p>Reference the policies that constrain this desk’s decisions, jurisdiction, and permitted actions.</p></div></header>
                       {(vals.deskPolicies || []).map((policy, $index) => (
                         <React.Fragment key={$index}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '38rem 16rem minmax(0, 1fr)', gap: '2.5rem', alignItems: 'baseline', padding: '0.875rem 0', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
+                          <div className="nx-desk-policy-row" style={{ display: 'grid', gridTemplateColumns: '38rem 16rem minmax(0, 1fr)', gap: '2.5rem', alignItems: 'baseline', padding: '0.875rem 0', borderBottom: '0.0625rem solid rgba(255,255,255,0.10)' }}>
                             <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-ink)' }}>
                               {policy.id}
                             </span>
@@ -1102,7 +1111,7 @@ export default function NexusWallTemplate({ vals }) {
                           </div>
                         </React.Fragment>
                       ))}
-                      <div style={{ paddingTop: '1.25rem', fontSize: '2rem', color: 'var(--nx-mute)', lineHeight: '1.28' }}>
+                      <div className="nx-desk-policy-note" style={{ paddingTop: '1.25rem', fontSize: '2rem', color: 'var(--nx-mute)', lineHeight: '1.28' }}>
                         Policy notes are reference. A note is never evidence and never opens an incident.
                       </div>
                     </div>
@@ -1110,7 +1119,8 @@ export default function NexusWallTemplate({ vals }) {
                 ) : null}
                 {vals.showRuleNotice ? (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                    <div className="nx-desk-form nx-desk-form--managed" style={{ display: 'grid', gridTemplateColumns: '26rem minmax(0, 1fr)', gap: '1.75rem 3rem', alignContent: 'start' }}>
+                      <header className="nx-desk-section-head"><span>03</span><div><h2>Managed runtime</h2><p>This desk remains deterministic until its server-side agent loop is explicitly enabled.</p></div></header>
                       <span style={{ fontSize: '1.75rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         Assessor
                       </span>
@@ -1133,7 +1143,7 @@ export default function NexusWallTemplate({ vals }) {
                   </>
                 ) : null}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', padding: '1.25rem 2.5rem', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', background: 'var(--nx-surface)' }}>
+              <div className="nx-desk-footer" style={{ display: 'flex', alignItems: 'center', padding: '1.25rem 2.5rem', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', background: 'var(--nx-surface)' }}>
                 <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', color: 'var(--nx-mute)' }}>
                   Edits apply to the next run of this desk. They never alter a frozen snapshot or a signed decision.
                 </span>
