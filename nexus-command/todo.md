@@ -119,16 +119,16 @@
 - [x] Make the decision, consequence, limitation, required approver, pending state, and signing record self-explanatory
 - [x] Normalize Stage 4 typography to a clear display, body, and mono data hierarchy
 - [x] Keep the entire Stage 4 workspace contained within the visible tab at desktop and command-wall resolutions
-- [ ] Validate signing behavior and all non-Stage 4 workflows, then push and confirm Railway deployment
+- [x] Validate signing behavior and all non-Stage 4 workflows, then push and confirm Railway deployment
 
 ## Stage 6 Visual Workflow Builder
 
-- [ ] Begin Stage 6 only after Stage 4 is visually validated, committed, and deployed
-- [ ] Keep the Workflow redesign confined to Stage 6 and preserve all existing workflow data semantics
-- [ ] Add branded source connectors for Box, Google Drive, and Microsoft SharePoint with approved recognizable logos
-- [ ] Include the existing sources, agents, stakeholder, decision, and operational workflow components in one complete catalog
-- [ ] Make every workflow component draggable within the canvas
-- [ ] Allow users to draw, select, and remove connections between compatible component ports
-- [ ] Preserve existing source-to-agent-to-stakeholder-to-decision meaning in the initial graph
-- [ ] Validate drag/connect interaction, layout containment, build, unit, browser, and non-Workflow regression safety
+- [x] Begin Stage 6 only after Stage 4 is visually validated, committed, and deployed
+- [x] Keep the Workflow redesign confined to Stage 6 and preserve all existing workflow data semantics
+- [x] Add branded source connectors for Box, Google Drive, and Microsoft SharePoint with approved recognizable logos
+- [x] Include the existing sources, agents, stakeholder, decision, and operational workflow components in one complete catalog
+- [x] Make every workflow component draggable within the canvas
+- [x] Allow users to draw, select, and remove connections between compatible component ports
+- [x] Preserve existing source-to-agent-to-stakeholder-to-decision meaning in the initial graph
+- [x] Validate drag/connect interaction, layout containment, build, unit, browser, and non-Workflow regression safety
 - [ ] Push the contained Workflow update and verify Railway deployment

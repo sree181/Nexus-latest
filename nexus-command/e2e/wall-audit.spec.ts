@@ -116,14 +116,45 @@ test('Stage 4 explains the decision, effect, limitation, stakeholders, and signi
   expect(contained).toBe(true);
 });
 
-test('workflow tab shows sources, agents, stakeholder, and decision', async ({ page }) => {
+test('Workflow provides branded connectors, a complete draggable catalog, and drawable connections', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: /Workflow/ }).click();
   await expect(page.locator('[data-screen-label="Workflow"]')).toBeVisible();
+  for (const connector of ['Box', 'Google Drive', 'Microsoft SharePoint']) {
+    await expect(page.locator(`[data-workflow-node="${connector}"]`)).toBeVisible();
+  }
   await expect(page.getByText('TomTom flow').first()).toBeVisible();
   await expect(page.getByText('ATLAS', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Stakeholder').first()).toBeVisible();
-  await expect(page.getByText('Decision').first()).toBeVisible();
+  await expect(page.getByText('Decision record', { exact: true })).toBeVisible();
+
+  const palette = page.locator('[data-workflow-palette]');
+  await expect(palette).toHaveCount(21);
+  expect(await palette.evaluateAll(items => items.every(item => item.getAttribute('draggable') === 'true'))).toBe(true);
+
+  const boxNode = page.locator('[data-workflow-node="Box"]').locator('xpath=..');
+  const before = await boxNode.boundingBox();
+  expect(before).not.toBeNull();
+  await page.mouse.move(before!.x + before!.width / 2, before!.y + before!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(before!.x + before!.width / 2 + 100, before!.y + before!.height / 2 + 70, { steps: 14 });
+  await page.mouse.up();
+  const after = await boxNode.boundingBox();
+  expect(after).not.toBeNull();
+  expect(Math.abs(after!.x - before!.x) + Math.abs(after!.y - before!.y)).toBeGreaterThan(20);
+
+  const edgeCount = await page.locator('.react-flow__edge').count();
+  const source = await page.locator('[data-workflow-node="Box"] .react-flow__handle-right').boundingBox();
+  const target = await page.locator('[data-workflow-node="ECHO"] .react-flow__handle-left').boundingBox();
+  expect(source && target).toBeTruthy();
+  await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 16 });
+  await page.mouse.up();
+  await expect.poll(() => page.locator('.react-flow__edge').count()).toBe(edgeCount + 1);
+
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(page.locator('.react-flow__edge')).toHaveCount(edgeCount);
 });
 
 test('desk tiles and screen tabs are press targets', async ({ page }) => {

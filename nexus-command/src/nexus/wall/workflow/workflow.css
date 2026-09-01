@@ -1,224 +1,133 @@
-/**
- * CIVIC INSTRUMENT PANEL
- * Workflow as municipal route map: large lane labels, scaled nodes, and spatial accountability.
- */
+/* CIVIC INSTRUMENT PANEL — Stage 6 only: a professional draggable accountability builder. */
 .nx-workflow {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-columns: minmax(260px, 20vw) minmax(0, 1fr);
-  min-height: 0;
-  background:
-    linear-gradient(90deg, rgba(7, 11, 16, 0.98), rgba(7, 11, 16, 0.72)),
-    url('/manus-storage/nexus-agency-coordination_a15e1a79.jpg') center / cover no-repeat;
-  color: var(--nx-ink);
-  font-size: 14px;
-}
-
-.nx-workflow__rail {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
-  padding: 26px 22px 24px;
-  border-right: 1px solid var(--nx-line);
-  background: rgba(12, 19, 27, 0.94);
-  min-height: 0;
-}
-
-.nx-workflow__rail h2 {
-  margin: 0;
-  font-family: Archivo, sans-serif;
-  max-width: 320px;
-  font-size: clamp(24px, 2vw, 34px);
-  font-weight: 620;
-  letter-spacing: -0.04em;
-  line-height: 1.02;
-}
-
-.nx-workflow__index {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--nx-accent);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.nx-workflow__rail p {
-  margin: 6px 0 0;
-  color: var(--nx-mute);
-  max-width: 340px;
-  line-height: 1.5;
-  font-size: 13px;
-}
-
-.nx-workflow__list {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  overflow: auto;
-  min-height: 0;
-}
-
-.nx-workflow__group {
-  display: grid;
-  gap: 6px;
-}
-
-.nx-workflow__group-title {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--nx-faint);
-}
-
-.nx-workflow__chip {
-  display: grid;
-  gap: 2px;
-  min-height: 54px;
-  padding: 11px 13px;
-  text-align: left;
-  border-radius: 0 7px 7px 0;
-  background: rgba(18, 29, 40, 0.88);
-  border: 1px solid var(--nx-line);
-  color: inherit;
-  cursor: grab;
-  touch-action: manipulation;
-}
-
-.nx-workflow__chip:active {
-  cursor: grabbing;
-}
-
-.nx-workflow__chip--armed {
-  border-color: var(--nx-accent);
-  background: var(--nx-accent-dim);
-}
-
-.nx-workflow__chip strong {
-  font-family: Archivo, sans-serif;
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.nx-workflow__chip span {
-  color: var(--nx-mute);
-  font-size: 11px;
-}
-
-.nx-workflow__chip--source { border-left: 3px solid var(--nx-mute); }
-.nx-workflow__chip--agent { border-left: 3px solid var(--nx-accent); }
-.nx-workflow__chip--stakeholder,
-.nx-workflow__chip--decision { border-left: 3px solid var(--nx-ink); }
-
-.nx-workflow__pane {
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  border-left: 1px solid rgba(242, 163, 58, 0.16);
-}
-
-.nx-workflow__pane .react-flow {
-  width: 100%;
-  height: 100%;
-}
-
-.nx-workflow .react-flow {
-  background: rgba(5, 8, 12, 0.70);
-}
-
-.nx-workflow .react-flow__controls {
-  box-shadow: none;
-  border: 1px solid var(--nx-line);
+  display: grid;
+  grid-template-columns: minmax(19rem, 23vw) minmax(0, 1fr);
+  background: #070b10;
+  color: var(--nx-ink);
+  font-family: var(--nx-font-body);
   overflow: hidden;
 }
 
-.nx-workflow .react-flow__controls-button {
-  background: var(--nx-surface);
-  border-bottom: 1px solid var(--nx-line);
-  fill: var(--nx-ink);
+.nx-workflow__rail {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1.5rem 1.25rem;
+  border-right: 0.0625rem solid rgba(194, 211, 225, 0.16);
+  background: rgba(11, 18, 27, 0.98);
 }
 
-.nx-workflow .react-flow__node-lane {
-  pointer-events: none;
+.nx-workflow__intro { display: grid; gap: 0.45rem; }
+.nx-workflow__index { color: var(--nx-accent); font-family: var(--nx-font-mono); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.nx-workflow__intro h2 { margin: 0; max-width: 22rem; color: var(--nx-ink); font-family: var(--nx-font-display); font-size: clamp(1.65rem, 2vw, 2.35rem); font-weight: 680; letter-spacing: -0.035em; line-height: 1.02; }
+.nx-workflow__intro p { margin: 0; max-width: 24rem; color: var(--nx-mute); font-size: 0.96rem; line-height: 1.42; }
+
+.nx-workflow__list { min-height: 0; display: grid; align-content: start; gap: 1rem; overflow: auto; padding-right: 0.25rem; }
+.nx-workflow__group { display: grid; gap: 0.4rem; }
+.nx-workflow__group > header { display: flex; align-items: center; justify-content: space-between; color: var(--nx-faint); font-family: var(--nx-font-mono); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.nx-workflow__group > header small { display: grid; place-items: center; width: 1.35rem; height: 1.35rem; border: 0.0625rem solid rgba(194, 211, 225, 0.16); color: var(--nx-mute); }
+
+.nx-workflow__chip {
+  min-width: 0;
+  min-height: 3.5rem;
+  display: grid;
+  grid-template-columns: 2.3rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 0.0625rem solid rgba(194, 211, 225, 0.14);
+  border-left: 0.2rem solid var(--chip-tone, var(--nx-mute));
+  border-radius: 0.25rem;
+  background: rgba(18, 29, 40, 0.76);
+  color: var(--nx-ink);
+  text-align: left;
+  cursor: grab;
+  touch-action: manipulation;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
-.nx-wf-lane {
-  min-width: 205px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--nx-accent);
-}
+.nx-workflow__chip:hover,
+.nx-workflow__chip:focus-visible { border-color: rgba(246, 163, 64, 0.68); background: rgba(26, 39, 53, 0.96); outline: none; transform: translateX(0.15rem); }
+.nx-workflow__chip:active { cursor: grabbing; }
+.nx-workflow__chip--armed { border-color: var(--nx-accent); background: rgba(246, 163, 64, 0.11); }
+.nx-workflow__chip--connector { --chip-tone: #3da6e8; }
+.nx-workflow__chip--source { --chip-tone: #55c9a9; }
+.nx-workflow__chip--agent { --chip-tone: #f2a33a; }
+.nx-workflow__chip--stakeholder { --chip-tone: #7da9ff; }
+.nx-workflow__chip--decision { --chip-tone: #e68be2; }
+
+.nx-workflow__chip-mark { width: 2.3rem; height: 2.3rem; display: grid; place-items: center; border: 0.0625rem solid rgba(194, 211, 225, 0.14); background: rgba(0, 0, 0, 0.22); }
+.nx-workflow__chip-mark svg,
+.nx-workflow__chip-mark img { width: 1.35rem; height: 1.35rem; object-fit: contain; }
+.nx-workflow__chip > span:last-child { min-width: 0; display: grid; gap: 0.1rem; }
+.nx-workflow__chip strong { min-width: 0; overflow: hidden; color: var(--nx-ink); font-family: var(--nx-font-display); font-size: 0.93rem; font-weight: 650; line-height: 1.12; text-overflow: ellipsis; white-space: nowrap; }
+.nx-workflow__chip small { min-width: 0; overflow: hidden; color: var(--nx-mute); font-size: 0.76rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+
+.nx-workflow__pane { min-width: 0; min-height: 0; position: relative; border-left: 0.0625rem solid rgba(242, 163, 58, 0.12); }
+.nx-workflow__pane .react-flow { width: 100%; height: 100%; background: radial-gradient(circle at 50% 45%, rgba(25, 40, 55, 0.42), transparent 56%), #05090e; }
+.nx-workflow .react-flow__node-lane { pointer-events: none; }
+.nx-wf-lane { min-width: 13rem; color: var(--nx-accent); font-family: var(--nx-font-mono); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 
 .nx-wf-node {
-  min-width: 205px;
-  max-width: 245px;
-  padding: 13px 15px 14px;
-  border-radius: 0 8px 8px 0;
-  background: rgba(12, 19, 27, 0.96);
-  border: 1px solid var(--nx-line);
+  --node-tone: var(--node-brand, #91a4b6);
+  min-width: 13.5rem;
+  max-width: 15.5rem;
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem;
+  border: 0.0625rem solid rgba(194, 211, 225, 0.2);
+  border-top: 0.22rem solid var(--node-tone);
+  border-radius: 0.3rem;
+  background: rgba(11, 18, 27, 0.98);
   color: var(--nx-ink);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0.8rem 2.4rem rgba(0, 0, 0, 0.32);
 }
 
-.nx-workflow .react-flow__node.selected .nx-wf-node {
-  border-color: var(--nx-accent);
-}
+.nx-wf-node--connector { --node-tone: var(--node-brand); }
+.nx-wf-node--source { --node-tone: #55c9a9; }
+.nx-wf-node--agent { --node-tone: #f2a33a; }
+.nx-wf-node--stakeholder { --node-tone: #7da9ff; background: rgba(16, 26, 40, 0.98); }
+.nx-wf-node--decision { --node-tone: #e68be2; background: rgba(29, 19, 32, 0.98); }
+.nx-wf-node--live { box-shadow: 0 0 0 0.08rem rgba(85, 201, 169, 0.35), 0 0.8rem 2.4rem rgba(0, 0, 0, 0.32); }
+.nx-workflow .react-flow__node.selected .nx-wf-node { border-color: var(--nx-accent); box-shadow: 0 0 0 0.12rem rgba(246, 163, 64, 0.38), 0 1rem 3rem rgba(0, 0, 0, 0.38); }
 
-.nx-wf-node__kicker {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--nx-mute);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+.nx-wf-node__mark { width: 2.75rem; height: 2.75rem; display: grid; place-items: center; color: var(--node-tone); border: 0.0625rem solid color-mix(in srgb, var(--node-tone) 52%, transparent); background: color-mix(in srgb, var(--node-tone) 10%, transparent); }
+.nx-wf-node__mark svg,
+.nx-wf-node__mark img { width: 1.65rem; height: 1.65rem; object-fit: contain; }
+.nx-wf-node__copy { min-width: 0; display: grid; gap: 0.12rem; }
+.nx-wf-node__kicker { color: var(--node-tone); font-family: var(--nx-font-mono); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.nx-wf-node__title { min-width: 0; overflow: hidden; color: var(--nx-ink); font-family: var(--nx-font-display); font-size: 1.02rem; font-weight: 700; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.nx-wf-node__note { min-width: 0; overflow: hidden; color: var(--nx-mute); font-size: 0.78rem; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 
-.nx-wf-node__title {
-  display: block;
-  font-family: Archivo, sans-serif;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
+.nx-workflow .react-flow__handle { width: 0.9rem; height: 0.9rem; border: 0.14rem solid #081019; background: var(--node-tone, var(--nx-accent)); box-shadow: 0 0 0 0.07rem rgba(255,255,255,0.38); }
+.nx-workflow .react-flow__handle-left { left: -0.5rem; }
+.nx-workflow .react-flow__handle-right { right: -0.5rem; }
+.nx-workflow .react-flow__edge-path { stroke: var(--nx-accent); stroke-width: 2.1; }
+.nx-workflow .react-flow__edge.selected .react-flow__edge-path { stroke: #fff4df; stroke-width: 3.4; }
 
-.nx-wf-node__note {
-  display: block;
-  margin-top: 4px;
-  color: var(--nx-mute);
-  font-size: 13px;
-  line-height: 1.3;
-}
+.nx-workflow__toolbar { display: flex; align-items: center; gap: 0.45rem; margin: 0.75rem; padding: 0.45rem; border: 0.0625rem solid rgba(194, 211, 225, 0.16); background: rgba(7, 13, 20, 0.92); box-shadow: 0 0.8rem 2.5rem rgba(0,0,0,0.28); }
+.nx-workflow__toolbar span,
+.nx-workflow__toolbar button { min-height: 2rem; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.55rem; border: 0; color: var(--nx-mute); background: transparent; font-family: var(--nx-font-body); font-size: 0.76rem; white-space: nowrap; }
+.nx-workflow__toolbar svg { width: 0.95rem; height: 0.95rem; }
+.nx-workflow__toolbar button { border-left: 0.0625rem solid rgba(194, 211, 225, 0.13); color: var(--nx-ink); cursor: pointer; }
+.nx-workflow__toolbar button:hover:not(:disabled),
+.nx-workflow__toolbar button:focus-visible { color: var(--nx-accent); outline: none; }
+.nx-workflow__toolbar button:disabled { opacity: 0.35; cursor: default; }
 
-.nx-wf-node--source { border-top: 3px solid var(--nx-mute); }
-.nx-wf-node--source.nx-wf-node--live { border-top-color: var(--nx-accent); }
-.nx-wf-node--agent { border-top: 3px solid var(--nx-accent); }
-.nx-wf-node--stakeholder,
-.nx-wf-node--decision { border-top: 3px solid var(--nx-accent); background: var(--nx-accent-dim); }
+.nx-workflow .react-flow__controls { overflow: hidden; border: 0.0625rem solid rgba(194, 211, 225, 0.18); box-shadow: none; }
+.nx-workflow .react-flow__controls-button { border-bottom: 0.0625rem solid rgba(194, 211, 225, 0.14); background: var(--nx-surface); fill: var(--nx-ink); }
+.nx-workflow .react-flow__minimap { border: 0.0625rem solid rgba(194, 211, 225, 0.16); background: rgba(7, 13, 20, 0.92); }
+.nx-workflow .react-flow__attribution { display: none; }
 
-.nx-wf-node--live .nx-wf-node__kicker { color: var(--nx-accent); }
-
-.nx-workflow .react-flow__handle {
-  width: 16px;
-  height: 16px;
-  background: var(--nx-accent);
-  border: 0;
-}
-
-.nx-workflow .react-flow__edge-path {
-  stroke: var(--nx-accent);
-  stroke-width: 2;
-}
-
-.nx-workflow .react-flow__attribution {
-  display: none;
+@media (max-width: 1100px) {
+  .nx-workflow { grid-template-columns: minmax(16rem, 30vw) minmax(0, 1fr); }
+  .nx-workflow__toolbar > span { display: none; }
 }

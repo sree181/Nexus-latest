@@ -1,6 +1,13 @@
-/** Charter wiring: a desk may only read the connectors it declares. */
+/* CIVIC INSTRUMENT PANEL — Stage 6 only: complete, branded workflow component catalog. */
+export type WorkflowKind = 'connector' | 'source' | 'agent' | 'stakeholder' | 'decision';
 
-export type WorkflowKind = 'source' | 'agent' | 'stakeholder' | 'decision';
+export interface WorkflowConnector {
+  id: string;
+  label: string;
+  agency: string;
+  icon: 'box' | 'google-drive' | 'sharepoint';
+  brand: string;
+}
 
 export interface WorkflowSource {
   id: string;
@@ -15,6 +22,21 @@ export interface WorkflowAgent {
   role: string;
   connectors: string[];
 }
+
+export interface WorkflowPaletteItem {
+  kind: WorkflowKind;
+  id: string;
+  label: string;
+  note: string;
+  icon: string;
+  brand?: string;
+}
+
+export const WORKFLOW_CONNECTORS: WorkflowConnector[] = [
+  { id: 'box-connector', label: 'Box', agency: 'Cloud content', icon: 'box', brand: '#0061D5' },
+  { id: 'google-drive-connector', label: 'Google Drive', agency: 'Workspace files', icon: 'google-drive', brand: '#34A853' },
+  { id: 'sharepoint-connector', label: 'Microsoft SharePoint', agency: 'Team sites and records', icon: 'sharepoint', brand: '#038387' },
+];
 
 export const WORKFLOW_SOURCES: WorkflowSource[] = [
   { id: 'tomtom-traffic-flow-v1', label: 'TomTom flow', agency: 'TomTom', aliases: ['tomtom'] },
@@ -38,11 +60,12 @@ export const WORKFLOW_AGENTS: WorkflowAgent[] = [
   { id: 'echo', label: 'ECHO', role: 'Communications', connectors: ['aldot-algo-traffic-v1', 'nexus-siem-alerts-v1'] },
 ];
 
-export const PALETTE: { kind: WorkflowKind; id: string; label: string; note: string }[] = [
-  ...WORKFLOW_SOURCES.map(item => ({ kind: 'source' as const, id: item.id, label: item.label, note: item.agency })),
-  ...WORKFLOW_AGENTS.map(item => ({ kind: 'agent' as const, id: item.id, label: item.label, note: item.role })),
-  { kind: 'stakeholder', id: 'stakeholder', label: 'Stakeholder', note: 'Named human' },
-  { kind: 'decision', id: 'decision', label: 'Decision', note: 'Signed record' },
+export const PALETTE: WorkflowPaletteItem[] = [
+  ...WORKFLOW_CONNECTORS.map(item => ({ kind: 'connector' as const, id: item.id, label: item.label, note: item.agency, icon: item.icon, brand: item.brand })),
+  ...WORKFLOW_SOURCES.map(item => ({ kind: 'source' as const, id: item.id, label: item.label, note: item.agency, icon: 'source' })),
+  ...WORKFLOW_AGENTS.map(item => ({ kind: 'agent' as const, id: item.id, label: item.label, note: item.role, icon: 'agent' })),
+  { kind: 'stakeholder', id: 'stakeholder', label: 'Stakeholder', note: 'Named human', icon: 'stakeholder' },
+  { kind: 'decision', id: 'decision', label: 'Decision', note: 'Signed record', icon: 'decision' },
 ];
 
 export function sourceIsLive(source: WorkflowSource, haystack: string): boolean {

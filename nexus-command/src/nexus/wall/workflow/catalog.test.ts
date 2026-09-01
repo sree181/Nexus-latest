@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PALETTE, WORKFLOW_AGENTS, WORKFLOW_SOURCES, sourceIsLive } from './catalog';
+import { PALETTE, WORKFLOW_AGENTS, WORKFLOW_CONNECTORS, WORKFLOW_SOURCES, sourceIsLive } from './catalog';
 
 describe('workflow catalog', () => {
   it('routes every declared connector through a named source box', () => {
@@ -12,11 +12,14 @@ describe('workflow catalog', () => {
     }
   });
 
-  it('keeps a palette that can drop sources, agents, stakeholder, and decision', () => {
+  it('keeps a complete palette with branded connectors and every accountability component', () => {
+    expect(PALETTE.some(item => item.kind === 'connector')).toBe(true);
     expect(PALETTE.some(item => item.kind === 'source')).toBe(true);
     expect(PALETTE.some(item => item.kind === 'agent')).toBe(true);
     expect(PALETTE.some(item => item.kind === 'stakeholder')).toBe(true);
     expect(PALETTE.some(item => item.kind === 'decision')).toBe(true);
+    expect(WORKFLOW_CONNECTORS.map(item => item.label)).toEqual(['Box', 'Google Drive', 'Microsoft SharePoint']);
+    expect(WORKFLOW_CONNECTORS.every(item => Boolean(item.icon && item.brand))).toBe(true);
   });
 
   it('marks a source live from a feed haystack without inventing a match', () => {
