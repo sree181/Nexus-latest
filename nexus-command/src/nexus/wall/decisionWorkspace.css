@@ -1,0 +1,189 @@
+/* CIVIC INSTRUMENT PANEL — Stage 4 only: contained accountability with one disciplined type system. */
+.nx-decision-workspace {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1.15rem;
+  padding: 1.5rem 3rem 1.75rem;
+  color: var(--nx-ink);
+  font-family: var(--nx-font-body);
+  overflow: hidden;
+}
+
+.nx-decision-workspace__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 3rem;
+  padding-bottom: 1rem;
+  border-bottom: 0.0625rem solid rgba(194, 211, 225, 0.14);
+}
+
+.nx-decision-workspace__header > div:first-child { display: grid; gap: 0.2rem; }
+
+.nx-decision-workspace__header > div:first-child > span,
+.nx-decision-expiry > span {
+  color: var(--nx-faint);
+  font-family: var(--nx-font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nx-decision-workspace__header h1 {
+  margin: 0;
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 3rem;
+  font-weight: 720;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.nx-decision-workspace__header p {
+  margin: 0;
+  color: var(--nx-mute);
+  font-size: 1.35rem;
+  line-height: 1.3;
+}
+
+.nx-decision-expiry { flex: none; display: grid; justify-items: end; gap: 0.25rem; }
+.nx-decision-expiry > strong { color: var(--nx-accent); font-family: var(--nx-font-mono); font-size: 1.4rem; font-weight: 650; }
+
+.nx-decision-grid {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.35fr 0.9fr 1.05fr;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-areas:
+    "primary effect stakeholders"
+    "primary limit stakeholders"
+    "signing signing signing";
+  gap: 1rem;
+}
+
+.nx-decision-card,
+.nx-decision-signing {
+  min-width: 0;
+  min-height: 0;
+  border: 0.0625rem solid rgba(194, 211, 225, 0.16);
+  background: rgba(11, 18, 27, 0.88);
+  overflow: hidden;
+}
+
+.nx-decision-card { display: grid; align-content: start; gap: 1.25rem; padding: 1.5rem; }
+.nx-decision-card--primary { grid-area: primary; align-content: space-between; border-top: 0.3rem solid #f6a340; background: linear-gradient(145deg, rgba(246, 163, 64, 0.09), rgba(11, 18, 27, 0.9) 42%); }
+.nx-decision-card--effect { grid-area: effect; border-top: 0.3rem solid #55c9a9; }
+.nx-decision-card--limit { grid-area: limit; border-top: 0.3rem solid #ef7373; }
+.nx-decision-card--stakeholders { grid-area: stakeholders; border-top: 0.3rem solid #7da9ff; }
+
+.nx-decision-card__header,
+.nx-decision-signing__heading { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 1rem; }
+
+.nx-decision-card__icon,
+.nx-decision-signing__heading > span {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: grid;
+  place-items: center;
+  border: 0.0625rem solid currentColor;
+  color: var(--nx-accent);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.nx-decision-card--effect .nx-decision-card__icon { color: #55c9a9; }
+.nx-decision-card--limit .nx-decision-card__icon { color: #ef7373; }
+.nx-decision-card--stakeholders .nx-decision-card__icon { color: #7da9ff; }
+.nx-decision-card__icon svg,
+.nx-decision-signing__heading svg { width: 2rem; height: 2rem; stroke-width: 1.7; }
+
+.nx-decision-card__header > div,
+.nx-decision-signing__heading > div { display: grid; gap: 0.2rem; min-width: 0; }
+
+.nx-decision-card__header span,
+.nx-decision-signing__heading small {
+  color: var(--nx-mute);
+  font-family: var(--nx-font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nx-decision-card__header h2,
+.nx-decision-signing__heading h2 {
+  margin: 0;
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 1.72rem;
+  font-weight: 680;
+  line-height: 1.08;
+}
+
+.nx-decision-card > p {
+  margin: 0;
+  color: var(--nx-mute);
+  font-size: 1.34rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.nx-decision-card > .nx-decision-card__lead {
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 2.45rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+}
+
+.nx-decision-card__state { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.nx-decision-card__state > div { display: grid; gap: 0.3rem; padding: 0.85rem; border: 0.0625rem solid rgba(194, 211, 225, 0.12); background: rgba(0, 0, 0, 0.2); }
+.nx-decision-card__state dt,
+.nx-decision-signing__meta dt { color: var(--nx-faint); font-size: 0.82rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; }
+.nx-decision-card__state dd,
+.nx-decision-signing__meta dd { margin: 0; color: var(--nx-ink); font-family: var(--nx-font-mono); font-size: 1rem; overflow-wrap: anywhere; }
+
+.nx-decision-stakeholders { display: grid; gap: 0.65rem; }
+.nx-decision-stakeholders article { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: 0.9rem; border: 0.0625rem solid rgba(194, 211, 225, 0.12); background: rgba(0, 0, 0, 0.2); }
+.nx-decision-stakeholders article > div { min-width: 0; display: grid; gap: 0.2rem; }
+.nx-decision-stakeholders article strong { color: var(--nx-ink); font-family: var(--nx-font-display); font-size: 1.2rem; line-height: 1.15; }
+.nx-decision-stakeholders article span { color: var(--nx-mute); font-size: 1rem; line-height: 1.25; }
+.nx-decision-stakeholders__status { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--stakeholder-tone) !important; font-family: var(--nx-font-mono); font-weight: 700; }
+.nx-decision-stakeholders__status i { width: 0.7rem; height: 0.7rem; border-radius: 50%; }
+.nx-decision-stakeholders__effect { margin-top: auto; display: grid; gap: 0.35rem; padding-top: 1rem; border-top: 0.0625rem solid rgba(194, 211, 225, 0.12); }
+.nx-decision-stakeholders__effect strong { color: #7da9ff; font-family: var(--nx-font-mono); font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.nx-decision-stakeholders__effect span { color: var(--nx-mute); font-size: 1.08rem; line-height: 1.35; }
+
+.nx-decision-signing {
+  grid-area: signing;
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.9fr) minmax(20rem, 0.85fr) minmax(32rem, 1.25fr) minmax(28rem, 1.2fr);
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 1.35rem;
+  border-left: 0.3rem solid var(--nx-accent);
+  background: rgba(246, 163, 64, 0.055);
+}
+
+.nx-decision-signing__heading > span { width: 3rem; height: 3rem; color: var(--nx-accent); }
+.nx-decision-signing__heading h2 { font-size: 1.42rem; }
+.nx-decision-signing__operator { min-width: 0; display: grid; gap: 0.25rem; }
+.nx-decision-signing__operator strong { color: var(--nx-ink); font-family: var(--nx-font-display); font-size: 1.42rem; line-height: 1.1; overflow-wrap: anywhere; }
+.nx-decision-signing__operator span { color: var(--nx-mute); font-size: 1rem; line-height: 1.25; }
+.nx-decision-signing__meta { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem 1rem; }
+.nx-decision-signing__meta > div { min-width: 0; display: grid; gap: 0.15rem; }
+.nx-decision-signing > p { margin: 0; color: var(--nx-mute); font-size: 1rem; line-height: 1.35; }
+
+@media (max-width: 1100px) {
+  .nx-decision-workspace { padding: 1.2rem 1.5rem; }
+  .nx-decision-grid { grid-template-columns: 1.2fr 1fr; grid-template-rows: repeat(3, minmax(0, auto)); grid-template-areas: "primary primary" "effect limit" "stakeholders stakeholders" "signing signing"; overflow: auto; }
+  .nx-decision-signing { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

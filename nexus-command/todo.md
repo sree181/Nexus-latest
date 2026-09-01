@@ -110,3 +110,25 @@
 - [x] Normalize Stage 3 typography to a consistent display, body, and data-role scale
 - [x] Validate default and selected-path states at desktop and 4K, rerun build/unit/browser suites, and confirm other stages are unchanged
 - [ ] Push the contained refinement and verify Railway deployment
+
+## Stage 4 Decision Workspace
+
+- [x] Keep every change confined to Stage 4 The Decision and preserve all decision/signing data and handlers
+- [x] Replace the text-only information blocks with four icon-led sections: Decision, Expected Effect, Stated Limitation, and Decision Stakeholders
+- [x] Use one coherent line-icon system derived from the provided decision-making, domino, hand, and stakeholder references
+- [x] Make the decision, consequence, limitation, required approver, pending state, and signing record self-explanatory
+- [x] Normalize Stage 4 typography to a clear display, body, and mono data hierarchy
+- [x] Keep the entire Stage 4 workspace contained within the visible tab at desktop and command-wall resolutions
+- [ ] Validate signing behavior and all non-Stage 4 workflows, then push and confirm Railway deployment
+
+## Stage 6 Visual Workflow Builder
+
+- [ ] Begin Stage 6 only after Stage 4 is visually validated, committed, and deployed
+- [ ] Keep the Workflow redesign confined to Stage 6 and preserve all existing workflow data semantics
+- [ ] Add branded source connectors for Box, Google Drive, and Microsoft SharePoint with approved recognizable logos
+- [ ] Include the existing sources, agents, stakeholder, decision, and operational workflow components in one complete catalog
+- [ ] Make every workflow component draggable within the canvas
+- [ ] Allow users to draw, select, and remove connections between compatible component ports
+- [ ] Preserve existing source-to-agent-to-stakeholder-to-decision meaning in the initial graph
+- [ ] Validate drag/connect interaction, layout containment, build, unit, browser, and non-Workflow regression safety
+- [ ] Push the contained Workflow update and verify Railway deployment

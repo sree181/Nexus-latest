@@ -1,6 +1,7 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, CircleSlash2 } from 'lucide-react';
+import { AlertTriangle, Blocks, BrainCircuit, CheckCircle2, CircleSlash2, FileSignature, Hand, UsersRound } from 'lucide-react';
 import EvidenceSankey from './EvidenceSankey';
+import './decisionWorkspace.css';
 import WorkflowBoard from './workflow/WorkflowBoard';
 
 /* CIVIC INSTRUMENT PANEL: presentation only; all live values and handlers come from NexusWall.renderVals(). */
@@ -509,118 +510,84 @@ export default function NexusWallTemplate({ vals }) {
         ) : null}
         {vals.isDecision ? (
           <>
-            <div style={{ position: 'absolute', inset: '0', padding: '1.5rem 3rem 1.75rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                  The decision · the wall witnesses, the desk signs
-                </span>
-                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem', color: 'var(--nx-accent)' }}>
-                  {vals.recExpiresRemaining}
-                </span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 72rem 76rem', gap: '2rem' }}>
-                <div style={{ display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                    What is being decided
-                  </span>
-                  <div style={{ fontSize: '2.625rem', fontWeight: '600', lineHeight: '1.14', textWrap: 'pretty' }}>
-                    {vals.recAction}
-                  </div>
-                  <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
-                  <div style={{ display: 'grid', gap: '0.375rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                      Expected effect
-                    </span>
-                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-ink)', lineHeight: '1.24' }}>
-                      {vals.expectedEffect}
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gap: '0.375rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
-                      Stated limitations
-                    </span>
-                    <span style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', lineHeight: '1.24' }}>
-                      {vals.limitations}
-                    </span>
-                  </div>
+            <div className="nx-decision-workspace" data-screen-label="Decision workspace">
+              <header className="nx-decision-workspace__header">
+                <div>
+                  <span>Stage 04 · accountable decision</span>
+                  <h1>The decision</h1>
+                  <p>The wall presents the record; a named stakeholder decides and signs.</p>
                 </div>
-                <div style={{ background: 'var(--nx-surface)', padding: '1.25rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                    Who must agree
-                  </span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '0.75rem 1.5rem', alignItems: 'center' }}>
+                <div className="nx-decision-expiry">
+                  <span>Decision window</span>
+                  <strong>{vals.recExpiresRemaining}</strong>
+                </div>
+              </header>
+
+              <div className="nx-decision-grid">
+                <section className="nx-decision-card nx-decision-card--primary">
+                  <header className="nx-decision-card__header">
+                    <span className="nx-decision-card__icon"><BrainCircuit aria-hidden="true" /></span>
+                    <div><span>Decision</span><h2>What must be resolved</h2></div>
+                  </header>
+                  <p className="nx-decision-card__lead">{vals.recAction}</p>
+                  <dl className="nx-decision-card__state">
+                    <div><dt>Current state</dt><dd>{vals.recState}</dd></div>
+                    <div><dt>Version</dt><dd>{vals.recVersion}</dd></div>
+                  </dl>
+                </section>
+
+                <section className="nx-decision-card nx-decision-card--effect">
+                  <header className="nx-decision-card__header">
+                    <span className="nx-decision-card__icon"><Blocks aria-hidden="true" /></span>
+                    <div><span>Expected effect</span><h2>What follows if approved</h2></div>
+                  </header>
+                  <p>{vals.expectedEffect}</p>
+                </section>
+
+                <section className="nx-decision-card nx-decision-card--limit">
+                  <header className="nx-decision-card__header">
+                    <span className="nx-decision-card__icon"><Hand aria-hidden="true" /></span>
+                    <div><span>Stated limitation</span><h2>What this decision cannot do</h2></div>
+                  </header>
+                  <p>{vals.limitations}</p>
+                </section>
+
+                <section className="nx-decision-card nx-decision-card--stakeholders">
+                  <header className="nx-decision-card__header">
+                    <span className="nx-decision-card__icon"><UsersRound aria-hidden="true" /></span>
+                    <div><span>Decision stakeholders</span><h2>Who must decide</h2></div>
+                  </header>
+                  <div className="nx-decision-stakeholders">
                     {(vals.approvals || []).map(party => (
-                      <React.Fragment key={party.id}>
-                        <div>
-                          <div style={{ fontSize: '2.125rem', fontWeight: '600' }}>
-                            {party.agency}
-                          </div>
-                          <div style={{ fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
-                            {party.role}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <span style={{ width: '1.125rem', height: '1.125rem', borderRadius: '50%', background: party.fill }}></span>
-                          <span style={{ fontSize: '1.75rem', fontWeight: '600', color: party.statusColor }}>
-                            {party.status}
-                          </span>
-                        </div>
-                      </React.Fragment>
+                      <article key={party.id} style={{ '--stakeholder-tone': party.statusColor }}>
+                        <div><strong>{party.agency}</strong><span>{party.role}</span></div>
+                        <span className="nx-decision-stakeholders__status"><i style={{ background: party.fill }}></i>{party.status}</span>
+                      </article>
                     ))}
                   </div>
-                  <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
-                  <div style={{ display: 'grid', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                      What approval does
-                    </span>
-                    <span style={{ fontSize: '1.75rem', color: 'var(--nx-ink)', lineHeight: '1.24' }}>
-                      Creates accountable agency commitments. It does not change a signal, close a road, or dispatch a crew.
-                    </span>
+                  <div className="nx-decision-stakeholders__effect">
+                    <strong>Approval creates</strong>
+                    <span>Accountable agency commitments. It does not change a signal, close a road, or dispatch a crew.</span>
                   </div>
-                </div>
-                <div style={{ background: 'rgba(232,119,34,0.07)', border: '0.0625rem solid rgba(232,119,34,0.4)', padding: '1.25rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '0.875rem' }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
-                    How it will be signed
-                  </span>
-                  <div>
-                    <div style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '3.25rem', fontWeight: '700', lineHeight: '1.05' }}>
-                      {vals.operatorName}
-                    </div>
-                    <div style={{ fontSize: '1.875rem', color: 'var(--nx-mute)', marginTop: '0.375rem' }}>
-                      {vals.operatorRole}
-                    </div>
+                </section>
+
+                <section className="nx-decision-signing">
+                  <header className="nx-decision-signing__heading">
+                    <span><FileSignature aria-hidden="true" /></span>
+                    <div><small>Signing record</small><h2>How accountability is recorded</h2></div>
+                  </header>
+                  <div className="nx-decision-signing__operator">
+                    <strong>{vals.operatorName}</strong>
+                    <span>{vals.operatorRole}</span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '20rem minmax(0, 1fr)', gap: '0.625rem 1.5rem', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.625rem' }}>
-                    <span style={{ color: 'var(--nx-mute)' }}>
-                      expected version
-                    </span>
-                    <span>
-                      {vals.recVersion}
-                    </span>
-                    <span style={{ color: 'var(--nx-mute)' }}>
-                      expected state
-                    </span>
-                    <span>
-                      {vals.recState}
-                    </span>
-                    <span style={{ color: 'var(--nx-mute)' }}>
-                      snapshot sha256
-                    </span>
-                    <span>
-                      {vals.hashShort}
-                    </span>
-                    <span style={{ color: 'var(--nx-mute)' }}>
-                      decided at
-                    </span>
-                    <span>
-                      {vals.decidedAt}
-                    </span>
-                  </div>
-                  <div style={{ height: '0.0625rem', background: 'rgba(232,119,34,0.25)' }}></div>
-                  <div style={{ fontSize: '1.75rem', color: 'var(--nx-ink)', lineHeight: '1.24' }}>
-                    The wall cannot sign. It records who did, when, against which frozen evidence — and refuses the write if any of it has moved.
-                  </div>
-                </div>
+                  <dl className="nx-decision-signing__meta">
+                    <div><dt>Expected version</dt><dd>{vals.recVersion}</dd></div>
+                    <div><dt>Expected state</dt><dd>{vals.recState}</dd></div>
+                    <div><dt>Snapshot</dt><dd>{vals.hashShort}</dd></div>
+                    <div><dt>Decided at</dt><dd>{vals.decidedAt}</dd></div>
+                  </dl>
+                  <p>The wall cannot sign. It records who decided, when, and against which frozen evidence; the write is refused if any input has moved.</p>
+                </section>
               </div>
             </div>
           </>

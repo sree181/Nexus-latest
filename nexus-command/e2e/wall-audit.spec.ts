@@ -101,6 +101,21 @@ test('Stage 2 differentiates agents, desks, findings, and participation without 
   expect(overflow).toBe('clip');
 });
 
+test('Stage 4 explains the decision, effect, limitation, stakeholders, and signing record in one contained view', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: /The decision/ }).click();
+  const workspace = page.locator('[data-screen-label="Decision workspace"]');
+  await expect(workspace).toBeVisible();
+  await expect(page.getByText('What must be resolved', { exact: true })).toBeVisible();
+  await expect(page.getByText('What follows if approved', { exact: true })).toBeVisible();
+  await expect(page.getByText('What this decision cannot do', { exact: true })).toBeVisible();
+  await expect(page.getByText('Who must decide', { exact: true })).toBeVisible();
+  await expect(page.getByText('How accountability is recorded', { exact: true })).toBeVisible();
+  await expect(page.locator('.nx-decision-card__icon svg')).toHaveCount(4);
+  const contained = await workspace.evaluate(el => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1);
+  expect(contained).toBe(true);
+});
+
 test('workflow tab shows sources, agents, stakeholder, and decision', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: /Workflow/ }).click();
