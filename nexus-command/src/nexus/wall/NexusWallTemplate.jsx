@@ -80,7 +80,7 @@ export default function NexusWallTemplate({ vals }) {
             <div className="nx-wall-picture" style={{ position: 'absolute', inset: '0', display: 'grid', gridTemplateColumns: '92rem minmax(0, 1fr)' }}>
               <section className="nx-wall-priority" data-screen-label="Priority card" style={{ background: 'var(--nx-surface)', borderRight: '0.0625rem solid var(--nx-line)', display: 'grid', overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', minHeight: '0', height: '100%', borderLeft: '0.5rem solid var(--nx-accent)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', padding: '1.75rem 2.5rem 1.5rem', borderBottom: '0.0625rem solid var(--nx-line)' }}>
+                  <div className="nx-wall-priority__meta" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', padding: '1.75rem 2.5rem 1.5rem', borderBottom: '0.0625rem solid var(--nx-line)' }}>
                     <span style={{ flex: 'none', background: 'var(--nx-accent)', color: 'var(--nx-accent-ink)', padding: '0.5rem 0.875rem', fontFamily: 'Archivo, sans-serif', fontSize: '1.375rem', fontWeight: '700', letterSpacing: '0.1em', lineHeight: '1' }}>
                       {vals.sevLabel}
                     </span>
@@ -88,19 +88,19 @@ export default function NexusWallTemplate({ vals }) {
                       {vals.incidentIdLine}
                     </span>
                   </div>
-                  <div style={{ display: 'grid', alignContent: 'start', gap: '2rem', minHeight: '0', overflow: 'auto', padding: '2.25rem 2.5rem' }}>
+                  <div className="nx-wall-priority__body" style={{ display: 'grid', alignContent: 'start', gap: '2rem', minHeight: '0', overflow: 'auto', padding: '2.25rem 2.5rem' }}>
                     <div style={{ display: 'grid', gap: '0.875rem' }}>
-                      <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3rem', fontWeight: '650', lineHeight: '1.12', letterSpacing: '-0.03em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                      <div className="nx-wall-priority__title" style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3rem', fontWeight: '650', lineHeight: '1.12', letterSpacing: '-0.03em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                         {vals.incidentTitle}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
+                      <div className="nx-wall-priority__owner" style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', fontSize: '1.625rem', color: 'var(--nx-mute)' }}>
                         <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.25rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--nx-faint)' }}>
                           Owner
                         </span>
                         <span>{vals.incidentOwner}</span>
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gap: '0.75rem', background: 'var(--nx-raised)', padding: '1.5rem 1.75rem', borderTop: '0.25rem solid var(--nx-accent)' }}>
+                    <div className="nx-wall-priority__ask" style={{ display: 'grid', gap: '0.75rem', background: 'var(--nx-raised)', padding: '1.5rem 1.75rem', borderTop: '0.25rem solid var(--nx-accent)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.25rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
                           Ask
@@ -111,12 +111,12 @@ export default function NexusWallTemplate({ vals }) {
                           </span>
                         ) : null}
                       </div>
-                      <div style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '500', lineHeight: '1.3', letterSpacing: '-0.015em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
+                      <div className="nx-wall-priority__action" style={{ fontFamily: 'Archivo, sans-serif', fontSize: '2rem', fontWeight: '500', lineHeight: '1.3', letterSpacing: '-0.015em', color: 'var(--nx-ink)', textWrap: 'pretty', overflowWrap: 'break-word', minWidth: 0 }}>
                         {vals.recAction}
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gap: '1rem', padding: '1.5rem 2.5rem 1.75rem', borderTop: '0.0625rem solid var(--nx-line)', background: 'var(--nx-raised)' }}>
+                  <div className="nx-wall-priority__state" style={{ display: 'grid', gap: '1rem', padding: '1.5rem 2.5rem 1.75rem', borderTop: '0.0625rem solid var(--nx-line)', background: 'var(--nx-raised)' }}>
                     {vals.awaiting ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--nx-accent)', color: 'var(--nx-accent-ink)', padding: '0.875rem 1.25rem' }}>
                         <span style={{ fontFamily: 'Archivo, sans-serif', fontSize: '1.75rem', fontWeight: '700', lineHeight: '1' }}>

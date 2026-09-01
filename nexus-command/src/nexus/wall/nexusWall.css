@@ -672,6 +672,317 @@ button:active:not(:disabled) { transform: scale(0.985); }
   color: var(--nx-ink) !important;
 }
 
+/*
+ * MAP-FIRST OPERATIONS REFINEMENT
+ * One uninterrupted geographic canvas; all other instruments are subordinate.
+ * Type roles: Archivo = display, Source Sans 3 = interface/body, JetBrains Mono = data only.
+ */
+:root {
+  --nx-font-display: "Archivo Variable", Archivo, sans-serif;
+  --nx-font-body: "Source Sans 3 Variable", "Source Sans 3", sans-serif;
+  --nx-font-mono: "JetBrains Mono Variable", "JetBrains Mono", monospace;
+  --nx-type-micro: 1rem;
+  --nx-type-label: 1.25rem;
+  --nx-type-body: 1.55rem;
+  --nx-type-panel: 2rem;
+  --nx-type-title: 3rem;
+  --nx-type-hero: 4rem;
+}
+
+.nx-wall--ops {
+  display: block !important;
+  padding: 0;
+  font-family: var(--nx-font-body);
+  background: #05090d;
+}
+
+.nx-wall--ops .nx-wall-main {
+  position: absolute !important;
+  z-index: 1;
+  inset: 0;
+  border: 0 !important;
+  border-radius: 0;
+  overflow: hidden !important;
+}
+
+.nx-wall--ops .nx-wall-picture {
+  display: block !important;
+  padding: 0 !important;
+  background: transparent;
+}
+
+.nx-wall--ops .nx-wall-map {
+  position: absolute !important;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.nx-wall--ops .nx-wall-map > div:first-child {
+  filter: brightness(0.72) saturate(0.8) contrast(1.04) !important;
+}
+
+.nx-wall--ops .nx-wall-map::before {
+  background:
+    linear-gradient(90deg, rgba(3, 7, 10, 0.5) 0, rgba(3, 7, 10, 0.08) 33%, rgba(3, 7, 10, 0.02) 68%, rgba(3, 7, 10, 0.42) 100%),
+    linear-gradient(0deg, rgba(3, 7, 10, 0.5) 0, transparent 30%);
+  opacity: 0.62;
+}
+
+.nx-wall--ops .nx-wall-map [data-nx-overlays] {
+  top: 11rem !important;
+  right: 35rem !important;
+  width: 38rem !important;
+  max-height: 23rem;
+  overflow: auto;
+  opacity: 0.84;
+}
+
+.nx-wall--ops .nx-wall-nav {
+  position: absolute;
+  z-index: 80;
+  inset: 1.25rem auto 1.25rem 1.25rem;
+  width: 14rem;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 0 !important;
+  padding: 8.5rem 0.75rem 0.75rem !important;
+  border: 0 !important;
+  border-right: 0.0625rem solid rgba(190, 209, 225, 0.14) !important;
+  border-radius: 0.75rem 0 0 0.75rem;
+  background: linear-gradient(180deg, rgba(10, 17, 24, 0.96), rgba(6, 11, 16, 0.92)) !important;
+  box-shadow: 1.5rem 0 5rem rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.nx-wall--ops .nx-wall-nav::before {
+  content: "NEXUS\A COORDINATE";
+  top: 1.75rem;
+  left: 1.5rem;
+  right: 1rem;
+  white-space: pre;
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.1em;
+}
+
+.nx-wall--ops .nx-wall-nav::after {
+  content: "";
+  position: absolute;
+  left: 1.5rem;
+  top: 6.2rem;
+  width: 3.5rem;
+  height: 0.3rem;
+  background: var(--nx-accent);
+}
+
+.nx-wall--ops .nx-wall-nav .nxw-tab {
+  width: 100%;
+  height: auto !important;
+  min-height: 0;
+  display: grid !important;
+  grid-template-columns: 1fr;
+  align-content: center;
+  gap: 0.3rem !important;
+  padding: 1rem 0.7rem 1rem 1.25rem !important;
+  border-radius: 0;
+  border-bottom: 0.0625rem solid rgba(190, 209, 225, 0.08) !important;
+  background: transparent !important;
+}
+
+.nx-wall--ops .nx-wall-nav .nxw-tab > span:first-child {
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-type-micro) !important;
+}
+
+.nx-wall--ops .nx-wall-nav .nxw-tab > span:last-child {
+  font-family: var(--nx-font-body);
+  font-size: var(--nx-type-label) !important;
+  font-weight: 600 !important;
+  line-height: 1.15;
+}
+
+.nx-wall--ops .nx-wall-header {
+  position: absolute;
+  z-index: 70;
+  top: 1.25rem;
+  left: 15.75rem;
+  right: 35rem;
+  height: 9rem;
+  padding: 0.6rem 1rem 0.8rem !important;
+  gap: 0.4rem !important;
+  border: 0 !important;
+  border-bottom: 0.0625rem solid rgba(190, 209, 225, 0.16) !important;
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(5, 9, 13, 0.9), rgba(5, 9, 13, 0.56)) !important;
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+
+.nx-wall--ops .nx-wall-brandrow { min-height: 1.8rem; }
+.nx-wall--ops .nx-wall-brandrow > span:first-child { display: none !important; }
+.nx-wall--ops .nx-wall-brandrow > span:nth-child(2) { display: grid !important; }
+.nx-wall--ops .nx-wall-brandrow > span:nth-child(2) > span:first-child { display: none !important; }
+.nx-wall--ops .nx-wall-brandrow > span:nth-child(2) > span:last-child {
+  font-family: var(--nx-font-body);
+  font-size: var(--nx-type-micro) !important;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--nx-faint);
+}
+.nx-wall--ops .nx-wall-brandrow > span:last-child { margin-left: auto !important; }
+.nx-wall--ops .nx-wall-brandrow > span:last-child > span:first-child { font-family: var(--nx-font-mono); font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-brandrow > span:last-child > span:last-child { font-family: var(--nx-font-mono); font-size: var(--nx-type-panel) !important; }
+
+.nx-wall--ops .nx-wall-kpis { gap: 0 !important; }
+.nx-wall--ops .nx-wall-kpi {
+  min-height: 5.2rem;
+  padding: 0.55rem 1rem !important;
+  border: 0 !important;
+  border-left: 0 !important;
+  border-right: 0.0625rem solid rgba(190, 209, 225, 0.12) !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.nx-wall--ops .nx-wall-kpi > span:first-child { font-family: var(--nx-font-body); font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-kpi > span:last-child { display: none; }
+.nx-wall--ops .nx-wall-kpi > span:nth-child(2) > span:first-child { font-family: var(--nx-font-display); font-size: var(--nx-type-panel) !important; }
+.nx-wall--ops .nx-wall-kpi > span:nth-child(2) > span:last-child { font-family: var(--nx-font-mono); font-size: var(--nx-type-micro) !important; }
+
+.nx-wall--ops .nx-wall-priority {
+  position: absolute;
+  z-index: 60;
+  top: 11rem;
+  left: 15.75rem;
+  width: 42rem;
+  height: 47rem;
+  border: 0 !important;
+  border-radius: 0.5rem;
+  background: linear-gradient(155deg, rgba(13, 23, 32, 0.95), rgba(7, 13, 19, 0.89)) !important;
+  box-shadow: 0 2.5rem 8rem rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(18px);
+}
+
+.nx-wall--ops .nx-wall-priority__meta { padding: 1.15rem 1.5rem !important; }
+.nx-wall--ops .nx-wall-priority__meta span { font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-priority__body { gap: 1.4rem !important; padding: 1.75rem 1.5rem !important; }
+.nx-wall--ops .nx-wall-priority__title {
+  font-family: var(--nx-font-display) !important;
+  font-size: var(--nx-type-title) !important;
+  font-weight: 650 !important;
+  line-height: 1.04 !important;
+}
+.nx-wall--ops .nx-wall-priority__owner,
+.nx-wall--ops .nx-wall-priority__owner span { font-family: var(--nx-font-body); font-size: var(--nx-type-label) !important; }
+.nx-wall--ops .nx-wall-priority__ask { padding: 1.15rem 1.25rem !important; background: rgba(22, 37, 50, 0.7) !important; }
+.nx-wall--ops .nx-wall-priority__ask span { font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-priority__action {
+  font-family: var(--nx-font-body) !important;
+  font-size: var(--nx-type-body) !important;
+  font-weight: 550 !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0 !important;
+}
+.nx-wall--ops .nx-wall-priority__state { gap: 0.7rem !important; padding: 1rem 1.5rem !important; background: rgba(7, 13, 19, 0.86) !important; }
+.nx-wall--ops .nx-wall-priority__state span,
+.nx-wall--ops .nx-wall-priority__state button { font-family: var(--nx-font-body); font-size: var(--nx-type-label) !important; }
+
+.nx-wall--ops .nx-wall-desks {
+  position: absolute;
+  z-index: 65;
+  top: 11rem;
+  right: 1.25rem;
+  bottom: 16.5rem;
+  width: 32.5rem;
+  grid-template-rows: 5rem minmax(0, 1fr) !important;
+  border: 0 !important;
+  border-left: 0.0625rem solid rgba(190, 209, 225, 0.16) !important;
+  border-radius: 0;
+  background: rgba(6, 12, 18, 0.88) !important;
+  box-shadow: -1.5rem 0 5rem rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+}
+
+.nx-wall--ops .nx-wall-desks__head { padding: 0 1.25rem !important; background: transparent !important; }
+.nx-wall--ops .nx-wall-desks__head > span:first-child { font-family: var(--nx-font-display) !important; font-size: var(--nx-type-panel) !important; letter-spacing: 0 !important; }
+.nx-wall--ops .nx-wall-desks__head > span:first-child::before { content: "03 / "; color: var(--nx-accent); font-family: var(--nx-font-mono); font-size: var(--nx-type-micro); letter-spacing: 0.12em; }
+.nx-wall--ops .nx-wall-desks__head > span:nth-child(2),
+.nx-wall--ops .nx-wall-desks__head > span:last-child { display: none; }
+
+.nx-wall--ops .nx-wall-desks__grid {
+  grid-template-columns: 1fr !important;
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 0 !important;
+  padding: 0 1.25rem 1rem !important;
+}
+
+.nx-wall--ops .nx-wall-desks .nxw-desk {
+  min-height: 0;
+  padding: 0.85rem 0.2rem !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-rows: auto auto !important;
+  border: 0 !important;
+  border-bottom: 0.0625rem solid rgba(190, 209, 225, 0.1) !important;
+  background: transparent !important;
+  box-shadow: none;
+}
+
+.nx-wall--ops .nx-wall-desks .nxw-desk img { width: 2.8rem !important; height: 2.8rem !important; }
+.nx-wall--ops .nx-wall-desks .nxw-desk > div:first-child > span:last-child > span:first-child { font-family: var(--nx-font-display); font-size: var(--nx-type-label) !important; }
+.nx-wall--ops .nx-wall-desks .nxw-desk > div:first-child > span:last-child > span:last-child { font-family: var(--nx-font-body); font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-desks .nxw-desk > div:nth-child(2) { justify-self: end; }
+.nx-wall--ops .nx-wall-desks .nxw-desk > div:nth-child(2) span { font-family: var(--nx-font-mono); font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-desks .nxw-desk > div:last-child { grid-column: 1 / -1; }
+.nx-wall--ops .nx-wall-desks .nxw-desk > div:last-child > span:first-child { font-family: var(--nx-font-mono); font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-desks .nxw-desk__open { display: none; }
+
+.nx-wall--ops .nx-wall-record-slot {
+  position: absolute !important;
+  z-index: 66;
+  left: 15.75rem;
+  right: 35rem;
+  bottom: 1.25rem;
+  height: 14.25rem;
+  border: 0 !important;
+  border-top: 0.0625rem solid rgba(190, 209, 225, 0.16) !important;
+  border-radius: 0;
+  background: rgba(5, 10, 15, 0.82);
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+
+.nx-wall--ops .nx-wall-record { height: 100%; padding: 0.85rem 1.25rem 0.65rem !important; background: transparent !important; }
+.nx-wall--ops .nx-wall-record > div:first-child span { font-family: var(--nx-font-mono); font-size: var(--nx-type-micro) !important; }
+.nx-wall--ops .nx-wall-record > div:first-child > span:first-child {
+  font-family: var(--nx-font-display) !important;
+  font-size: var(--nx-type-body) !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  color: var(--nx-ink) !important;
+}
+.nx-wall--ops .nx-wall-record > div:first-child > span:first-child::before {
+  content: "04 / ";
+  color: var(--nx-accent);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-type-micro);
+  letter-spacing: 0.12em;
+}
+.nx-wall--ops .nx-wall-record > div:nth-child(2) span { font-family: var(--nx-font-mono); font-size: var(--nx-type-micro) !important; }
+
+@media (max-width: 1800px) {
+  .nx-wall--ops .nx-wall-priority { width: 38rem; }
+  .nx-wall--ops .nx-wall-header,
+  .nx-wall--ops .nx-wall-record-slot { right: 32.5rem; }
+  .nx-wall--ops .nx-wall-desks { width: 30rem; }
+  .nx-wall--ops .nx-wall-map [data-nx-overlays] { right: 32.5rem !important; width: 34rem !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

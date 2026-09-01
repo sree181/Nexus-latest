@@ -43,3 +43,12 @@
 - [x] Establish a stronger brand masthead, incident-led spatial hierarchy, route-based navigation, and visually dominant map/workspace canvas
 - [x] Verify the revised wall at 3840×2160 and 1440×900, including evidence, workflow, and desk interactions
 - [x] Run build, unit, and Playwright checks, then push the corrective commit to GitHub
+
+## Map-First Hierarchy Refinement
+
+- [x] Reduce the command wall to one display family, one body family, and one monospace family with a fixed six-step type scale
+- [x] Make the live map the dominant visual field and move incident, telemetry, desks, and record into clearly subordinate overlays or rails
+- [x] Remove competing card weight, decorative density, and redundant metadata from the primary scan path
+- [x] Preserve all six workspaces, desk configuration, live data, map behavior, and decision-state interactions
+- [x] Verify the refined wall at 2048×1273, 1440×900, and 3840×2160, then run build, unit, and Playwright checks
+- [x] Push the final map-first refinement to GitHub and confirm Railway deployment status
