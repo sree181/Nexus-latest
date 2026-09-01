@@ -975,6 +975,131 @@ button:active:not(:disabled) { transform: scale(0.985); }
 }
 .nx-wall--ops .nx-wall-record > div:nth-child(2) span { font-family: var(--nx-font-mono); font-size: var(--nx-type-micro) !important; }
 
+/* Real Auburn–Opelika agent locations; marker and popup styling only. */
+.nx-agent-marker-shell {
+  border: 0;
+  background: transparent;
+}
+
+.nx-agent-marker {
+  position: relative;
+  width: 4.5rem;
+  height: 5.5rem;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  filter: drop-shadow(0 0.75rem 1.25rem rgba(0, 0, 0, 0.58));
+  transition: transform 160ms var(--nx-ease), filter 160ms var(--nx-ease);
+}
+
+.nx-agent-marker::after {
+  content: "";
+  position: absolute;
+  top: 3.55rem;
+  width: 0;
+  height: 0;
+  border-left: 0.48rem solid transparent;
+  border-right: 0.48rem solid transparent;
+  border-top: 0.8rem solid var(--agent-tone);
+}
+
+.nx-agent-marker__halo {
+  position: absolute;
+  top: -0.35rem;
+  width: 4.35rem;
+  height: 4.35rem;
+  border-radius: 50%;
+  border: 0.18rem solid var(--agent-tone);
+  background: color-mix(in srgb, var(--agent-tone) 16%, transparent);
+  box-shadow: 0 0 0 0.35rem rgba(5, 10, 15, 0.76), 0 0 1.5rem color-mix(in srgb, var(--agent-tone) 34%, transparent);
+}
+
+.nx-agent-marker__avatar {
+  position: relative;
+  z-index: 1;
+  width: 3.65rem;
+  height: 3.65rem;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: 0.02rem;
+  border: 0.14rem solid rgba(255, 255, 255, 0.9);
+  background: #0b131c;
+}
+
+.nx-agent-marker__code {
+  position: relative;
+  z-index: 2;
+  min-width: 4.2rem;
+  margin-top: 0.3rem;
+  padding: 0.22rem 0.38rem;
+  border: 0.0625rem solid color-mix(in srgb, var(--agent-tone) 62%, #ffffff 8%);
+  border-radius: 0.25rem;
+  background: rgba(5, 10, 15, 0.94);
+  color: #f6f7f8;
+  font-family: var(--nx-font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.nx-agent-marker__status {
+  position: absolute;
+  z-index: 3;
+  top: 2.85rem;
+  right: 0.18rem;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  display: grid;
+  place-items: center;
+  border: 0.1rem solid #081018;
+  border-radius: 50%;
+  background: var(--agent-tone);
+  color: #071018;
+  font-family: var(--nx-font-mono);
+  font-size: 0;
+  font-weight: 800;
+}
+
+.nx-agent-marker-shell:hover .nx-agent-marker,
+.nx-agent-marker-shell:focus .nx-agent-marker {
+  transform: translateY(-0.25rem) scale(1.06);
+  filter: drop-shadow(0 1rem 1.8rem rgba(0, 0, 0, 0.72));
+}
+
+.leaflet-control-zoom a,
+.leaflet-control-attribution {
+  background: rgba(5, 10, 15, 0.9) !important;
+  color: #e9edf0 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  font-family: var(--nx-font-body);
+}
+
+.leaflet-control-attribution a { color: #f2a33a !important; }
+
+.nx-agent-popup .leaflet-popup-content-wrapper,
+.nx-agent-popup .leaflet-popup-tip {
+  background: rgba(7, 13, 19, 0.97);
+  color: #f5f7f8;
+  border: 0.0625rem solid rgba(194, 211, 225, 0.22);
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.48);
+}
+
+.nx-agent-popup .leaflet-popup-content-wrapper { border-radius: 0.55rem; }
+.nx-agent-popup .leaflet-popup-content { margin: 1rem; }
+.nx-agent-popup .leaflet-popup-close-button { color: #c5d0d8 !important; font-size: 1.4rem !important; }
+
+.nx-agent-popup-card { display: grid; gap: 0.85rem; font-family: var(--nx-font-body); }
+.nx-agent-popup-card__head { display: flex; align-items: center; gap: 0.8rem; }
+.nx-agent-popup-card__head img { width: 3rem; height: 3rem; border-radius: 50%; object-fit: cover; border: 0.12rem solid #f2a33a; }
+.nx-agent-popup-card__head span { display: grid; gap: 0.15rem; }
+.nx-agent-popup-card__head strong { color: #ffffff; font-family: var(--nx-font-display); font-size: 1.05rem; letter-spacing: 0.04em; }
+.nx-agent-popup-card__head small { color: #9fb0bd; font-size: 0.84rem; line-height: 1.2; }
+.nx-agent-popup-card__facility { padding-top: 0.75rem; border-top: 0.0625rem solid rgba(194, 211, 225, 0.16); color: #f4f6f7; font-size: 0.95rem; font-weight: 650; line-height: 1.25; }
+.nx-agent-popup-card address { color: #aebbc5; font-size: 0.86rem; font-style: normal; line-height: 1.35; }
+.nx-agent-popup-card footer { display: flex; justify-content: space-between; gap: 0.75rem; padding-top: 0.7rem; border-top: 0.0625rem solid rgba(194, 211, 225, 0.16); color: #f2a33a; font-family: var(--nx-font-mono); font-size: 0.76rem; }
+
 @media (max-width: 1800px) {
   .nx-wall--ops .nx-wall-priority { width: 38rem; }
   .nx-wall--ops .nx-wall-header,

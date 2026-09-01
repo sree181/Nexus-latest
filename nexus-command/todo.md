@@ -52,3 +52,12 @@
 - [x] Preserve all six workspaces, desk configuration, live data, map behavior, and decision-state interactions
 - [x] Verify the refined wall at 2048×1273, 1440×900, and 3840×2160, then run build, unit, and Playwright checks
 - [x] Push the final map-first refinement to GitHub and confirm Railway deployment status
+
+## Auburn–Opelika Agent Map
+
+- [x] Verify one appropriate public operational facility and precise coordinate pair for ATLAS, AQUA, SENTINEL, PHOENIX, FORGE, and ECHO
+- [x] Center and fit the real interactive map to the Auburn–Opelika operating area while retaining the active incident
+- [x] Render each agent as an accessible avatar marker with role, facility, address, state, and evidence details
+- [x] Keep every non-map surface and workflow unchanged
+- [x] Validate map controls, marker interactions, responsive framing, build, unit tests, and wall browser tests
+- [ ] Push the contained map update to GitHub and confirm Railway deployment

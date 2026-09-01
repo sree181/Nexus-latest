@@ -161,12 +161,27 @@ const bearing = (a, b) => {
   return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
 };
 
-const MAP_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const MAP_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const MAP_INCIDENT = [-85.495, 32.603];
 const DESK_AVATARS = {
   atlas: 'madeleine-pitts', aqua: 'maxwell-tan', sentinel: 'marco-gross',
   phoenix: 'fergus-gray', forge: 'caitlyn-king', echo: 'courtney-turner',
 };
+const AGENT_LOCATIONS = [
+  { code: 'atlas', facility: 'City of Opelika Engineering Department', address: '710 Fox Trail, Opelika, AL 36803', lat: 32.6544675, lon: -85.3611555 },
+  { code: 'aqua', facility: 'Auburn University Parking Services', address: '330 Lem Morrison Drive, Auburn, AL 36849', lat: 32.5936154, lon: -85.486734 },
+  { code: 'sentinel', facility: 'Auburn University Campus Safety and Security', address: '543 W Magnolia Ave, Auburn, AL 36849', lat: 32.6059515, lon: -85.4923746 },
+  { code: 'phoenix', facility: 'Auburn Fire Department Headquarters', address: '359 E Magnolia Ave, Auburn, AL 36830', lat: 32.6064596, lon: -85.4754828 },
+  { code: 'forge', facility: 'City of Auburn Public Works Building', address: '4277 Wire Rd, Suite 300, Auburn, AL 36832', lat: 32.5584716, lon: -85.5653283 },
+  { code: 'echo', facility: 'Lee County Emergency Management Agency', address: '908 Avenue B, Opelika, AL 36801', lat: 32.6455237, lon: -85.3791158 },
+];
+
+const escapeHtml = value => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
 
 const MODEL_CHOICES = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'llama3.2', 'custom'];
 
@@ -178,7 +193,11 @@ class NexusWallLogic extends React.Component {
   initMap() {
     const host = this.mapRef.current;
     if (!host || !window.L || !host.clientWidth) return;
-    if (host.__nxMap) { this.map = host.__nxMap; return; }
+    if (host.__nxMap) {
+      this.map = host.__nxMap;
+      this.syncAgentMarkers();
+      return;
+    }
     if (host.childElementCount) host.innerHTML = '';
     const live = buildLiveView(this.state.live || getLive());
     if (live.incidentPoint) {
@@ -189,14 +208,20 @@ class NexusWallLogic extends React.Component {
     const lon = MAP_INCIDENT[0];
     const coord = `${lat.toFixed(4)} N · ${Math.abs(lon).toFixed(4)} W`;
     const m = window.L.map(host, {
-      center: [lat, lon],
-      zoom: 15,
-      zoomControl: false, attributionControl: false,
-      dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
-      touchZoom: false, boxZoom: false, keyboard: false, tap: false,
-      zoomAnimation: false, fadeAnimation: false, zoomSnap: 0, zoomDelta: 0.5,
+      center: [32.611, -85.463],
+      zoom: 12,
+      zoomControl: false, attributionControl: true,
+      dragging: true, scrollWheelZoom: true, doubleClickZoom: true,
+      touchZoom: true, boxZoom: true, keyboard: true, tap: true,
+      zoomAnimation: true, fadeAnimation: true, zoomSnap: 0.25, zoomDelta: 0.5,
     });
-    window.L.tileLayer(MAP_TILES, { maxZoom: 19, detectRetina: false }).addTo(m);
+    window.L.tileLayer(MAP_TILES, {
+      maxZoom: 19,
+      detectRetina: false,
+      updateWhenIdle: false,
+      keepBuffer: 6,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(m);
     this.map = m;
     host.__nxMap = m;
     this.syncMapMode();
@@ -205,6 +230,7 @@ class NexusWallLogic extends React.Component {
         <span style="font-family: 'JetBrains Mono', monospace; font-size: 2rem; color: #F4F2ED; text-shadow: 0 0 1rem #06070A, 0 0 0.5rem #06070A;">${coord}</span>
       </div>`, [lat, lon], [0, 0]);
     this.addProbes(m);
+    this.syncAgentMarkers(m);
     this.updateScale();
     void this.loadGeo(m, host);
     this.mapObserver = new ResizeObserver(() => { if (this.map) { this.map.invalidateSize(); this.updateScale(); } });
@@ -216,8 +242,8 @@ class NexusWallLogic extends React.Component {
   syncMapMode() {
     const m = this.map;
     if (!m || !m.dragging) return;
-    const live = (this.props.displayMode ?? 'wall') === 'walk-up';
-    if (this.mapLive === live) return;
+    const live = true;
+    if (this.mapLive === live && this.zoomCtl) return;
     this.mapLive = live;
     for (const h of ['dragging', 'scrollWheelZoom', 'doubleClickZoom', 'touchZoom', 'boxZoom', 'keyboard']) {
       if (m[h]) live ? m[h].enable() : m[h].disable();
@@ -229,7 +255,7 @@ class NexusWallLogic extends React.Component {
       this.zoomCtl.remove();
       this.zoomCtl = null;
     }
-    m.getContainer().style.cursor = live ? 'grab' : 'default';
+    m.getContainer().style.cursor = 'grab';
   }
 
   /* Arrows and labels are DOM, so collisions are settled from real rects, not predicted boxes.
@@ -268,14 +294,13 @@ class NexusWallLogic extends React.Component {
   }
 
   frameArea(m, host) {
-    const probes = this.liveProbes();
-    const pts = [[MAP_INCIDENT[1], MAP_INCIDENT[0]]].concat(
-      probes.filter(pr => metres([MAP_INCIDENT[0], MAP_INCIDENT[1]], [pr.lon, pr.lat]) < 3000).map(pr => [pr.lat, pr.lon]));
+    const pts = [[MAP_INCIDENT[1], MAP_INCIDENT[0]]]
+      .concat(AGENT_LOCATIONS.map(agent => [agent.lat, agent.lon]));
     const w = host.clientWidth, hh = host.clientHeight;
     this.mapFit = () => {
       m.fitBounds(window.L.latLngBounds(pts), {
-        paddingTopLeft: [Math.round(w * 0.1), Math.round(hh * 0.16)],
-        paddingBottomRight: [Math.round(w * 0.08), Math.round(hh * 0.3)],
+        paddingTopLeft: [Math.round(w * 0.19), Math.round(hh * 0.12)],
+        paddingBottomRight: [Math.round(w * 0.15), Math.round(hh * 0.17)],
         animate: false,
       });
       this.updateScale();
@@ -384,6 +409,76 @@ class NexusWallLogic extends React.Component {
       window.L.circleMarker([pr.lat, pr.lon], {
         radius: 10 + pr.sev * 26, color: tone, weight: 3, opacity: 0.9, fillColor: tone, fillOpacity: 0.22, interactive: false,
       }).addTo(m);
+    }
+  }
+
+  agentIcon(location, tile) {
+    const code = location.code;
+    const avatar = `/avatars/${DESK_AVATARS[code]}.jpg`;
+    const tone = tile?.statusColor || '#9BA8B4';
+    const status = tile?.status || '—';
+    return window.L.divIcon({
+      className: 'nx-agent-marker-shell',
+      iconSize: [72, 88],
+      iconAnchor: [36, 78],
+      popupAnchor: [0, -72],
+      html: `<div class="nx-agent-marker" style="--agent-tone:${escapeHtml(tone)}">
+        <span class="nx-agent-marker__halo"></span>
+        <img class="nx-agent-marker__avatar" src="${avatar}" alt="" />
+        <span class="nx-agent-marker__code">${escapeHtml(code.toUpperCase())}</span>
+        <span class="nx-agent-marker__status" aria-hidden="true">${escapeHtml(status)}</span>
+      </div>`,
+    });
+  }
+
+  agentPopup(location, tile) {
+    const status = tile?.status && tile.status !== '—' ? tile.status : 'Monitoring';
+    const evidence = tile?.meta || 'No evidence in this snapshot';
+    const role = tile?.role || DESK_PROFILES[location.code]?.role || location.code;
+    return `<article class="nx-agent-popup-card">
+      <header class="nx-agent-popup-card__head">
+        <img src="/avatars/${DESK_AVATARS[location.code]}.jpg" alt="" />
+        <span><strong>${escapeHtml(location.code.toUpperCase())}</strong><small>${escapeHtml(role)}</small></span>
+      </header>
+      <div class="nx-agent-popup-card__facility">${escapeHtml(location.facility)}</div>
+      <address>${escapeHtml(location.address)}</address>
+      <footer><span>${escapeHtml(status)}</span><span>${escapeHtml(evidence)}</span></footer>
+    </article>`;
+  }
+
+  syncAgentMarkers(map = this.map) {
+    if (!map || !window.L) return;
+    const live = buildLiveView(this.state.live || getLive());
+    const byCode = new Map((live.wallDesks || []).map(tile => [tile.code, tile]));
+    if (!this.agentMarkers) this.agentMarkers = new Map();
+    for (const location of AGENT_LOCATIONS) {
+      const tile = byCode.get(location.code);
+      const signature = [tile?.status, tile?.statusColor, tile?.meta].join('|');
+      let record = this.agentMarkers.get(location.code);
+      if (!record) {
+        const marker = window.L.marker([location.lat, location.lon], {
+          icon: this.agentIcon(location, tile),
+          interactive: true,
+          keyboard: true,
+          riseOnHover: true,
+          title: `${location.code.toUpperCase()} — ${location.facility}`,
+          alt: `${location.code.toUpperCase()} at ${location.address}`,
+        }).addTo(map);
+        marker.bindPopup(this.agentPopup(location, tile), {
+          className: 'nx-agent-popup',
+          minWidth: 280,
+          maxWidth: 340,
+          closeButton: true,
+          autoPan: true,
+          autoPanPadding: [48, 48],
+        });
+        record = { marker, signature };
+        this.agentMarkers.set(location.code, record);
+      } else if (record.signature !== signature) {
+        record.marker.setIcon(this.agentIcon(location, tile));
+        record.marker.setPopupContent(this.agentPopup(location, tile));
+        record.signature = signature;
+      }
     }
   }
 

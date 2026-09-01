@@ -41,6 +41,16 @@ test('operations screen shows the product name and desks', async ({ page }) => {
   await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();
 });
 
+test('real Auburn–Opelika map exposes six agent facility markers', async ({ page }) => {
+  await open(page);
+  const markers = page.locator('.nx-agent-marker-shell');
+  await expect(markers).toHaveCount(6);
+  const echo = page.locator('.nx-agent-marker-shell[title^="ECHO"]');
+  await echo.click();
+  await expect(page.getByText('Lee County Emergency Management Agency', { exact: true })).toBeVisible();
+  await expect(page.getByText('908 Avenue B, Opelika, AL 36801', { exact: true })).toBeVisible();
+});
+
 test('reach band switches to evidence lineage', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: /Evidence lineage/ }).click();
