@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle, CheckCircle2, CircleSlash2 } from 'lucide-react';
 import WorkflowBoard from './workflow/WorkflowBoard';
 
 /* CIVIC INSTRUMENT PANEL: presentation only; all live values and handlers come from NexusWall.renderVals(). */
@@ -19,15 +20,15 @@ export default function NexusWallTemplate({ vals }) {
     <div className={`nx-wall ${screenClass}${vals.deskOpen ? ' nx-wall--desk-open' : ''}${vals.deskRailCollapsed ? ' nx-wall--desk-rail-collapsed' : ''}`} data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: 'var(--nx-ground)', position: 'relative', overflow: 'hidden' }}>
       <header className="nx-wall-header" data-screen-label="Stratum 1 — state" style={{ padding: '1.75rem 3rem 1.5rem', display: 'grid', gap: '1.25rem', borderBottom: '0.0625rem solid var(--nx-line)' }}>
         <div className="nx-wall-brandrow" style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <span className="nx-wall-mark" style={{ flex: 'none', padding: '0.4375rem 0.625rem', display: 'flex', alignItems: 'center' }}>
-            <img src="/manus-storage/nexus-junction-mark_0614c4a0.png" alt="" onError={(event) => { event.currentTarget.style.opacity = '0'; }} style={{ height: '3.5rem', width: 'auto', display: 'block' }} />
+          <span className="nx-wall-mark" aria-label={vals.isDelib ? 'Auburn University Harbert Business' : undefined} style={{ flex: 'none', padding: '0.4375rem 0.625rem', display: 'flex', alignItems: 'center' }}>
+            <img src={vals.isDelib ? 'data:image/webp;base64,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' : '/manus-storage/nexus-junction-mark_0614c4a0.png'} alt={vals.isDelib ? 'Auburn University' : ''} onError={(event) => { event.currentTarget.style.opacity = '0'; }} style={{ height: '3.5rem', width: 'auto', display: 'block' }} />
           </span>
           <span style={{ display: 'grid', gap: '0.125rem', minWidth: 0 }}>
             <span className="nx-wall-wordmark" aria-label="Nexus" style={{ fontFamily: 'Archivo, sans-serif', fontSize: '3.25rem', fontWeight: '700', letterSpacing: '0.08em', lineHeight: '1', color: 'var(--nx-ink)', whiteSpace: 'nowrap' }}>
-              NE<i>X</i>US
+              {vals.isDelib ? 'Nexus Coordinate' : <>NE<i>X</i>US</>}
             </span>
             <span style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap' }}>
-              Coordinate · mobility command
+              {vals.isDelib ? 'Deliberation · Auburn mobility command' : 'Coordinate · mobility command'}
             </span>
           </span>
           <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', alignItems: 'center', gap: '2rem' }}>
@@ -358,7 +359,7 @@ export default function NexusWallTemplate({ vals }) {
         ) : null}
         {vals.isDelib ? (
           <>
-            <div style={{ position: 'absolute', inset: '0', padding: '2.5rem 3rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1.5rem' }}>
+            <div className="nx-delib" style={{ position: 'absolute', inset: '0', padding: '2.5rem 3rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
                 <span style={{ fontSize: '1.625rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                   Deliberation · one evidence snapshot, six desks
@@ -367,29 +368,33 @@ export default function NexusWallTemplate({ vals }) {
                   snapshot sha256 {vals.hashShort} · {vals.evidenceFrozen} · immutable
                 </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 5rem 74rem', gap: '0', minHeight: '0' }}>
-                <div style={{ display: 'grid', gridAutoRows: 'minmax(0, 1fr)', gap: '0.375rem', minHeight: '0' }}>
+              <div className="nx-delib-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 5rem 74rem', gap: '0', minHeight: '0' }}>
+                <div className="nx-delib-agents" style={{ display: 'grid', gridAutoRows: 'minmax(0, 1fr)', gap: '0.375rem', minHeight: '0' }}>
                   {(vals.desks || []).map(row => (
-                  <button key={row.code} type="button" className="nxw-agent-row" aria-label={`Open ${row.name}`} onClick={vals[`open_${row.code}`]} style={{ display: 'grid', gridTemplateColumns: '12rem 15rem minmax(0, 1fr) minmax(0, 0.78fr) 18rem 14rem', columnGap: '2rem', alignItems: 'center', background: row.rowBg, border: '0', borderLeft: `0.375rem solid ${row.hue}`, padding: '1.25rem 1.5rem', overflow: 'hidden', cursor: 'pointer' }}>
-                    <div style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', letterSpacing: '0.06em', color: row.nameColor, whiteSpace: 'nowrap' }}>
-                      {row.name}
+                  <button key={row.code} type="button" className={`nxw-agent-row nxw-agent-row--${row.statusLabel.toLowerCase()}`} aria-label={`Open ${row.name}`} onClick={vals[`open_${row.code}`]} style={{ display: 'grid', gridTemplateColumns: '12rem 15rem minmax(0, 1fr) minmax(0, 0.78fr) 18rem 14rem', columnGap: '2rem', alignItems: 'center', background: row.rowBg, border: '0', borderLeft: `0.375rem solid ${row.hue}`, padding: '1.25rem 1.5rem', overflow: 'hidden', cursor: 'pointer' }}>
+                    <div className="nx-delib-agent">
+                      <img src={row.avatar} alt="" />
+                      <span>{row.name}</span>
                     </div>
-                    <div style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {row.role}
+                    <div className="nx-delib-desk">
+                      <img src={row.logo} alt="" />
+                      <span>{row.deskTitle}</span>
                     </div>
-                    <div style={{ fontSize: '1.875rem', color: row.lineColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div className="nx-delib-action" style={{ color: row.lineColor }}>
+                      <small>Finding</small>
                       {row.line}
                     </div>
-                    <div style={{ fontSize: '1.625rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div className="nx-delib-note">
+                      <small>Priority note</small>
                       {row.note}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', whiteSpace: 'nowrap' }}>
-                      <span style={{ width: '1.125rem', height: '1.125rem', borderRadius: '50%', flex: 'none', background: row.markFill || 'transparent', border: row.markBorder ? '0.1875rem solid ' + row.markBorder : '0' }}></span>
-                      <span style={{ fontSize: '1.75rem', fontWeight: '600', color: row.statusColor }}>
+                    <div className="nx-delib-status">
+                      {row.statusLabel === 'Contributed' ? <CheckCircle2 aria-hidden="true" /> : row.statusLabel === 'Dissent' ? <AlertTriangle aria-hidden="true" /> : <CircleSlash2 aria-hidden="true" />}
+                      <span>
                         {row.statusAt}
                       </span>
                     </div>
-                    <div style={{ fontSize: '1.5rem', color: 'var(--nx-mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: '\'JetBrains Mono\', monospace', textAlign: 'right' }}>
+                    <div className="nx-delib-meta">
                       {row.meta}
                     </div>
                   </button>
@@ -399,8 +404,8 @@ export default function NexusWallTemplate({ vals }) {
                   <div style={{ position: 'absolute', left: '50%', top: '6%', bottom: '6%', width: '0.125rem', background: 'rgba(255,255,255,0.18)' }}></div>
                   <div style={{ position: 'absolute', left: '50%', top: '50%', width: '2.5rem', height: '0.125rem', background: 'rgba(255,255,255,0.18)' }}></div>
                 </div>
-                <div style={{ background: 'rgba(232,119,34,0.06)', border: '0.0625rem solid rgba(232,119,34,0.35)', padding: '1.5rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.25rem' }}>
+                <div className="nx-delib-summary" style={{ background: 'rgba(232,119,34,0.06)', border: '0.0625rem solid rgba(232,119,34,0.35)', padding: '1.5rem 1.75rem', display: 'grid', alignContent: 'space-between', gap: '1rem' }}>
+                  <div className="nx-delib-summary__brand" style={{ display: 'flex', alignItems: 'baseline', gap: '1.25rem' }}>
                     <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2.125rem', fontWeight: '700', letterSpacing: '0.08em', color: 'var(--nx-accent)' }}>
                       NEXUS
                     </span>
@@ -408,11 +413,12 @@ export default function NexusWallTemplate({ vals }) {
                       Coordinator · composes, never authors
                     </span>
                   </div>
-                  <div style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '2.875rem', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.01em' }}>
-                    {vals.composeLine}
+                  <div className="nx-delib-summary__count" style={{ fontFamily: 'Archivo, sans-serif', fontStretch: '100%', fontSize: '2.875rem', fontWeight: '700', lineHeight: '1.1', letterSpacing: '-0.01em' }}>
+                    <small>Composition result</small>
+                    <span>{vals.composeLine}</span>
                   </div>
                   <div style={{ height: '0.0625rem', background: 'rgba(255,255,255,0.12)' }}></div>
-                  <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  <div className="nx-delib-summary__detail" style={{ display: 'grid', gap: '0.5rem' }}>
                     <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                       Playbook
                     </span>
@@ -423,7 +429,7 @@ export default function NexusWallTemplate({ vals }) {
                       NEXUS may not author an action outside this playbook.
                     </span>
                   </div>
-                  <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  <div className="nx-delib-summary__detail nx-delib-summary__detail--dissent" style={{ display: 'grid', gap: '0.5rem' }}>
                     <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-accent)' }}>
                       Dissent carried forward
                     </span>
@@ -431,7 +437,7 @@ export default function NexusWallTemplate({ vals }) {
                       {vals.dissentNote}
                     </span>
                   </div>
-                  <div style={{ display: 'grid', gap: '0.5rem' }}>
+                  <div className="nx-delib-summary__detail nx-delib-summary__detail--silence" style={{ display: 'grid', gap: '0.5rem' }}>
                     <span style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                       Silence recorded
                     </span>

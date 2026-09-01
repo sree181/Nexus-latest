@@ -37,7 +37,7 @@ test('operations screen shows the product name and desks', async ({ page }) => {
   await open(page);
   await expect(page.getByText('Mobility command', { exact: true })).toBeVisible();
   await expect(page.getByText('Nexus Coordinate', { exact: true })).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Auburn University Harbert College of Business' })).toBeVisible();
+  await expect(page.locator('.nx-wall-identity')).toBeVisible();
   await expect(page.getByText('ATLAS', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('AQUA', { exact: true }).first()).toBeVisible();
   await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();
@@ -61,6 +61,19 @@ test('reach band switches to evidence lineage', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: /Evidence lineage/ }).click();
   await expect(page.getByText('arrows read left to right')).toBeVisible();
+});
+
+test('Stage 2 differentiates agents, desks, findings, and participation without truncation', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: /Deliberation/ }).click();
+  await expect(page.getByLabel('Auburn University Harbert Business')).toBeVisible();
+  await expect(page.locator('.nx-delib-agent img')).toHaveCount(6);
+  await expect(page.locator('.nx-delib-desk img')).toHaveCount(6);
+  await expect(page.locator('.nxw-agent-row--contributed .nx-delib-status').first()).toBeVisible();
+  await expect(page.locator('.nxw-agent-row--abstained .nx-delib-status').first()).toBeVisible();
+  await expect(page.locator('.nx-delib-summary__detail--dissent')).toBeVisible();
+  const overflow = await page.locator('.nx-delib-action').first().evaluate(el => getComputedStyle(el).textOverflow);
+  expect(overflow).toBe('clip');
 });
 
 test('workflow tab shows sources, agents, stakeholder, and decision', async ({ page }) => {

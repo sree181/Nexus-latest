@@ -955,7 +955,12 @@ class NexusWallLogic extends React.Component {
       recAuthoredLine: live.recAuthoredLine,
       decidedAt: live.decidedAt,
       approvals: live.approvals,
-      desks: live.desks,
+      desks: live.desks.map(row => ({
+        ...row,
+        avatar: DESK_AVATARS[row.code] ? `/avatars/${DESK_AVATARS[row.code]}.jpg` : '',
+        logo: `/icons/desks/${row.code}.svg`,
+        deskTitle: DESK_PROFILES[row.code]?.kicker ?? row.role,
+      })),
       expectedEffect: live.expectedEffect,
       limitations: live.limitations,
       hashShort: live.hashShort,

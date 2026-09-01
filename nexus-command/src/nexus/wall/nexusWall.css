@@ -1241,6 +1241,222 @@ button:active:not(:disabled) { transform: scale(0.985); }
 }
 
 /* AGENT DESK WORKSPACE: shared by all six desks; surrounding wall surfaces remain untouched. */
+.nx-wall--deliberation .nx-wall-mark {
+  width: 19rem;
+  padding-left: 0 !important;
+  display: grid !important;
+  grid-template-columns: 4.4rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 0.8rem;
+  align-items: center;
+}
+
+.nx-wall--deliberation .nx-wall-mark img {
+  display: none !important;
+}
+
+.nx-wall--deliberation .nx-wall-mark::before {
+  content: "AU";
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  grid-column: 1;
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 4.4rem;
+  height: 4.4rem;
+  border: 0.16rem solid #f68026;
+  border-radius: 0;
+  background: transparent;
+  color: #f68026;
+  font-family: var(--nx-font-display);
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.08em;
+}
+
+.nx-wall--deliberation .nx-wall-mark::after {
+  content: "AUBURN UNIVERSITY\A HARBERT BUSINESS";
+  position: static;
+  left: auto;
+  top: auto;
+  width: auto;
+  height: auto;
+  transform: none;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  white-space: pre;
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.08em;
+  border-radius: 0;
+  background: transparent;
+}
+
+.nx-wall--deliberation .nx-wall-wordmark {
+  color: var(--auburn-orange, #f68026) !important;
+  font-family: var(--nx-font-display) !important;
+  font-size: 2.7rem !important;
+  font-weight: 680 !important;
+  letter-spacing: -0.025em !important;
+  text-transform: none;
+}
+
+.nx-delib-layout { grid-template-columns: minmax(0, 1fr) 3rem 66rem !important; }
+.nx-delib-agents { gap: 0.65rem !important; }
+
+.nxw-agent-row {
+  grid-template-columns: 15rem 17rem minmax(20rem, 1.2fr) minmax(18rem, 0.85fr) 17rem 14rem !important;
+  column-gap: 1.4rem !important;
+  padding: 1.25rem 1.5rem !important;
+  overflow: visible !important;
+  text-align: left;
+  border-top: 0.0625rem solid rgba(194, 211, 225, 0.08) !important;
+  border-bottom: 0.0625rem solid rgba(194, 211, 225, 0.08) !important;
+}
+
+.nx-delib-agent,
+.nx-delib-desk {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.nx-delib-agent img {
+  width: 3.5rem;
+  height: 3.5rem;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 0.125rem solid rgba(255, 255, 255, 0.22);
+}
+
+.nx-delib-desk img {
+  width: 3.5rem;
+  height: 3.5rem;
+  object-fit: contain;
+}
+
+.nx-delib-agent span {
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.nx-delib-desk span {
+  color: var(--nx-mute);
+  font-family: var(--nx-font-body);
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.nx-delib-action,
+.nx-delib-note {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 0.3rem;
+  color: var(--nx-mute);
+  font-family: var(--nx-font-body);
+  font-size: 1.45rem;
+  line-height: 1.28;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+.nx-delib-action small,
+.nx-delib-note small {
+  color: var(--nx-faint);
+  font-family: var(--nx-font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nx-delib-status {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-family: var(--nx-font-body);
+  font-size: 1.45rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nx-delib-status svg { width: 1.65rem; height: 1.65rem; flex: none; }
+.nxw-agent-row--contributed .nx-delib-status { color: #4dd8a6; }
+.nxw-agent-row--abstained .nx-delib-status { color: #8fa6bc; }
+.nxw-agent-row--dissent .nx-delib-status { color: var(--auburn-orange, #f68026); }
+
+.nx-delib-meta {
+  color: var(--nx-mute);
+  font-family: var(--nx-font-mono);
+  font-size: 1.15rem;
+  line-height: 1.3;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.nx-delib-summary {
+  align-content: start !important;
+  gap: 1.5rem !important;
+  padding: 2rem !important;
+  background: rgba(10, 17, 25, 0.94) !important;
+  border-color: rgba(246, 128, 38, 0.32) !important;
+}
+
+.nx-delib-summary__count {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.25rem 0 1.5rem;
+}
+
+.nx-delib-summary__count small {
+  color: var(--nx-mute);
+  font-family: var(--nx-font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nx-delib-summary__count span {
+  color: var(--nx-ink);
+  font-family: var(--nx-font-display);
+  font-size: 2.65rem;
+  line-height: 1.12;
+}
+
+.nx-delib-summary__detail {
+  padding: 1.15rem 1.25rem;
+  border: 0.0625rem solid rgba(194, 211, 225, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.nx-delib-summary__detail--dissent { border-left: 0.22rem solid var(--auburn-orange, #f68026); }
+.nx-delib-summary__detail--silence { border-left: 0.22rem solid #8fa6bc; }
+
+.nx-delib-summary__detail > span:last-child {
+  font-size: 1.6rem !important;
+  line-height: 1.4 !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .nx-wall--desk-open .nx-wall-header { display: none !important; }
 
 .nx-wall--desk-open .nx-wall-nav {

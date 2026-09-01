@@ -79,3 +79,13 @@
 - [x] Preserve each agent’s existing content, fields, handlers, save/cancel behavior, and constraints
 - [x] Confirm map, markers, notification, branding, desks list, timeline, and non-desk workspaces remain unchanged
 - [x] Test every agent desk plus build, unit, and browser suites, then push and confirm Railway deployment
+
+## Stage 2 Deliberation Refinement
+
+- [x] Keep Stage 2 as a large workspace and limit all changes to the Deliberation presentation
+- [x] Align the Stage 2 Nexus Coordinate header with the Auburn-branded home treatment
+- [x] Add each agent avatar beside its name and each desk logo beside a clear desk title
+- [x] Replace truncated action, priority, evidence, and dissent text with legible multi-line content
+- [x] Distinguish Contributed and Abstained using accessible icons and restrained status colors
+- [x] Preserve all Stage 2 data, decisions, timestamps, navigation behavior, and right-side composition content
+- [x] Confirm every non-Deliberation surface is unchanged, run build/unit/browser validation, then push and verify deployment
