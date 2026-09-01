@@ -750,6 +750,15 @@ export default function NexusWallTemplate({ vals }) {
         ) : null}
       </main>
       <nav className="nx-wall-nav" data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 2rem', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
+        {vals.isOps ? (
+          <div className="nx-wall-identity" aria-label="Nexus Coordinate with Auburn University Harbert College of Business">
+            <img src="https://harbert.auburn.edu/_resources/img/logos/logo2.svg" alt="Auburn University Harbert College of Business" />
+            <span>
+              <strong>Nexus Coordinate</strong>
+              <small>Mobility command</small>
+            </span>
+          </div>
+        ) : null}
         <button type="button" className="nxw-tab" onClick={vals.goOps} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeOps}`, color: vals.inkOps, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             01

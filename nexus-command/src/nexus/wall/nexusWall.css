@@ -1100,6 +1100,146 @@ button:active:not(:disabled) { transform: scale(0.985); }
 .nx-agent-popup-card address { color: #aebbc5; font-size: 0.86rem; font-style: normal; line-height: 1.35; }
 .nx-agent-popup-card footer { display: flex; justify-content: space-between; gap: 0.75rem; padding-top: 0.7rem; border-top: 0.0625rem solid rgba(194, 211, 225, 0.16); color: #f2a33a; font-family: var(--nx-font-mono); font-size: 0.76rem; }
 
+/* Requested containment: Auburn identity and a quiet, non-blocking incident notification only. */
+.nx-wall--ops {
+  --auburn-navy: #03244d;
+  --auburn-orange: #f68026;
+}
+
+.nx-wall--ops .nx-wall-nav {
+  padding-top: 10.5rem !important;
+  background: linear-gradient(180deg, rgba(3, 36, 77, 0.97), rgba(4, 19, 36, 0.94)) !important;
+}
+
+.nx-wall--ops .nx-wall-nav::before,
+.nx-wall--ops .nx-wall-nav::after { display: none; }
+
+.nx-wall-identity {
+  position: absolute;
+  top: 1.15rem;
+  left: 1rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.8rem;
+  padding-bottom: 1rem;
+  border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.18);
+}
+
+.nx-wall-identity img {
+  width: 100%;
+  height: auto;
+  max-height: 2.7rem;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.nx-wall-identity > span { display: grid; gap: 0.15rem; }
+
+.nx-wall-identity strong {
+  color: var(--auburn-orange);
+  font-family: var(--nx-font-display);
+  font-size: 1.55rem;
+  font-weight: 680;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+}
+
+.nx-wall-identity small {
+  color: rgba(255, 255, 255, 0.72);
+  font-family: var(--nx-font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+
+.nx-wall--ops .nx-wall-priority {
+  top: 11rem;
+  left: 16.5rem;
+  width: 35rem;
+  height: auto;
+  max-height: 20rem;
+  border: 0.0625rem solid rgba(255, 255, 255, 0.14) !important;
+  border-left: 0.22rem solid var(--auburn-orange) !important;
+  border-radius: 0.45rem;
+  background: rgba(3, 22, 41, 0.88) !important;
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(14px);
+}
+
+.nx-wall--ops .nx-wall-priority > div {
+  grid-template-rows: auto auto auto !important;
+  border-left: 0 !important;
+}
+
+.nx-wall--ops .nx-wall-priority__meta {
+  padding: 0.7rem 1rem !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.nx-wall--ops .nx-wall-priority__meta > span:first-child {
+  padding: 0.28rem 0.5rem !important;
+  background: transparent !important;
+  color: var(--auburn-orange) !important;
+  border: 0.0625rem solid color-mix(in srgb, var(--auburn-orange) 70%, transparent);
+}
+
+.nx-wall--ops .nx-wall-priority__body {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem !important;
+  padding: 0.95rem 1rem !important;
+  overflow: visible;
+}
+
+.nx-wall--ops .nx-wall-priority__title {
+  font-size: 1.7rem !important;
+  line-height: 1.08 !important;
+}
+
+.nx-wall--ops .nx-wall-priority__owner { margin-top: 0.45rem; }
+.nx-wall--ops .nx-wall-priority__owner,
+.nx-wall--ops .nx-wall-priority__owner span { font-size: 0.9rem !important; }
+
+.nx-wall--ops .nx-wall-priority__ask {
+  gap: 0.45rem !important;
+  padding: 0.75rem 0.85rem !important;
+  border-top: 0 !important;
+  border-left: 0.15rem solid rgba(246, 128, 38, 0.72);
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.nx-wall--ops .nx-wall-priority__action {
+  font-size: 1rem !important;
+  line-height: 1.3 !important;
+}
+
+.nx-wall--ops .nx-wall-priority__state {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem !important;
+  padding: 0.65rem 1rem !important;
+  background: rgba(2, 14, 27, 0.7) !important;
+}
+
+.nx-wall--ops .nx-wall-priority__state > div {
+  min-height: 2rem;
+  padding: 0.45rem 0.65rem !important;
+  background: rgba(246, 128, 38, 0.12) !important;
+  color: var(--auburn-orange) !important;
+  border: 0.0625rem solid rgba(246, 128, 38, 0.35);
+}
+
+.nx-wall--ops .nx-wall-priority__state span,
+.nx-wall--ops .nx-wall-priority__state button { font-size: 0.9rem !important; }
+
+.nx-wall--ops .nx-wall-priority__state button {
+  min-width: 5rem;
+  padding: 0.55rem 0.8rem !important;
+  border-width: 0.0625rem !important;
+}
+
 @media (max-width: 1800px) {
   .nx-wall--ops .nx-wall-priority { width: 38rem; }
   .nx-wall--ops .nx-wall-header,

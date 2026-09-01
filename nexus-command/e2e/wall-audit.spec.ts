@@ -35,10 +35,16 @@ test('frame fills 3840x2160 with no scroll', async ({ page }) => {
 
 test('operations screen shows the product name and desks', async ({ page }) => {
   await open(page);
-  await expect(page.getByText('Mobility command')).toBeVisible();
+  await expect(page.getByText('Mobility command', { exact: true })).toBeVisible();
+  await expect(page.getByText('Nexus Coordinate', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Auburn University Harbert College of Business' })).toBeVisible();
   await expect(page.getByText('ATLAS', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('AQUA', { exact: true }).first()).toBeVisible();
   await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();
+  const notice = await page.locator('[data-screen-label="Priority card"]').boundingBox();
+  expect(notice).not.toBeNull();
+  expect(notice!.width).toBeLessThan(800);
+  expect(notice!.height).toBeLessThan(420);
 });
 
 test('real Auburn–Opelika map exposes six agent facility markers', async ({ page }) => {

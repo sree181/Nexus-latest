@@ -61,3 +61,11 @@
 - [x] Keep every non-map surface and workflow unchanged
 - [x] Validate map controls, marker interactions, responsive framing, build, unit tests, and wall browser tests
 - [ ] Push the contained map update to GitHub and confirm Railway deployment
+
+## Notification and Auburn Business Branding
+
+- [x] Verify the official Auburn business-school logo asset and Auburn navy/orange brand treatment
+- [x] Convert the operations warning into a compact, non-intrusive notification without changing its content or behavior
+- [x] Display “Nexus Coordinate” clearly beside the Auburn business-school logo using a map-complementary Auburn color treatment
+- [x] Confirm the map, markers, desks, timeline, navigation, and all other workspaces remain unchanged
+- [ ] Run visual, build, unit, and wall browser validation, then push and confirm Railway deployment
