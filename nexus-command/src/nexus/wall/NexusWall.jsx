@@ -1,3 +1,7 @@
+/**
+ * CIVIC INSTRUMENT PANEL
+ * Preserve live operational behavior while the presentation scales from desktop review to a 4K command wall.
+ */
 import React from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -909,10 +913,10 @@ const DESIGN_WIDTH = 3840;
 
 export default class NexusWall extends NexusWallLogic {
   componentDidMount() {
-    /* The design is authored in rem against a 3840px canvas; scaling the root font size
-       reproduces it at any viewport. Drop this if your shell already scales the route. */
+    /* Keep the 4K wall at the authored 16px root while making ordinary review displays
+       twenty percent more legible than a literal 3840-to-viewport shrink. */
     this.__prevRootFontSize = document.documentElement.style.fontSize;
-    document.documentElement.style.fontSize = 'calc(min(100vw * 16 / ' + DESIGN_WIDTH + ', 100vh * 16 / 2160))';
+    document.documentElement.style.fontSize = 'min(1rem, calc(100vw * 16 / 3200), calc(100vh * 16 / 1800))';
     if (super.componentDidMount) super.componentDidMount();
   }
   componentWillUnmount() {

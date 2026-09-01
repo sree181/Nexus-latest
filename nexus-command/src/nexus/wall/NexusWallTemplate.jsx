@@ -3,9 +3,20 @@ import WorkflowBoard from './workflow/WorkflowBoard';
 
 /* CIVIC INSTRUMENT PANEL: presentation only; all live values and handlers come from NexusWall.renderVals(). */
 export default function NexusWallTemplate({ vals }) {
+  const screenClass = vals.isOps
+    ? 'nx-wall--ops'
+    : vals.isEvidence
+      ? 'nx-wall--evidence'
+      : vals.isWorkflow
+        ? 'nx-wall--workflow'
+        : vals.isDelib
+          ? 'nx-wall--deliberation'
+          : vals.isDecision
+            ? 'nx-wall--decision'
+            : 'nx-wall--commitments';
   return (
     <>
-    <div className="nx-wall" data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: 'var(--nx-ground)', position: 'relative', overflow: 'hidden' }}>
+    <div className={`nx-wall ${screenClass}`} data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: 'var(--nx-ground)', position: 'relative', overflow: 'hidden' }}>
       <header className="nx-wall-header" data-screen-label="Stratum 1 — state" style={{ padding: '1.75rem 3rem 1.5rem', display: 'grid', gap: '1.25rem', borderBottom: '0.0625rem solid var(--nx-line)' }}>
         <div className="nx-wall-brandrow" style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
           <span className="nx-wall-mark" style={{ flex: 'none', padding: '0.4375rem 0.625rem', display: 'flex', alignItems: 'center' }}>
@@ -34,7 +45,7 @@ export default function NexusWallTemplate({ vals }) {
             </span>
           </span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '1rem' }}>
+        <div className="nx-wall-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '1rem' }}>
           {[
             { label: 'Feeds', value: vals.feedLive, unit: `/ ${vals.feedTotal}`, color: 'var(--nx-ink)', note: vals.feedDegraded },
             { label: 'Evidence', value: vals.evidenceCount, unit: '', color: 'var(--nx-ink)', note: vals.evidenceFrozen },
@@ -456,22 +467,22 @@ export default function NexusWallTemplate({ vals }) {
                   {(vals.lineageColumns || []).map(col => (
                   <div className="nx-wall-lineage__column" key={col.key} style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '0.5rem', minWidth: '0', minHeight: '0', height: '100%', overflow: 'hidden' }}>
                     <div className="nx-wall-lineage__stage" style={{ height: 'min-content', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto auto', alignItems: 'baseline', columnGap: '0.5rem', paddingBottom: '0.25rem', borderBottom: `0.1875rem solid ${col.headerTone}` }}>
-                      <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
+                      <span className="nx-wall-lineage__number" style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
                         {col.n}
                       </span>
-                      <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
+                      <span className="nx-wall-lineage__label" style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
                         {col.label}
                       </span>
                       {col.subtitle ? (
-                        <span style={{ gridColumn: '1 / -1', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
+                        <span className="nx-wall-lineage__subtitle" style={{ gridColumn: '1 / -1', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.75rem', color: 'var(--nx-mute)' }}>
                           {col.subtitle}
                         </span>
                       ) : null}
-                      <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: 'var(--nx-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                      <span className="nx-wall-lineage__count" style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: 'var(--nx-ink)', fontVariantNumeric: 'tabular-nums' }}>
                         {col.cards.filter(card => card.id !== 'c-none' && card.id !== 'v-none' && card.id !== 'd-gate').length || (col.cards.length && col.cards[0].id !== 'c-none' && col.cards[0].id !== 'v-none' ? col.cards.length : 0)}
                       </span>
                       {col.key !== 'verification' ? (
-                        <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: '#5A6270', marginLeft: '0.5rem' }}>
+                        <span className="nx-wall-lineage__arrow" style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', fontWeight: '700', color: '#5A6270', marginLeft: '0.5rem' }}>
                           &#8594;
                         </span>
                       ) : null}
@@ -739,7 +750,7 @@ export default function NexusWallTemplate({ vals }) {
         ) : null}
       </main>
       <nav className="nx-wall-nav" data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 2rem', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
-        <button type="button" className="nxw-tab" onClick={vals.goOps} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeOps}`, color: vals.inkOps, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" className="nxw-tab" onClick={vals.goOps} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeOps}`, color: vals.inkOps, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             01
           </span>
@@ -747,7 +758,7 @@ export default function NexusWallTemplate({ vals }) {
             Operations
           </span>
         </button>
-        <button type="button" className="nxw-tab" onClick={vals.goDelib} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeDelib}`, color: vals.inkDelib, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" className="nxw-tab" onClick={vals.goDelib} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeDelib}`, color: vals.inkDelib, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             02
           </span>
@@ -755,7 +766,7 @@ export default function NexusWallTemplate({ vals }) {
             Deliberation
           </span>
         </button>
-        <button type="button" className="nxw-tab" onClick={vals.goEvidence} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeEvidence}`, color: vals.inkEvidence, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" className="nxw-tab" onClick={vals.goEvidence} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeEvidence}`, color: vals.inkEvidence, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             03
           </span>
@@ -763,7 +774,7 @@ export default function NexusWallTemplate({ vals }) {
             Evidence lineage
           </span>
         </button>
-        <button type="button" className="nxw-tab" onClick={vals.goDecision} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeDecision}`, color: vals.inkDecision, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" className="nxw-tab" onClick={vals.goDecision} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeDecision}`, color: vals.inkDecision, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             04
           </span>
@@ -771,7 +782,7 @@ export default function NexusWallTemplate({ vals }) {
             The decision
           </span>
         </button>
-        <button type="button" className="nxw-tab" onClick={vals.goCommit} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeCommit}`, color: vals.inkCommit, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
+        <button type="button" className="nxw-tab" onClick={vals.goCommit} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeCommit}`, color: vals.inkCommit, fontFamily: 'inherit', textAlign: 'left', padding: '0 2.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             05
           </span>
@@ -779,7 +790,7 @@ export default function NexusWallTemplate({ vals }) {
             Commitments
           </span>
         </button>
-        <button type="button" className="nxw-tab" onClick={vals.goWorkflow} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderTop: `0.5rem solid ${vals.edgeWorkflow}`, color: vals.inkWorkflow, fontFamily: 'inherit', textAlign: 'left', padding: '0 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }}>
+        <button type="button" className="nxw-tab" onClick={vals.goWorkflow} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeWorkflow}`, color: vals.inkWorkflow, fontFamily: 'inherit', textAlign: 'left', padding: '0 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }}>
           <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
             06
           </span>
@@ -791,7 +802,7 @@ export default function NexusWallTemplate({ vals }) {
       {vals.showDesks ? (
         <>
           <section className="nx-wall-desks" data-screen-label="Desks panel" style={{ borderTop: '0.1875rem solid rgba(255,255,255,0.18)', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', display: 'grid', gridTemplateRows: '4.5rem minmax(0, 1fr)', background: '#08090C' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0 1.5rem', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', background: '#0E1116' }}>
+            <div className="nx-wall-desks__head" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0 1.5rem', borderBottom: '0.1875rem solid rgba(255,255,255,0.18)', background: '#0E1116' }}>
               <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.875rem', fontWeight: '700', letterSpacing: '0.18em' }}>
                 Desks
               </span>
@@ -802,7 +813,7 @@ export default function NexusWallTemplate({ vals }) {
                 {vals.snapshotLine}
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '1.25rem', padding: '1rem 1.5rem', minHeight: '0', overflow: 'hidden' }}>
+            <div className="nx-wall-desks__grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '1.25rem', padding: '1rem 1.5rem', minHeight: '0', overflow: 'hidden' }}>
               {(vals.wallDesks || []).map(tile => (
               <button key={tile.code} type="button" className="nxw-desk" data-desk={tile.code} aria-label={`Open ${tile.name}`} onClick={vals[`open_${tile.code}`]} style={{ background: vals[`bg_${tile.code}`], border: '0.0625rem solid rgba(255,255,255,0.12)', borderTop: `0.375rem solid ${vals[`gut_${tile.code}`]}`, padding: '1.125rem 1.375rem', display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr)', gap: '0.625rem', alignContent: 'space-between', minWidth: '0', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: '0' }}>
@@ -841,7 +852,7 @@ export default function NexusWallTemplate({ vals }) {
       ) : null}
       {vals.isOps ? (
         <>
-          <div style={{ position: 'relative', minHeight: '0', overflow: 'hidden' }}>
+          <div className="nx-wall-record-slot" style={{ position: 'relative', minHeight: '0', overflow: 'hidden' }}>
             {vals.deskClosed ? (
               <>
                 <div style={{ height: '100%' }}>

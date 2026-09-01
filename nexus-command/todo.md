@@ -34,3 +34,12 @@
 - [x] Implement graph snapshot, neighborhood, path, lineage, coordination, and state-history query APIs
 - [x] Define frontend graph contracts and component layouts for Mobility Flow, Decision Lineage, and Agency Coordination
 - [x] Add migration and graph API tests, type-check, build, and package the graph-enabled source
+
+## Command-Wall Visual Correction
+
+- [x] Confirm the user-visible runtime is serving the latest GitHub `main` commit and identify any deployment or cache mismatch
+- [x] Compare the supplied wall screenshot against the committed presentation layer and document why the prior update reads as only incremental
+- [x] Replace the existing wall composition with a visibly differentiated operational layout while preserving all six workspaces and live behavior
+- [x] Establish a stronger brand masthead, incident-led spatial hierarchy, route-based navigation, and visually dominant map/workspace canvas
+- [x] Verify the revised wall at 3840×2160 and 1440×900, including evidence, workflow, and desk interactions
+- [x] Run build, unit, and Playwright checks, then push the corrective commit to GitHub
