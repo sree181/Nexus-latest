@@ -454,18 +454,16 @@ export default function NexusWallTemplate({ vals }) {
         {vals.isEvidence ? (
           <>
             <div className="nx-wall-evidence" style={{ position: 'absolute', inset: '0', padding: '0.75rem 3rem 1rem', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '0.5rem' }}>
-              <div className="nx-wall-evidence__header" style={{ display: 'flex', alignItems: 'baseline', gap: '2rem' }}>
-                <span style={{ fontSize: '2rem', fontWeight: '700', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--nx-mute)' }}>
-                  Evidence lineage · flow of the record, left to right, append-only
-                </span>
-                <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
-                  {vals.linHint}
-                </span>
-                <span style={{ marginLeft: 'auto', fontFamily: '\'JetBrains Mono\', monospace', fontSize: '2rem', color: 'var(--nx-mute)' }}>
-                  mode {vals.modeLive} · every edge is a citation, not an inference
-                </span>
-              </div>
-              <div className="nx-wall-evidence__body" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(22rem, 28rem)', gap: '2rem', minHeight: '0', overflow: 'hidden' }}>
+              <header className="nx-wall-evidence__header">
+                <div className="nx-evidence-heading__meta">
+                  <span>Stage 03 · Record lineage</span>
+                  <span>Mode {vals.modeLive} · every edge is a citation, not an inference</span>
+                </div>
+                <h1>Evidence lineage</h1>
+                <p>Flow of the record · left to right · append-only</p>
+                <strong>{vals.linHint}</strong>
+              </header>
+              <div className="nx-wall-evidence__body">
                 <EvidenceSankey
                   columns={vals.lineageColumns || []}
                   nodes={vals.lineageNodes || {}}
@@ -475,7 +473,7 @@ export default function NexusWallTemplate({ vals }) {
                   hotIds={vals.lineageHotIds || []}
                   onSelect={vals.selectLineage}
                 />
-                <aside className="nx-wall-lineage__inspector" style={{ background: 'var(--nx-surface)', borderLeft: '0.375rem solid #2A3038', padding: '1.25rem 1.5rem', display: 'grid', gridAutoRows: 'min-content', gap: '0.875rem', minHeight: '0', overflow: 'hidden' }}>
+                <aside className={`nx-wall-lineage__inspector${vals.linPicked ? ' is-populated' : ' is-empty'}`} aria-live="polite">
                   <header className="nx-lineage-inspector__header">
                     <span>Record inspector</span>
                     <small>Stage, stakeholder, citation inputs, and downstream effect</small>

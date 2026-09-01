@@ -99,3 +99,14 @@
 - [x] Preserve click-to-inspect lineage tracing with clear active-path emphasis and subdued unrelated flows
 - [x] Validate Stage 3 at desktop and command-wall resolutions, run build/unit/browser suites, and confirm every other stage is unchanged
 - [ ] Push the contained Stage 3 update and verify Railway deployment
+
+## Stage 3 Sankey Fit and Hierarchy Refinement
+
+- [x] Keep every change confined to Stage 3 Evidence Lineage
+- [x] Hide the Nexus logo/header identity only while Stage 3 is active
+- [x] Give the Sankey the full content width and keep all stages, nodes, labels, and links inside the visible screen
+- [x] Replace the full-height Record Inspector column with a compact contextual box that appears without consuming the canvas
+- [x] Arrange the Stage 3 title, selected-path context, and system/citation status as a clear top-to-bottom hierarchy
+- [x] Normalize Stage 3 typography to a consistent display, body, and data-role scale
+- [x] Validate default and selected-path states at desktop and 4K, rerun build/unit/browser suites, and confirm other stages are unchanged
+- [ ] Push the contained refinement and verify Railway deployment
