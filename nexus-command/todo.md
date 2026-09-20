@@ -133,6 +133,17 @@
 - [x] Validate drag/connect interaction, layout containment, build, unit, browser, and non-Workflow regression safety
 - [ ] Push the contained Workflow update and verify Railway deployment
 
+## Stage 7 Orchestration UI Prototype
+
+- [x] Keep the prototype confined to a new 07 Orchestration tab and leave Stages 1–6 unchanged
+- [x] Clearly label the tab as a UI preview rather than real Open Multi-Agent telemetry
+- [x] Reuse existing Nexus incident, agent, contribution, model, evidence, and decision state without inventing operational facts
+- [x] Add a recent-run rail, execution summary, live-style task DAG, proportional waterfall, and compact selected-task inspector
+- [x] Show all six agent avatars and distinguish LLM-backed, deterministic, contributed, and abstained states accurately
+- [x] Support run selection, DAG/waterfall task selection, filters, and live-follow/replay presentation interactions locally in the prototype
+- [x] Validate desktop and 4K containment, accessibility, build, unit, browser, and Stages 1–6 regression safety
+- [x] Push the contained prototype and verify Railway deployment
+
 ## Basemap Delivery Hotfix
 
 - [x] Identify the user-visible failure as OpenStreetMap volunteer raster tile policy blocking rather than a Leaflet or marker defect
@@ -140,4 +151,4 @@
 - [x] Preserve the existing Auburn–Opelika framing, interaction, overlays, incident point, and six agent markers
 - [x] Verify loaded imagery tiles and absence of requests to the blocked volunteer raster endpoint in browser regression coverage
 - [x] Run type-check, build, unit, and wall suites
-- [ ] Push the isolated fix and confirm Railway deployment
+- [x] Push the isolated fix and confirm Railway deployment

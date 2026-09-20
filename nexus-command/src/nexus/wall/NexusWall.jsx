@@ -16,7 +16,7 @@ window.L = L;
 /* Ported from Nexus Wall.dc.html. Behaviour, timers, map wiring, data and copy are unchanged.
    renderVals() is the only bridge between logic and markup. */
 
-const SCREENS = ['operations', 'deliberation', 'evidence', 'decision', 'commitments', 'workflow'];
+const SCREENS = ['operations', 'deliberation', 'evidence', 'decision', 'commitments', 'workflow', 'orchestration'];
 
 /* Desk copy, boundaries, roles and prompts lifted from server/operational/agents/*
    (desks.ts boundaries, atlas/catalog.ts and aqua/catalog.ts defaults, DeskConfigDialog copy). */
@@ -724,13 +724,15 @@ class NexusWallLogic extends React.Component {
       goDecision: this.go('decision'),
       goCommit: this.go('commitments'),
       goWorkflow: this.go('workflow'),
+      goOrchestration: this.go('orchestration'),
       isOps: s === 'operations',
       isDelib: s === 'deliberation',
       isEvidence: s === 'evidence',
-      showDesks: s !== 'evidence' && s !== 'deliberation' && s !== 'workflow',
+      showDesks: s !== 'evidence' && s !== 'deliberation' && s !== 'workflow' && s !== 'orchestration',
       isDecision: s === 'decision',
       isCommit: s === 'commitments',
       isWorkflow: s === 'workflow',
+      isOrchestration: s === 'orchestration',
       awaiting: (this.props.witnessState ?? 'awaiting signature') === 'awaiting signature',
       signed: (this.props.witnessState ?? 'awaiting signature') === 'signed',
       reachOverlay: this.props.reachOverlay === true,
@@ -926,7 +928,7 @@ class NexusWallLogic extends React.Component {
       vals[`edge${suffix}`] = on ? '#E87722' : 'transparent';
       vals[`ink${suffix}`] = on ? '#F3EDE4' : '#8B93A0';
     }
-    const keys = { operations: 'Ops', deliberation: 'Delib', evidence: 'Evidence', decision: 'Decision', commitments: 'Commit', workflow: 'Workflow' };
+    const keys = { operations: 'Ops', deliberation: 'Delib', evidence: 'Evidence', decision: 'Decision', commitments: 'Commit', workflow: 'Workflow', orchestration: 'Orchestration' };
     for (const name of SCREENS) {
       const active = s === name;
       vals[`edge${keys[name]}`] = active ? '#E87722' : 'transparent';
@@ -1009,6 +1011,56 @@ class NexusWallLogic extends React.Component {
       modeLive: live.modeLabel,
       modeColor: live.modeColor,
     });
+    const findingByCode = new Map((live.recommendation?.agentFindings || []).map(finding => [finding.agentCode, finding]));
+    vals.orchestration = {
+      runId: live.recommendation?.recommendationId || live.incident?.incidentId || 'current-nexus-state',
+      runLabel: 'Current Nexus composition',
+      incidentTitle: live.incidentTitle,
+      incidentIdLine: live.incidentIdLine,
+      recAction: live.recAction,
+      recState: live.recState,
+      recVersion: live.recVersion,
+      recMeta: live.recMeta,
+      snapshotHash: live.hashShort,
+      snapshotState: live.evidenceFrozen,
+      evidenceCount: live.evidenceCount,
+      contributedCount: live.desksContributed,
+      abstainedCount: live.abstainedCount,
+      dissentCount: live.dissentCount,
+      commitmentCount: live.commitmentPreview.length,
+      operatorName: live.operatorName,
+      operatorRole: live.operatorRole,
+      awaiting: live.awaiting,
+      signed: live.signed,
+      composeLine: live.composeLine,
+      dissentNote: live.dissentNote,
+      tasks: live.desks.map(row => {
+        const finding = findingByCode.get(row.code);
+        const modelBacked = Boolean(finding?.modelName);
+        return {
+          id: `desk-${row.code}`,
+          code: row.code,
+          name: row.name,
+          role: row.role,
+          avatar: DESK_AVATARS[row.code] ? `/avatars/${DESK_AVATARS[row.code]}.jpg` : '',
+          logo: `/icons/desks/${row.code}.svg`,
+          tone: row.hue,
+          status: row.statusLabel,
+          statusAt: row.statusAt,
+          runtimeKind: modelBacked ? 'model' : 'deterministic',
+          runtimeLabel: modelBacked ? 'Model-backed' : 'Rule assessment',
+          runtimeDetail: modelBacked
+            ? [finding.modelName, finding.modelVersion].filter(Boolean).join(' · ')
+            : 'No model metadata in current finding',
+          finding: row.line,
+          note: row.note,
+          evidenceLabel: finding?.citedEvidenceIds?.length
+            ? `${finding.citedEvidenceIds.length} cited evidence record${finding.citedEvidenceIds.length === 1 ? '' : 's'}`
+            : 'No cited evidence in finding',
+          boundary: DESK_PROFILES[row.code]?.boundary || 'Authority remains with the named operational stakeholder.',
+        };
+      }),
+    };
     if (live.snapshot) {
       vals.awaiting = live.awaiting;
       vals.signed = live.signed;

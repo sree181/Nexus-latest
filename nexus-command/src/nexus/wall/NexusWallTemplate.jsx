@@ -3,6 +3,7 @@ import { AlertTriangle, Blocks, BrainCircuit, CheckCircle2, CircleSlash2, FileSi
 import EvidenceSankey from './EvidenceSankey';
 import './decisionWorkspace.css';
 import WorkflowBoard from './workflow/WorkflowBoard';
+import OrchestrationPrototype from './OrchestrationPrototype';
 
 /* CIVIC INSTRUMENT PANEL: presentation only; all live values and handlers come from NexusWall.renderVals(). */
 export default function NexusWallTemplate({ vals }) {
@@ -12,11 +13,13 @@ export default function NexusWallTemplate({ vals }) {
       ? 'nx-wall--evidence'
       : vals.isWorkflow
         ? 'nx-wall--workflow'
-        : vals.isDelib
-          ? 'nx-wall--deliberation'
-          : vals.isDecision
-            ? 'nx-wall--decision'
-            : 'nx-wall--commitments';
+        : vals.isOrchestration
+          ? 'nx-wall--orchestration'
+          : vals.isDelib
+            ? 'nx-wall--deliberation'
+            : vals.isDecision
+              ? 'nx-wall--decision'
+              : 'nx-wall--commitments';
   return (
     <>
     <div className={`nx-wall ${screenClass}${vals.deskOpen ? ' nx-wall--desk-open' : ''}${vals.deskRailCollapsed ? ' nx-wall--desk-rail-collapsed' : ''}`} data-screen-label="Command wall" style={{ width: '100vw', height: '135rem', maxHeight: '100vh', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto auto auto', background: 'var(--nx-ground)', position: 'relative', overflow: 'hidden' }}>
@@ -654,8 +657,11 @@ export default function NexusWallTemplate({ vals }) {
         {vals.isWorkflow ? (
           <WorkflowBoard feeds={vals.feeds} stakeholder={vals.operatorName} />
         ) : null}
+        {vals.isOrchestration ? (
+          <OrchestrationPrototype data={vals.orchestration} />
+        ) : null}
       </main>
-      <nav id="nx-stage-navigation" className="nx-wall-nav" data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 2rem', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
+      <nav id="nx-stage-navigation" className="nx-wall-nav" data-screen-label="Stratum 3 — reach band, screens" style={{ background: '#12151B', borderTop: '0.1875rem solid rgba(255,255,255,0.18)', padding: '0.75rem 2rem', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1rem' }}>
         {vals.isOps ? (
           <div className="nx-wall-identity" aria-label="Nexus Coordinate with Auburn University Harbert College of Business">
             <img src="https://harbert.auburn.edu/_resources/img/logos/logo2.svg" alt="Auburn University Harbert College of Business" />
@@ -711,6 +717,14 @@ export default function NexusWallTemplate({ vals }) {
           </span>
           <span style={{ fontSize: '2.5rem', fontWeight: '600' }}>
             Workflow
+          </span>
+        </button>
+        <button type="button" className="nxw-tab" onClick={vals.goOrchestration} style={{ height: '7rem', background: 'var(--nx-raised)', border: '0', borderLeft: `0.5rem solid ${vals.edgeOrchestration}`, color: vals.inkOrchestration, fontFamily: 'inherit', textAlign: 'left', padding: '0 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }}>
+          <span style={{ fontFamily: '\'JetBrains Mono\', monospace', fontSize: '1.5rem', letterSpacing: '0.12em', opacity: '0.6' }}>
+            07
+          </span>
+          <span style={{ fontSize: '2.5rem', fontWeight: '600' }}>
+            Orchestration
           </span>
         </button>
       </nav>

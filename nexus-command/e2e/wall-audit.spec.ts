@@ -60,7 +60,7 @@ test('real Auburn–Opelika map exposes six agent facility markers', async ({ pa
 test('operations map loads the Esri imagery basemap instead of blocked volunteer OSM raster tiles', async ({ page }) => {
   await open(page);
   const loadedTiles = page.locator('.leaflet-tile-loaded');
-  await expect.poll(() => loadedTiles.count()).toBeGreaterThan(0);
+  await expect.poll(() => loadedTiles.count(), { timeout: 20_000, intervals: [500, 1_000, 2_000] }).toBeGreaterThan(0);
   const sources = await loadedTiles.evaluateAll(tiles => tiles.map(tile => (tile as HTMLImageElement).currentSrc));
   expect(sources.length).toBeGreaterThan(0);
   expect(sources.every(source => source.includes('server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'))).toBe(true);
@@ -167,12 +167,46 @@ test('Workflow provides branded connectors, a complete draggable catalog, and dr
   await expect(page.locator('.react-flow__edge')).toHaveCount(edgeCount);
 });
 
+test('Stage 7 previews the current Nexus composition without claiming live orchestration telemetry', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: /Orchestration/ }).click();
+
+  const prototype = page.locator('[data-screen-label="Orchestration prototype"]');
+  await expect(prototype).toBeVisible();
+  await expect(page.getByText('UI prototype · existing Nexus state', { exact: true })).toBeVisible();
+  await expect(page.getByText('No Open Multi-Agent telemetry', { exact: true })).toBeVisible();
+  await expect(page.getByText('Unavailable · prototype', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-orchestration-run]')).toHaveCount(1);
+  await expect(page.locator('[data-orchestration-task]')).toHaveCount(6);
+  await expect(page.getByLabel('Selected task inspector').getByRole('heading', { name: 'Evidence snapshot' })).toBeVisible();
+
+  await page.locator('[data-orchestration-task="aqua"]').click();
+  await expect(page.getByLabel('Selected task inspector').getByRole('heading', { name: 'AQUA' })).toBeVisible();
+  await expect(page.getByLabel('Selected task inspector').getByText(/Rule assessment|Model-backed/)).toBeVisible();
+
+  await page.getByRole('button', { name: /abstained 3/i }).click();
+  await expect(page.locator('[data-orchestration-task="atlas"]')).toBeDisabled();
+  await expect(page.locator('[data-orchestration-task="sentinel"]')).toBeEnabled();
+
+  await page.getByRole('button', { name: /Replay view/ }).click();
+  await expect(page.getByText('Phase 1 / 4', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Step forward' }).click();
+  await expect(page.getByText('Phase 2 / 4', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Follow current/ }).click();
+  await expect(page.getByText('Phase 4 / 4', { exact: true })).toBeVisible();
+
+  const contained = await prototype.evaluate(element => (
+    element.scrollHeight <= element.clientHeight + 1 && element.scrollWidth <= element.clientWidth + 1
+  ));
+  expect(contained).toBe(true);
+});
+
 test('desk tiles and screen tabs are press targets', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Open ATLAS' }).click();
   await expect(page.getByText(/DESK ATLAS/i)).toBeVisible();
   await page.getByRole('button', { name: 'CANCEL' }).click();
-  for (const name of [/Deliberation/, /Evidence lineage/, /The decision/, /Commitments/, /Workflow/, /Operations/]) {
+  for (const name of [/Deliberation/, /Evidence lineage/, /The decision/, /Commitments/, /Workflow/, /Orchestration/, /Operations/]) {
     await page.getByRole('button', { name }).click();
   }
   await expect(page.locator('[data-screen-label="Incident map"]')).toBeVisible();
