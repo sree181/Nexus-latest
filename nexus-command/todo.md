@@ -132,3 +132,12 @@
 - [x] Preserve existing source-to-agent-to-stakeholder-to-decision meaning in the initial graph
 - [x] Validate drag/connect interaction, layout containment, build, unit, browser, and non-Workflow regression safety
 - [ ] Push the contained Workflow update and verify Railway deployment
+
+## Basemap Delivery Hotfix
+
+- [x] Identify the user-visible failure as OpenStreetMap volunteer raster tile policy blocking rather than a Leaflet or marker defect
+- [x] Restore the intended Esri World Imagery basemap with the service's required source attribution
+- [x] Preserve the existing Auburn–Opelika framing, interaction, overlays, incident point, and six agent markers
+- [x] Verify loaded imagery tiles and absence of requests to the blocked volunteer raster endpoint in browser regression coverage
+- [x] Run type-check, build, unit, and wall suites
+- [ ] Push the isolated fix and confirm Railway deployment

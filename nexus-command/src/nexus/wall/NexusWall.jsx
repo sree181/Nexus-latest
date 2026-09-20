@@ -161,7 +161,8 @@ const bearing = (a, b) => {
   return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
 };
 
-const MAP_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const MAP_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const MAP_ATTRIBUTION = 'Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community';
 const MAP_INCIDENT = [-85.495, 32.603];
 const DESK_AVATARS = {
   atlas: 'madeleine-pitts', aqua: 'maxwell-tan', sentinel: 'marco-gross',
@@ -220,7 +221,7 @@ class NexusWallLogic extends React.Component {
       detectRetina: false,
       updateWhenIdle: false,
       keepBuffer: 6,
-      attribution: '&copy; OpenStreetMap contributors',
+      attribution: MAP_ATTRIBUTION,
     }).addTo(m);
     this.map = m;
     host.__nxMap = m;

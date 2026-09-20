@@ -57,6 +57,16 @@ test('real Auburn–Opelika map exposes six agent facility markers', async ({ pa
   await expect(page.getByText('908 Avenue B, Opelika, AL 36801', { exact: true })).toBeVisible();
 });
 
+test('operations map loads the Esri imagery basemap instead of blocked volunteer OSM raster tiles', async ({ page }) => {
+  await open(page);
+  const loadedTiles = page.locator('.leaflet-tile-loaded');
+  await expect.poll(() => loadedTiles.count()).toBeGreaterThan(0);
+  const sources = await loadedTiles.evaluateAll(tiles => tiles.map(tile => (tile as HTMLImageElement).currentSrc));
+  expect(sources.length).toBeGreaterThan(0);
+  expect(sources.every(source => source.includes('server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'))).toBe(true);
+  expect(sources.some(source => source.includes('tile.openstreetmap.org'))).toBe(false);
+});
+
 test('reach band switches to evidence lineage', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: /Evidence lineage/ }).click();
