@@ -22,7 +22,8 @@ export interface BrowserSessionStatus {
 }
 
 function currentReturnTo(): string {
-  const target = window.location.pathname + window.location.search + window.location.hash;
+  const target =
+    window.location.pathname + window.location.search + window.location.hash;
   return target.startsWith("/") && !target.startsWith("//") ? target : "/";
 }
 
@@ -81,7 +82,7 @@ export function localIdentity(): { user: string; role: LocalRole } {
 export function setLocalIdentity(user: string, role: LocalRole): void {
   localStorage.setItem(LOCAL_USER, user);
   localStorage.setItem(LOCAL_ROLE, role);
-  window.location.reload();
+  window.location.assign("/");
 }
 
 /** Production browser requests rely on the same-origin HttpOnly cookie. */

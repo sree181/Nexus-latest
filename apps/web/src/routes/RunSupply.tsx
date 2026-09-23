@@ -2,10 +2,11 @@ import { useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@meshagent/ui";
 import type { Severity } from "@meshagent/graph";
-import type { CveImpact, SbomOut } from "../lib/api";
+import type { Capability, CveImpact, SbomOut } from "../lib/api";
 import { api } from "../lib/api";
 import { Async, EmptyState, ErrorState, Loading } from "../components/Async";
 import { entityLabel } from "../lib/format";
+import { useIdentity } from "../lib/useIdentity";
 
 const severityTone: Record<Severity, "risk" | "warn" | "neutral"> = {
   critical: "risk",
@@ -14,6 +15,31 @@ const severityTone: Record<Severity, "risk" | "warn" | "neutral"> = {
   low: "neutral",
   unknown: "neutral",
 };
+
+export function canReadFleetImpact(
+  capabilities: readonly Capability[],
+  cve: string | undefined,
+): boolean {
+  return Boolean(cve) && capabilities.includes("fleet.read");
+}
+
+function RestrictedImpact({ cve }: { cve: string }) {
+  return (
+    <section className="rounded-2xl border border-warn bg-warn-soft p-5">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h2 className="font-serif text-[17px] text-ink">
+          Advisory recorded for this run
+        </h2>
+        <Badge tone="warn">{cve}</Badge>
+      </div>
+      <p className="mt-2 text-[13.5px] leading-snug text-ink">
+        The software bill of materials below remains available to the run owner.
+        Organization-wide impact crosses other teams and agents, so that view is
+        limited to Security Analyst and CISO roles.
+      </p>
+    </section>
+  );
+}
 
 /** The blast radius the way the hypergraph holds it: a vulnerable version
  *  reaches a package, the package reaches classes, the classes reach the
@@ -75,7 +101,9 @@ function Tiers({ impact }: { impact: CveImpact }) {
                 </span>
               </div>
               {tier.items.length === 0 ? (
-                <p className="font-mono text-[12px] text-slate">none recorded</p>
+                <p className="font-mono text-[12px] text-slate">
+                  none recorded
+                </p>
               ) : (
                 <ul className="mt-1 flex flex-wrap gap-1.5">
                   {tier.items.map((item) => (
@@ -105,7 +133,9 @@ function CveHeader({ impact }: { impact: CveImpact }) {
     >
       <div className="flex flex-wrap items-center gap-2.5">
         <h2 className="font-mono text-[17px] text-ink">{impact.cve}</h2>
-        <Badge tone={impact.severity ? severityTone[impact.severity] : "neutral"}>
+        <Badge
+          tone={impact.severity ? severityTone[impact.severity] : "neutral"}
+        >
           {impact.severity ?? "severity not recorded"}
         </Badge>
         {impact.feed && <Badge tone="neutral">{impact.feed}</Badge>}
@@ -140,55 +170,62 @@ function SbomTable({ sbom }: { sbom: SbomOut }) {
         </span>
       </div>
       <div className="responsive-table-wrap">
-      <table className="w-full min-w-[680px] border-collapse text-left">
-        <thead>
-          <tr className="border-b border-line">
-            {["Package", "Version", "License", "Advisories", "Feed"].map((h) => (
-              <th
-                key={h}
-                scope="col"
-                className="pb-2 font-mono text-[10.5px] font-normal tracking-wide text-slate"
-              >
-                {h.toUpperCase()}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sbom.entries.map((entry) => (
-            <tr key={`${entry.package}@${entry.version}`} className="border-b border-line">
-              <td className="py-2.5 font-mono text-[12.5px] text-ink">
-                {entityLabel(entry.package)}
-              </td>
-              <td className="py-2.5 font-mono text-[12.5px] text-ink">
-                {entityLabel(entry.version)}
-              </td>
-              <td className="py-2.5 font-mono text-[12.5px] text-slate">
-                {entry.license}
-              </td>
-              <td className="py-2.5">
-                {entry.cves.length === 0 ? (
-                  <span className="font-mono text-[12px] text-slate">none</span>
-                ) : (
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-[12.5px] text-ink">
-                      {entry.cves.join(", ")}
-                    </span>
-                    {entry.severity && (
-                      <Badge tone={severityTone[entry.severity]}>
-                        {entry.severity}
-                      </Badge>
-                    )}
-                  </span>
-                )}
-              </td>
-              <td className="py-2.5 font-mono text-[12px] text-slate">
-                {entry.feed ?? "—"}
-              </td>
+        <table className="w-full min-w-[680px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-line">
+              {["Package", "Version", "License", "Advisories", "Feed"].map(
+                (h) => (
+                  <th
+                    key={h}
+                    scope="col"
+                    className="pb-2 font-mono text-[10.5px] font-normal tracking-wide text-slate"
+                  >
+                    {h.toUpperCase()}
+                  </th>
+                ),
+              )}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sbom.entries.map((entry) => (
+              <tr
+                key={`${entry.package}@${entry.version}`}
+                className="border-b border-line"
+              >
+                <td className="py-2.5 font-mono text-[12.5px] text-ink">
+                  {entityLabel(entry.package)}
+                </td>
+                <td className="py-2.5 font-mono text-[12.5px] text-ink">
+                  {entityLabel(entry.version)}
+                </td>
+                <td className="py-2.5 font-mono text-[12.5px] text-slate">
+                  {entry.license}
+                </td>
+                <td className="py-2.5">
+                  {entry.cves.length === 0 ? (
+                    <span className="font-mono text-[12px] text-slate">
+                      none
+                    </span>
+                  ) : (
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-mono text-[12.5px] text-ink">
+                        {entry.cves.join(", ")}
+                      </span>
+                      {entry.severity && (
+                        <Badge tone={severityTone[entry.severity]}>
+                          {entry.severity}
+                        </Badge>
+                      )}
+                    </span>
+                  )}
+                </td>
+                <td className="py-2.5 font-mono text-[12px] text-slate">
+                  {entry.feed ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );
@@ -196,6 +233,7 @@ function SbomTable({ sbom }: { sbom: SbomOut }) {
 
 export function RunSupply() {
   const { runId } = useParams({ from: "/runs/$runId" });
+  const identity = useIdentity();
 
   const sbom = useQuery({
     queryKey: ["run", runId, "sbom"],
@@ -205,10 +243,14 @@ export function RunSupply() {
   // the CVE in the header is whichever advisory the SBOM actually carries,
   // not a fixed one
   const cve = sbom.data?.entries.flatMap((e) => e.cves)[0];
+  const canViewFleetImpact = canReadFleetImpact(
+    identity.me?.capabilities ?? [],
+    cve,
+  );
   const impact = useQuery({
     queryKey: ["cve", cve],
     queryFn: () => api.cveImpact(cve as string),
-    enabled: Boolean(cve),
+    enabled: canViewFleetImpact,
   });
 
   return (
@@ -226,6 +268,8 @@ export function RunSupply() {
               title="No advisories on these packages"
               detail="Every package in this run's memory is free of recorded advisories, so there is no blast radius to draw."
             />
+          ) : !canViewFleetImpact ? (
+            <RestrictedImpact cve={cve} />
           ) : impact.isPending ? (
             <Loading label="resolving the blast radius…" />
           ) : impact.isError ? (
