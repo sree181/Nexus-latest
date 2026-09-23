@@ -49,8 +49,8 @@ The release was validated from locked dependencies and rebuilt native code. Both
 
 Validated local image identifiers:
 
-- `meshagent-api:model-fix`: `sha256:828ed05b92f86206dbed64317afd5168d8a12a86ee78cbe4dcc881961d8a510a`
-- `meshagent-web:model-fix`: `sha256:5e33c5a805f87e1af8d6163978be0d0cbd73db2df5002dfe6c691d23aad4ee00`
+- `meshagent-api:model-fix`: `sha256:5626b41da066a0a3951581bbacd86517a2b70133cea822cc43215031226bd266`
+- `meshagent-web:model-fix`: `sha256:afdb0c61c7a4ba98fc731c0bf0c33a104b4ac3436ccb351479486628f2c2a05e`
 
 These local identifiers are build evidence, not registry release references. CI or the deployment pipeline must record immutable registry digests for the promoted images.
 
