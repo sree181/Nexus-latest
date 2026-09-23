@@ -14,6 +14,12 @@ services:
       # for the developer to go and approve their pairing at. Unset, it prints
       # the dev server's port and the pairing is abandoned half-done.
       MESHAGENT_WEB_URL: "http://localhost:8080"
+      # Optional live model execution. When OPENAI_API_KEY is empty, new runs
+      # use the clearly labelled reference build instead of pretending a model
+      # executed the task.
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+      MESHAGENT_MODEL: "${MESHAGENT_MODEL:-gpt-5-mini}"
       # Governed memory, the audit log and the registered devices. Without it
       # they go to a temporary directory, so every machine that paired has to
       # log in again after a restart and the audit log starts empty.

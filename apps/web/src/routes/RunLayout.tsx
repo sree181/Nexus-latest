@@ -45,10 +45,28 @@ export function RunLayout() {
         }
       />
       <TabBar label="Run views" tabs={runTabs(runId)} />
+      {run?.status === "failed" && (
+        <RunFailureNotice detail={run.failure_reason} />
+      )}
       {run?.seeded && <SeededNotice />}
       {run?.reference_build && <ReferenceBuildNotice task={run.task} />}
       {unlisted ? <NotYours runId={runId} /> : <Outlet />}
     </main>
+  );
+}
+
+function RunFailureNotice({ detail }: { detail: string | null }) {
+  return (
+    <div
+      role="alert"
+      className="flex shrink-0 items-start gap-3 border-b border-risk bg-risk-soft px-6 py-3"
+    >
+      <Badge tone="risk">run failed</Badge>
+      <p className="text-[12.5px] leading-snug text-ink">
+        {detail ??
+          "The run stopped before its governed build completed. Review the API log and start a new run after correcting the execution service."}
+      </p>
+    </div>
   );
 }
 

@@ -33,9 +33,9 @@ The release was validated from locked dependencies and rebuilt native code. Both
 |---|---|
 | Frontend TypeScript check | Passed |
 | Frontend deterministic lint | Passed |
-| Frontend Vitest | **6 files, 14 tests passed** |
+| Frontend Vitest | **7 files, 17 tests passed** |
 | Frontend production build | Passed; largest generated chunk approximately **479 kB** before gzip |
-| Complete Python/API suite | **456 passed, 1 skipped** |
+| Complete Python/API suite | **458 passed, 1 skipped** |
 | Native HyperMesh suites | **20 + 119 + 28 + 37 + WAL recovery + 18** checks passed |
 | JavaScript production dependency audit | **No known vulnerabilities found** |
 | Python locked dependency audit | **No known vulnerabilities found** after upgrading FastAPI and PyJWT |
@@ -44,11 +44,13 @@ The release was validated from locked dependencies and rebuilt native code. Both
 | Web production image | Built successfully; non-root; healthy; API and `/auth/*` proxy passed |
 | Browser security headers | CSP, Permissions-Policy, Referrer-Policy, X-Content-Type-Options, and X-Frame-Options present |
 | Browser identity boundary | OIDC-configured image showed the company sign-in gate and no local identity picker |
+| Live model execution | `gpt-5-mini` completed “Build a small language model training pipeline in Python” as run `e639`: 250-line `main.py`, 4 classes, 9 governed memories, resolved `torch@2.14.0`, and 0 scanner findings. |
+| Model failure handling | Empty or unsupported provider responses are rejected explicitly; the failed state and redacted reason persist across reloads and render as an actionable run banner. |
 
 Validated local image identifiers:
 
-- `meshagent-api:role-journeys`: `sha256:235d83661299d72a4c45a6a6cbf383cc89d1173ea36442e88a2daa84c4e367c1`
-- `meshagent-web:role-journeys`: `sha256:d00846500d81d2bb71218cd35815854f0fce31761534ad2ff1c3f86d4b04c7bd`
+- `meshagent-api:model-fix`: `sha256:828ed05b92f86206dbed64317afd5168d8a12a86ee78cbe4dcc881961d8a510a`
+- `meshagent-web:model-fix`: `sha256:5e33c5a805f87e1af8d6163978be0d0cbd73db2df5002dfe6c691d23aad4ee00`
 
 These local identifiers are build evidence, not registry release references. CI or the deployment pipeline must record immutable registry digests for the promoted images.
 

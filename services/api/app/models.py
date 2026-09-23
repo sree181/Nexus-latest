@@ -180,6 +180,9 @@ class RunSummary(BaseModel):
     # elsewhere -- and reading that as publishable would hand one developer's
     # work to the whole company without anybody saying so.
     seeded: bool = False
+    # Redacted operational explanation when status is failed. This is safe to
+    # show to the run owner; raw provider responses stay in server logs only.
+    failure_reason: str | None = None
 
 
 class CreateRunRequest(BaseModel):

@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import functools
 import hashlib
+import logging
 import re
 import threading
 import time
@@ -67,6 +68,8 @@ from .models import (
     ToolEvent,
     WhyOut,
 )
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_KINDS = {
     "source", "decision", "class", "package", "version", "license",
@@ -200,6 +203,7 @@ class _Run:
     # -- rather than asserted in a header. Coverage names people against
     # their gaps, so it has to know which of those names it can stand behind.
     attributed: bool = False
+    failure_reason: str | None = None
 
 
 class EngineGateway(Gateway):
@@ -257,6 +261,7 @@ class EngineGateway(Gateway):
                 external=rec.session is not None,
                 session=rec.session, agent=rec.agent,
                 attributed=rec.attributed,
+                failure_reason=rec.failure_reason,
             )
         self._remember()
 
@@ -272,6 +277,7 @@ class EngineGateway(Gateway):
                 owner=r.owner, owner_name=r.owner_name,
                 session=r.session, agent=r.agent,
                 attributed=r.attributed,
+                failure_reason=r.failure_reason,
             )
             for r in self._runs.values()
         }
@@ -312,6 +318,7 @@ class EngineGateway(Gateway):
             model=run.model,
             owner=run.owner, owner_name=run.owner_name,
             seeded=run.seeded,
+            failure_reason=run.failure_reason,
         )
 
     def mode(self) -> GatewayMode:
@@ -774,6 +781,7 @@ class EngineGateway(Gateway):
                     yield RunStreamEvent(type="notice", detail=log.notices[told])
                     told += 1
             run.status = "complete"
+            run.failure_reason = None
             with _ENGINE:
                 joined = self._join_fleet(run)
             if joined:
@@ -781,6 +789,22 @@ class EngineGateway(Gateway):
                     f"This run joined the fleet as run-{run.id}, with the "
                     f"{joined} package version(s) its code imports. The fleet "
                     "views now count it in their shared risk."))
+        except Exception:
+            logger.exception("run %s stopped during execution", run.id)
+            run.status = "failed"
+            if run.model:
+                run.failure_reason = (
+                    f"The configured model {run.model} could not complete this "
+                    "run. Verify that MESHAGENT_MODEL exists at the configured "
+                    "OpenAI-compatible endpoint, then start a new run."
+                )
+            else:
+                run.failure_reason = (
+                    "The run stopped before its governed build completed. "
+                    "Review the API log and start a new run after correcting "
+                    "the execution service."
+                )
+            yield RunStreamEvent(type="error", detail=run.failure_reason)
         finally:
             if run.status == "recording":
                 # the caller stopped pulling: the recording did not finish, and

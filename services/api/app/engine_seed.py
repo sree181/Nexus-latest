@@ -307,7 +307,7 @@ def model_name() -> str | None:
     build and says so, rather than pretending a model ran."""
     if not os.environ.get("OPENAI_API_KEY"):
         return None
-    return os.environ.get("MESHAGENT_MODEL", "gpt-4o-mini")
+    return os.environ.get("MESHAGENT_MODEL", "gpt-5-mini")
 
 
 def model_llm(name: str) -> Any:
@@ -317,7 +317,8 @@ def model_llm(name: str) -> Any:
     return OpenAILLM(
         model=name,
         api_key=os.environ.get("OPENAI_API_KEY"),
-        base_url=os.environ.get("OPENAI_BASE_URL") or None,
+        base_url=(os.environ.get("OPENAI_BASE_URL")
+                  or os.environ.get("OPENAI_API_BASE") or None),
     )
 
 

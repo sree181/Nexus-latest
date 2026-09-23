@@ -55,6 +55,9 @@ class RunRecord:
     # because the coverage report names developers, and a restart that
     # forgot which names were verified would silently promote all of them.
     attributed: bool = False
+    # A redacted operational explanation for a failed run. Provider responses,
+    # credentials, prompts, and stack traces never belong in this index.
+    failure_reason: str | None = None
 
 
 @dataclass

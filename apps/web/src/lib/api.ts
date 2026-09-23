@@ -76,6 +76,8 @@ export interface RunSummary {
    *  from a null owner — a run can end up ownerless for reasons that are
    *  nobody's decision to publish. */
   seeded: boolean;
+  /** Safe operational explanation for a failed run; provider internals remain server-side. */
+  failure_reason: string | null;
 }
 
 // -- the deployment itself --

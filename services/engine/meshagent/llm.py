@@ -49,6 +49,10 @@ class LLMClient(Protocol):
         ...
 
 
+class ModelResponseError(RuntimeError):
+    """The provider answered, but not with a usable chat completion."""
+
+
 # ── mock ─────────────────────────────────────────────────────────────────
 
 # A scripted policy: given the running message list, return the next
@@ -270,8 +274,17 @@ class OpenAILLM:
         if tools:
             kwargs["tools"] = _to_openai_tools(tools)
         resp = self._client.chat.completions.create(**kwargs)
-
-        choice = resp.choices[0].message
+        choices = getattr(resp, "choices", None) or []
+        if not choices:
+            raise ModelResponseError(
+                f"model {self._model!r} returned no completion choices; "
+                "verify that the configured endpoint supports this model"
+            )
+        choice = getattr(choices[0], "message", None)
+        if choice is None:
+            raise ModelResponseError(
+                f"model {self._model!r} returned a completion without a message"
+            )
         usage = {}
         if getattr(resp, "usage", None) is not None:
             usage = {

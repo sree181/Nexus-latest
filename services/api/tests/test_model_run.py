@@ -271,6 +271,26 @@ def test_a_model_that_writes_no_code_records_nothing_on_its_behalf(built):
     assert next(r for r in gw.runs() if r.id == run.id).status == "complete"
 
 
+def test_a_provider_failure_is_reported_and_persisted(monkeypatch):
+    class BrokenLLM:
+        def step(self, **_kwargs):
+            raise RuntimeError("provider body containing internal details")
+
+    monkeypatch.setattr(engine_seed, "model_name", lambda: "unavailable-model")
+    monkeypatch.setattr(engine_seed, "model_llm", lambda _name: BrokenLLM())
+    gw = _gateway()
+    run = gw.create_run("Build a tiny Python pipeline")
+    frames = list(gw.run_stream(run.id))
+    summary = gw.run(run.id)
+
+    assert summary.status == "failed"
+    assert summary.failure_reason is not None
+    assert "unavailable-model" in summary.failure_reason
+    assert "internal details" not in summary.failure_reason
+    errors = [frame.detail for frame in frames if frame.type == "error"]
+    assert errors == [summary.failure_reason]
+
+
 def test_the_whole_wire_carries_a_model_build(monkeypatch):
     """The route, the socket and the gateway together, in engine mode: the
     frontend's actual path to a model-built run.
@@ -545,6 +565,22 @@ def test_the_adapter_reads_back_a_tool_call_and_a_final_answer():
         type("M", (), {"tool_calls": [], "content": "all built"})()))
     final = done.step(system="s", messages=[], tools=[])
     assert final.is_final and final.final_text == "all built"
+
+
+def test_the_adapter_rejects_a_provider_response_without_choices():
+    from meshagent.llm import ModelResponseError, OpenAILLM
+
+    class EmptyChat:
+        def __init__(self):
+            self.completions = self
+            self.chat = self
+
+        def create(self, **_kwargs):
+            return type("R", (), {"choices": None, "usage": None})()
+
+    llm = OpenAILLM(model="missing-model", client=EmptyChat())
+    with pytest.raises(ModelResponseError, match="returned no completion choices"):
+        llm.step(system="s", messages=[], tools=[])
 
 
 def test_a_malformed_tool_call_is_carried_to_the_tool_layer_not_crashed():

@@ -28,12 +28,14 @@ All notable production-v1 operational and repository changes should be recorded 
 - FastAPI and PyJWT were upgraded to current advisory-free versions and all dependency lock hashes regenerated.
 - Browser requests now use same-origin opaque sessions; OIDC access tokens no longer enter JavaScript or browser storage. Verified Bearer access remains supported for documented non-browser clients.
 - Production startup now requires distinct Analyst and CISO groups plus the public OIDC client ID used by the API-owned code flow.
+- Model-backed runs now default to the supported `gpt-5-mini` model, accept both standard OpenAI base-URL environment names, and receive optional model settings through local and production Compose.
 
 ### Fixed
 
 - Corrected native test fixtures and parser expectations so every bundled C engine test is hermetic and repeatable.
 - Corrected production container path discovery, native-library placement, health checks, OIDC web-build configuration, and Nginx security-header inheritance.
 - Corrected MCP session discovery and module claims to use the locked namespaced state store.
+- Corrected unsupported or malformed model responses so the run persists a redacted failure reason and the UI shows an actionable error instead of stopping after the task statement.
 
 ## [0.1.0] — production v1 baseline
 
