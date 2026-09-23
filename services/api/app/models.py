@@ -226,7 +226,9 @@ class Me(BaseModel):
     subject: str
     name: str
     email: str
-    role: Literal["developer", "analyst"]
+    role: Literal["developer", "analyst", "ciso"]
+    primary_role: Literal["developer", "analyst", "ciso"]
+    capabilities: list[str] = []
     verified: bool
 
 
@@ -673,7 +675,7 @@ class DeviceOut(BaseModel):
     label: str
     subject: str
     name: str
-    role: Literal["developer", "analyst"]
+    role: Literal["developer", "analyst", "ciso"]
     created_at: int
     last_used: int = 0
     # Whether the human who minted this was themselves verified. A device

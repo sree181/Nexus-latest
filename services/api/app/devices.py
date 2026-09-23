@@ -313,7 +313,7 @@ class Store:
         device = self.devices.get(device_id)
         if device is None or not device.active:
             raise AuthError("no such device")
-        if not who.analyst and device.subject != who.subject:
+        if not who.has("device.fleet") and device.subject != who.subject:
             raise AuthError("no such device")    # not whose it is to revoke
         device.revoked_at = int(time.time())
         self.save()
@@ -325,7 +325,7 @@ class Store:
         security office, whose job is to know what is recording."""
         return sorted(
             (d for d in self.devices.values()
-             if d.active and (who.analyst or d.subject == who.subject)),
+             if d.active and (who.has("device.fleet") or d.subject == who.subject)),
             key=lambda d: d.created_at, reverse=True)
 
     @_synchronized

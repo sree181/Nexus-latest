@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { MAX_STREAM_RECONNECTS, streamReconnectDelay } from "./useRunStream";
+import {
+  MAX_STREAM_RECONNECTS,
+  streamReconnectDelay,
+  terminalCloseMessage,
+} from "./useRunStream";
 
 describe("run stream recovery", () => {
   it("uses bounded exponential reconnect delays", () => {
@@ -11,5 +15,11 @@ describe("run stream recovery", () => {
 
   it("caps automatic reconnect attempts", () => {
     expect(MAX_STREAM_RECONNECTS).toBe(5);
+  });
+
+  it("treats session expiry and access revocation as terminal", () => {
+    expect(terminalCloseMessage(4401)).toContain("session expired");
+    expect(terminalCloseMessage(4403)).toContain("access");
+    expect(terminalCloseMessage(1006)).toBeNull();
   });
 });

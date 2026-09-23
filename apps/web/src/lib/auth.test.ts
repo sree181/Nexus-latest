@@ -1,28 +1,47 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { clearSignInArtifacts, constantTimeStateEquals } from "./auth";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { authHeaders, browserSession, localIdentity, socketProtocols } from "./auth";
 
 afterEach(() => {
-  sessionStorage.clear();
+  localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
-describe("OAuth callback state validation", () => {
-  it("accepts only the exact persisted state", () => {
-    expect(constantTimeStateEquals("expected-state", "expected-state")).toBe(true);
-    expect(constantTimeStateEquals("expected-state", "expected-STATE")).toBe(false);
-    expect(constantTimeStateEquals("expected-state", "short")).toBe(false);
-    expect(constantTimeStateEquals("expected-state", null)).toBe(false);
-    expect(constantTimeStateEquals(null, "expected-state")).toBe(false);
+describe("browser session boundary", () => {
+  it("treats a 401 session response as reauthentication, not an application error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ authenticated: false, expires_at: null, reauth_required: true }),
+      { status: 401, headers: { "content-type": "application/json" } },
+    )));
+
+    await expect(browserSession()).resolves.toEqual({
+      authenticated: false,
+      expires_at: null,
+      reauth_required: true,
+    });
   });
 
-  it("removes all transient PKCE artifacts", () => {
-    sessionStorage.setItem("meshagent.pkce.verifier", "verifier");
-    sessionStorage.setItem("meshagent.pkce.state", "state");
-    sessionStorage.setItem("meshagent.pkce.return", "/runs/a");
+  it("surfaces an unavailable session service", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("error", { status: 503 })));
+    await expect(browserSession()).rejects.toThrow("could not verify");
+  });
+});
 
-    clearSignInArtifacts();
+describe("explicit local development identity", () => {
+  it("defaults to an unprivileged developer and never invents an unsupported role", () => {
+    localStorage.setItem("meshagent.local.role", "administrator");
+    expect(localIdentity()).toEqual({ user: "dev@localhost", role: "developer" });
+    expect(authHeaders()).toEqual({
+      "X-MeshAgent-User": "dev@localhost",
+      "X-MeshAgent-Role": "developer",
+    });
+  });
 
-    expect(sessionStorage.getItem("meshagent.pkce.verifier")).toBeNull();
-    expect(sessionStorage.getItem("meshagent.pkce.state")).toBeNull();
-    expect(sessionStorage.getItem("meshagent.pkce.return")).toBeNull();
+  it("keeps local WebSocket identity out of the URL", () => {
+    localStorage.setItem("meshagent.local.user", "priya@example.com");
+    localStorage.setItem("meshagent.local.role", "analyst");
+    const protocols = socketProtocols();
+    expect(protocols?.[0]).toBe("meshagent.local");
+    expect(protocols?.join(".")).not.toContain("priya@example.com");
   });
 });

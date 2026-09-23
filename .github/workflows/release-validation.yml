@@ -75,6 +75,7 @@ jobs:
           MESHAGENT_OIDC_AUDIENCE: meshagent-api
           MESHAGENT_OIDC_CLIENT_ID: meshagent-web
           MESHAGENT_ANALYST_GROUPS: meshagent-security
+          MESHAGENT_CISO_GROUPS: meshagent-ciso
           MESHAGENT_CORS_ORIGINS: https://meshagent.example.invalid
           MESHAGENT_WEB_URL: https://meshagent.example.invalid
           MESHAGENT_WEB_PORT: '8080'

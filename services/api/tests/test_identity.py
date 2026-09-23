@@ -46,6 +46,7 @@ def oidc(monkeypatch, keys):
     monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
     monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office,appsec-leads")
+    monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "ciso-office,security-leadership")
 
     class _Key:
         key = public
@@ -161,6 +162,25 @@ def test_membership_of_an_analyst_group_means_the_security_office(oidc):
     assert who.analyst
 
 
+def test_membership_of_a_ciso_group_grants_governance_capabilities(oidc):
+    who = auth.Verifier(auth.config()).verify(
+        mint(oidc, roles=["engineering", "ciso-office"]))
+    assert who.role == "ciso"
+    assert who.has("policy.write")
+    assert who.has("report.generate")
+
+
+def test_conflicting_privileged_groups_are_refused(oidc):
+    with pytest.raises(AuthError, match="conflicting"):
+        auth.Verifier(auth.config()).verify(
+            mint(oidc, roles=["sec-office", "ciso-office"]))
+
+
+def test_malformed_role_claim_is_refused(oidc):
+    with pytest.raises(AuthError, match="malformed"):
+        auth.Verifier(auth.config()).verify(mint(oidc, roles={"bad": True}))
+
+
 def test_anyone_else_is_a_developer(oidc):
     who = auth.Verifier(auth.config()).verify(mint(oidc, roles=["engineering"]))
     assert who.role == "developer"
@@ -201,7 +221,9 @@ def test_only_the_three_explicit_environment_values_are_accepted(monkeypatch):
 
 def test_production_startup_rejects_every_missing_security_prerequisite(monkeypatch):
     for key in ("MESHAGENT_OIDC_ISSUER", "MESHAGENT_OIDC_AUDIENCE",
-                "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_DB_DIR",
+                "MESHAGENT_OIDC_CLIENT_ID",
+                "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_CISO_GROUPS",
+                "MESHAGENT_DB_DIR",
                 "MESHAGENT_STRICT_AUDIT", "MESHAGENT_WEB_URL",
                 "MESHAGENT_ENGINE", "MESHAGENT_CORS_ORIGINS"):
         monkeypatch.delenv(key, raising=False)
@@ -211,7 +233,9 @@ def test_production_startup_rejects_every_missing_security_prerequisite(monkeypa
         main.validate_startup()
     message = str(exc.value)
     for required in ("MESHAGENT_OIDC_ISSUER", "MESHAGENT_OIDC_AUDIENCE",
-                     "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_DB_DIR",
+                     "MESHAGENT_OIDC_CLIENT_ID",
+                     "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_CISO_GROUPS",
+                     "MESHAGENT_DB_DIR",
                      "MESHAGENT_STRICT_AUDIT", "MESHAGENT_WEB_URL",
                      "MESHAGENT_ENGINE", "MESHAGENT_CORS_ORIGINS"):
         assert required in message
@@ -222,7 +246,9 @@ def test_complete_production_security_configuration_passes_startup_validation(
     monkeypatch.setenv("MESHAGENT_ENV", "production")
     monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("MESHAGENT_OIDC_CLIENT_ID", "meshagent-web")
     monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office")
+    monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "ciso-office")
     monkeypatch.setenv("MESHAGENT_DB_DIR", "/var/lib/meshagent-test")
     monkeypatch.setenv("MESHAGENT_ENGINE", "1")
     monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
@@ -232,11 +258,30 @@ def test_complete_production_security_configuration_passes_startup_validation(
     main.validate_startup()
 
 
+def test_production_rejects_overlapping_analyst_and_ciso_groups(monkeypatch):
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("MESHAGENT_OIDC_CLIENT_ID", "meshagent-web")
+    monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "security-office")
+    monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "security-office")
+    monkeypatch.setenv("MESHAGENT_DB_DIR", "/var/lib/meshagent-test")
+    monkeypatch.setenv("MESHAGENT_ENGINE", "1")
+    monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
+    monkeypatch.setenv("MESHAGENT_WEB_URL", "https://meshagent.example.com")
+    monkeypatch.setenv("MESHAGENT_CORS_ORIGINS", "https://meshagent.example.com")
+
+    with pytest.raises(RuntimeError, match="must not overlap"):
+        main.validate_startup()
+
+
 def test_production_rejects_temporary_storage_and_wildcard_cors(monkeypatch, tmp_path):
     monkeypatch.setenv("MESHAGENT_ENV", "production")
     monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("MESHAGENT_OIDC_CLIENT_ID", "meshagent-web")
     monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office")
+    monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "ciso-office")
     monkeypatch.setenv("MESHAGENT_ENGINE", "1")
     monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
     monkeypatch.setenv("MESHAGENT_WEB_URL", "https://meshagent.example.com")
@@ -297,6 +342,9 @@ def test_me_reports_the_caller_and_whether_it_was_checked(maya):
     body = maya.get("/api/me").json()
     assert body["subject"] == "maya@example.com"
     assert body["role"] == "developer"
+    assert body["primary_role"] == "developer"
+    assert "run.create" in body["capabilities"]
+    assert "fleet.read" not in body["capabilities"]
     assert body["verified"] is False
 
 

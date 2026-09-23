@@ -16,7 +16,8 @@ from fastapi.testclient import TestClient
 from app import auth, devices, main
 from app.auth import AuthError, Principal
 
-HUMAN = {auth.DEV_USER: "priya@example.com", auth.DEV_ROLE: "analyst"}
+CISO = {auth.DEV_USER: "alex@example.com", auth.DEV_ROLE: "ciso"}
+ANALYST = {auth.DEV_USER: "priya@example.com", auth.DEV_ROLE: "analyst"}
 DEV = {auth.DEV_USER: "sam@example.com", auth.DEV_ROLE: "developer"}
 
 
@@ -146,11 +147,19 @@ def test_a_developer_cannot_revoke_a_colleagues_device(store):
     assert store.verify(token).subject == "sam@example.com"
 
 
-def test_the_security_office_can_revoke_anyones_device(store):
+def test_the_ciso_can_revoke_anyones_device(store):
     paired(store, person("sam@example.com"))
     device = next(iter(store.devices.values()))
-    store.revoke(device.id, person("priya@example.com", "analyst"))
+    store.revoke(device.id, person("alex@example.com", "ciso"))
     assert not device.active
+
+
+def test_an_analyst_cannot_revoke_a_colleagues_device(store):
+    token = paired(store, person("sam@example.com"))
+    device = next(iter(store.devices.values()))
+    with pytest.raises(AuthError):
+        store.revoke(device.id, person("priya@example.com", "analyst"))
+    assert store.verify(token).subject == "sam@example.com"
 
 
 def test_a_token_is_never_more_trustworthy_than_who_minted_it(store):
@@ -261,5 +270,7 @@ def test_a_developer_only_sees_their_own_devices(client):
     paired(main.device_store, person("mallory@example.com"))
     mine = client.get("/api/devices").json()
     assert [d["subject"] for d in mine] == ["sam@example.com"]
-    every = client.get("/api/devices", headers=HUMAN).json()
+    analyst = client.get("/api/devices", headers=ANALYST).json()
+    assert analyst == []
+    every = client.get("/api/devices", headers=CISO).json()
     assert len(every) == 2

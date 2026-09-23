@@ -1,6 +1,6 @@
 # MeshAgent Production v1
 
-MeshAgent is a **single-tenant, customer-operated control plane for governed agent memory**. It records governed-memory relationships, provenance, security and package observations, and deletion certificates; a React web application exposes developer and analyst workflows through a FastAPI API. This README is the authoritative description of the shipped v1 architecture and supported modes. Operational procedures are in [Production Operations](docs/PRODUCTION_OPERATIONS.md), security reporting is in [SECURITY.md](SECURITY.md), and support boundaries are in [SUPPORT.md](SUPPORT.md).
+MeshAgent is a **single-tenant, customer-operated control plane for governed agent memory**. It records governed-memory relationships, provenance, security and package observations, and deletion certificates; a React web application exposes Developer, Analyst, and CISO journeys through a FastAPI API. This README is the authoritative description of the shipped v1 architecture and supported modes. Operational procedures are in [Production Operations](docs/PRODUCTION_OPERATIONS.md), security reporting is in [SECURITY.md](SECURITY.md), and support boundaries are in [SUPPORT.md](SUPPORT.md).
 
 > MeshAgent v1 is software, not an attestation. It does not by itself establish regulatory compliance, immutable audit evidence, availability guarantees, complete vulnerability coverage, or deletion of every copy of data. Deployments must validate controls in their own environment.
 
@@ -8,7 +8,7 @@ MeshAgent is a **single-tenant, customer-operated control plane for governed age
 
 ```mermaid
 flowchart LR
-    U[Developer / Analyst browser] -->|TLS: REST + WebSocket| I[Customer-managed ingress]
+    U[Developer / Analyst / CISO browser] -->|TLS: HttpOnly session, REST + WebSocket| I[Customer-managed ingress]
     A[Cursor / Claude Code adapters] -->|recording-only device token| I
     M[MCP client] -->|delegated API access| I
     I --> API[MeshAgent FastAPI control plane]
@@ -27,11 +27,11 @@ The authoritative runtime components are listed below. The tree may include hist
 
 | Component | Location | Responsibility | Production boundary |
 |---|---|---|---|
-| Web application | `apps/web` | Browser user interface and API client | Served behind a customer-managed TLS ingress. It is not an authorization authority. |
-| API control plane | `services/api/app` | REST/WebSocket endpoints, OIDC verification, device pairing, audit logging, gateway selection | Enforce network controls, exact CORS origins, and identity configuration. |
+| Web application | `apps/web` | Browser UI, role landing, Analyst casework, and CISO governance | Served behind a customer-managed TLS ingress. It never stores OIDC tokens and is not an authorization authority. |
+| API control plane | `services/api/app` | BFF OIDC/PKCE, opaque sessions, REST/WebSocket authorization, workflow state, device pairing, audit logging, gateway selection | Enforce exact origins, identity configuration, and one writer per state directory. |
 | Engine gateway | `services/api/app/engine_gateway.py` | Production-facing gateway over governed HyperMesh memory | Required for production. Serializes engine access in the current process. |
 | MeshAgent / HyperMesh engine | `services/engine` | Governed-memory records, provenance, forget, and graph export primitives | State remains in `MESHAGENT_DB_DIR`; test concurrency and storage behavior for the chosen platform. |
-| Durable state | `MESHAGENT_DB_DIR` | HyperMesh directories (`run`, `fleet`, `run-*`), `index.json`, `devices.json`, `audit.jsonl` | Must be persistent, access-controlled, and backed up as one unit. |
+| Durable state | `MESHAGENT_DB_DIR` | HyperMesh directories, run registry, operation journal, `control-plane.sqlite3`, `browser_sessions.sqlite3`, devices, and audit log | Must be persistent, access-controlled, single-writer, and backed up as one unit. |
 | Operations package | `scripts/ops` | Quiesced backup, manifest verification, pluggable encryption, clean restore, retention, drill, upgrade preflight, and rollback handoff | Deployment hooks supply service-manager, KMS, and isolated health-check behavior. |
 
 The API exposes unauthenticated `GET /api/health` so callers can identify the active gateway, durability, and identity-provider status. A healthy response indicates the configured process is reachable; it does not prove that all business, security, or disaster-recovery controls are effective.
@@ -42,7 +42,7 @@ The API exposes unauthenticated `GET /api/health` so callers can identify the ac
 |---|---|---|---|
 | **Local sample mode** | Default API configuration | Uses `SampleGateway`; no production persistence claim; local asserted identity may be used | UI development and demonstrations only. |
 | **Engine development mode** | `MESHAGENT_ENGINE=1` | Uses real engine records; `MESHAGENT_DB_DIR` makes state survive restart | Integration testing and operator rehearsal. Use isolated state. |
-| **Production single-tenant mode** | Engine mode, durable state, OIDC, TLS ingress, verified backups | `EngineGateway`; customer-controlled persistent state; OIDC access tokens; controlled recorder devices | Supported v1 deployment mode. |
+| **Production single-tenant mode** | Engine mode, durable state, OIDC, TLS ingress, verified backups | `EngineGateway`; customer-controlled state; API-owned opaque browser sessions; controlled recorder devices | Supported v1 deployment mode. |
 
 **Do not deploy sample mode, an unset `MESHAGENT_DB_DIR`, or local asserted identity as production.** Production is intentionally a customer-network deployment. This repository does not ship a multi-tenant service, managed KMS, external audit signing, HA topology, or a complete observability stack.
 
@@ -99,7 +99,7 @@ It publishes the web application at `http://localhost:8080` and the API at `http
 ## Production baseline
 
 1. Set `MESHAGENT_ENGINE=1` and mount a dedicated persistent `MESHAGENT_DB_DIR`.
-2. Configure the OIDC issuer, API audience, public browser client ID, role claim, and analyst group mapping. Once an issuer is configured, the API rejects development identity headers. Rebuild the web image after changing browser OIDC settings.
+2. Configure the OIDC issuer, API audience, public browser client ID, scopes, role claim, and distinct Analyst and CISO group mappings. The API performs Authorization Code + PKCE, verifies the resulting access token, and keeps it behind an opaque HttpOnly session. Once an issuer is configured, the API rejects development identity headers. Overlapping privileged groups fail startup and ambiguous signed claims fail authentication. Rebuild the web image after changing public OIDC settings.
 3. Place the service behind TLS, restrict network routes, set exact `MESHAGENT_CORS_ORIGINS`, and configure `MESHAGENT_WEB_URL` to the canonical browser origin.
 4. Provision quiesce and resume hooks, encrypted backup recipients, controlled recovery identities, and a legal-hold register.
 5. Verify an encrypted backup and conduct an isolated application recovery drill before acceptance and at the approved cadence.
@@ -114,6 +114,7 @@ export MESHAGENT_OIDC_ISSUER=https://identity.example.com/tenant/v2.0
 export MESHAGENT_OIDC_AUDIENCE=meshagent-api
 export MESHAGENT_OIDC_CLIENT_ID=meshagent-web
 export MESHAGENT_ANALYST_GROUPS=meshagent-security
+export MESHAGENT_CISO_GROUPS=meshagent-ciso
 export MESHAGENT_CORS_ORIGINS=https://meshagent.example.com
 export MESHAGENT_WEB_URL=https://meshagent.example.com
 docker compose -f docker-compose.production.yml --profile production up --build -d
@@ -123,7 +124,8 @@ The API remains internal to the Compose network; the web container is the only p
 
 ## API and data-handling notes
 
-- **Identity:** With OIDC enabled, the API validates issuer, audience, expiry, and asymmetric signatures. Developers see their own non-seeded runs; analysts are selected from signed claim groups and can view fleet data. This is an application boundary that should be independently tested at deployment time.
+- **Identity and authority:** With OIDC enabled, the API owns discovery, PKCE, code exchange, token verification, opaque HttpOnly browser sessions, session expiry/revocation, CSRF origin checks, and WebSocket session checks. It maps signed groups into one closed primary role: Developer, Analyst, or CISO. Developers see their own non-seeded runs. Analysts receive investigative and case capabilities. CISOs receive policy, approval, remediation, report, and fleet-device capabilities. Verified Bearer clients remain supported; the API remains the enforcement point.
+- **Workflow state:** `control-plane.sqlite3` stores cases, immutable case events, policies and versions, exceptions, approvals, remediation work, reports, and posture snapshots. It must be backed up with the HyperMesh stores, registry, devices, operation journal, and audit log.
 - **Devices:** Paired device credentials can use recording routes but are refused on human-only routes. Revoke devices that are lost, retired, or suspicious.
 - **Audit:** `audit.jsonl` is append-only and hash chained. Verification can detect a broken chain but is not an externally signed or immutable log. Preserve the audit file and the registry in backups.
 - **Deletion:** `forget` removes governed-memory content and returns a deletion certificate. Backups, replicas, exported material, and third-party systems require separate records, retention, and legal-hold procedures.

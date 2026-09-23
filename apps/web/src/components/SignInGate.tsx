@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 
 import {
-  clearSignInArtifacts,
-  completeSignIn,
+  browserSession,
   localIdentity,
   oidcEnabled,
   setLocalIdentity,
   signIn,
-  signedIn,
 } from "../lib/auth";
 
 /** Stands between the app and anyone who has not identified themselves.
@@ -18,60 +16,39 @@ import {
  *  thing it must never do is imply a login happened when none did.
  */
 export function SignInGate({ children }: { children: React.ReactNode }) {
-  const [error, setError] = useState<string | null>(null);
-  const [returning, setReturning] = useState(
-    () => {
-      const params = new URLSearchParams(window.location.search);
-      return params.has("code") || params.has("error");
-    },
+  const [status, setStatus] = useState<"checking" | "signed-in" | "signed-out">(
+    oidcEnabled ? "checking" : "signed-in",
   );
+  const [error, setError] = useState<string | null>(() => {
+    const value = new URLSearchParams(window.location.search).get("auth_error");
+    return value ? "The company sign-in could not be completed. Start a new attempt or contact your identity administrator." : null;
+  });
 
   useEffect(() => {
-    if (!returning) return;
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const providerError = params.get("error");
-    if (providerError) {
-      const description = params.get("error_description");
-      clearSignInArtifacts();
-      setError(
-        description
-          ? `The identity provider did not complete sign-in: ${description}`
-          : `The identity provider did not complete sign-in (${providerError}).`,
-      );
-      setReturning(false);
-      window.history.replaceState({}, document.title, "/");
-      return;
-    }
-    if (!code) {
-      clearSignInArtifacts();
-      setError("The sign-in response did not include an authorization code.");
-      setReturning(false);
-      window.history.replaceState({}, document.title, "/");
-      return;
-    }
-    completeSignIn(code, params.get("state"))
-      .then((back) => window.location.replace(back))
+    if (!oidcEnabled) return;
+    browserSession()
+      .then((session) => setStatus(session.authenticated ? "signed-in" : "signed-out"))
       .catch((exc: unknown) => {
-        setError(exc instanceof Error ? exc.message : String(exc));
-        setReturning(false);
-        window.history.replaceState({}, document.title, "/");
+        setError(exc instanceof Error ? exc.message : "MeshAgent could not verify the browser session.");
+        setStatus("signed-out");
       });
-  }, [returning]);
+    if (window.location.search.includes("auth_error=")) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
-  if (returning) return <Waiting>Completing sign-in…</Waiting>;
+  if (status === "checking") return <Waiting>Checking company session…</Waiting>;
 
-  if (oidcEnabled && !signedIn()) {
+  if (oidcEnabled && status === "signed-out") {
     return (
       <Panel
         title="Sign in to MeshAgent"
-        body="Memory here is attributed to the person whose agent wrote it, so
-              the API will not serve anything until it knows who you are."
+        body="Use your company identity. Your role and permissions are confirmed by the API before a workspace opens."
         error={error}
       >
         <button
           type="button"
-          onClick={() => void signIn()}
+          onClick={signIn}
           className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright"
         >
           Sign in with your company account
@@ -105,18 +82,44 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen items-center justify-center bg-paper px-6">
-      <div className="w-full max-w-md">
-        <h1 className="font-serif text-2xl font-semibold text-ink">{title}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-dim">{body}</p>
-        {error ? (
-          <p role="alert" className="mt-4 rounded-lg bg-danger-wash px-3 py-2 text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
-        <div className="mt-6">{children}</div>
+    <div className="min-h-screen bg-paper p-4 sm:p-7 lg:p-10">
+      <main className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl overflow-hidden rounded-[24px] border border-line bg-surface shadow-[0_24px_80px_rgba(19,26,34,0.12)] sm:min-h-[calc(100vh-3.5rem)] lg:grid-cols-[0.92fr_1.08fr]">
+        <section className="relative flex flex-col justify-between overflow-hidden bg-rail p-7 text-rail-ink sm:p-10 lg:p-12">
+          <div aria-hidden="true" className="absolute -right-24 -top-20 h-72 w-72 rounded-full border border-accent-bright/20 bg-accent/10 blur-2xl" />
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent shadow-lg shadow-black/20">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><circle cx="19" cy="19" r="2" /><path d="M12 7v4M12 11l-6 6M12 11l6 6" /></svg>
+              </div>
+              <div><p className="font-serif text-xl font-semibold">MeshAgent</p><p className="font-mono text-[10px] tracking-[0.18em] text-rail-ink-faint">SECURITY WORKBENCH</p></div>
+            </div>
+            <h2 className="mt-16 max-w-md font-serif text-3xl font-semibold leading-tight sm:text-4xl">One verified entry point for engineering evidence and security decisions.</h2>
+            <p className="mt-4 max-w-md text-sm leading-relaxed text-rail-ink-dim">The workspace shown after sign-in is determined by server-issued capabilities, not by the browser.</p>
+          </div>
+          <dl className="relative mt-12 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            {[
+              ["Identity", "OIDC + PKCE"],
+              ["Access", "Role scoped"],
+              ["Actions", "Audit recorded"],
+            ].map(([label, value]) => <div key={label} className="rounded-xl border border-rail-line bg-white/[0.035] px-4 py-3"><dt className="font-mono text-[10px] tracking-widest text-rail-ink-faint">{label.toUpperCase()}</dt><dd className="mt-1 text-sm text-rail-ink">{value}</dd></div>)}
+          </dl>
+        </section>
+        <section className="flex items-center p-7 sm:p-12 lg:p-16">
+          <div className="w-full max-w-md">
+            <p className="font-mono text-[10.5px] tracking-[0.18em] text-accent">COMPANY ACCESS</p>
+            <h1 className="mt-3 font-serif text-3xl font-semibold text-ink sm:text-4xl">{title}</h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate">{body}</p>
+            {error ? (
+              <p role="alert" className="mt-5 rounded-xl border border-risk bg-risk-soft px-4 py-3 text-sm text-risk">{error}</p>
+            ) : null}
+            <div className="mt-7">{children}</div>
+            <div className="mt-8 border-t border-line pt-5">
+              <p className="text-xs leading-relaxed text-slate">Only authorized Developer, Analyst, and CISO roles are accepted. Privileged group conflicts are denied rather than resolved automatically.</p>
+            </div>
+          </div>
+        </section>
+      </main>
       </div>
-    </div>
   );
 }
 
@@ -132,9 +135,12 @@ export function LocalIdentityPicker() {
       onSubmit={(e) => {
         e.preventDefault();
         const form = new FormData(e.currentTarget);
+        const requestedRole = String(form.get("role") ?? "developer");
         setLocalIdentity(
           String(form.get("user") ?? "").trim() || "dev@localhost",
-          form.get("role") === "analyst" ? "analyst" : "developer",
+          requestedRole === "analyst" || requestedRole === "ciso"
+            ? requestedRole
+            : "developer",
         );
       }}
     >
@@ -160,7 +166,8 @@ export function LocalIdentityPicker() {
           className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink"
         >
           <option value="developer">Developer</option>
-          <option value="analyst">Security office</option>
+          <option value="analyst">Security analyst</option>
+          <option value="ciso">CISO</option>
         </select>
       </div>
       <button

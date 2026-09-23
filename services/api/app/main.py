@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import tempfile
+import time
 from collections.abc import Iterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -15,9 +17,9 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
-from . import __version__, audit, auth, devices, paths
+from . import __version__, audit, auth, browser_sessions, control_plane, devices, paths
 from .auth import AuthError, Forbidden, Principal
 from .gateway import Conflict, NotFound, Stale, get_gateway
 from .models import (
@@ -61,6 +63,25 @@ from .models import (
     SarifDocument,
     WhyOut,
 )
+from .workflow_models import (
+    ApprovalDecisionRequest,
+    ApprovalOut,
+    AssignCaseRequest,
+    CaseListOut,
+    CaseOut,
+    CisoOverviewOut,
+    CreateCaseRequest,
+    CreateExceptionRequest,
+    CreatePolicyRequest,
+    CreateRemediationRequest,
+    ExceptionOut,
+    OriginOut,
+    PolicyOut,
+    RemediationOut,
+    ReportOut,
+    ReportRequest,
+    TransitionCaseRequest,
+)
 
 def validate_startup() -> None:
     """Reject incomplete production configuration before serving traffic."""
@@ -77,8 +98,14 @@ def validate_startup() -> None:
         problems.append("MESHAGENT_OIDC_ISSUER")
     if not cfg.audience:
         problems.append("MESHAGENT_OIDC_AUDIENCE")
+    if not os.environ.get("MESHAGENT_OIDC_CLIENT_ID", "").strip():
+        problems.append("MESHAGENT_OIDC_CLIENT_ID")
     if not cfg.analyst_groups:
         problems.append("MESHAGENT_ANALYST_GROUPS")
+    if not cfg.ciso_groups:
+        problems.append("MESHAGENT_CISO_GROUPS")
+    if set(cfg.analyst_groups) & set(cfg.ciso_groups):
+        problems.append("MESHAGENT role groups (Analyst and CISO must not overlap)")
     db_raw = os.environ.get("MESHAGENT_DB_DIR", "").strip()
     if not db_raw:
         problems.append("MESHAGENT_DB_DIR")
@@ -133,6 +160,7 @@ app.add_middleware(
     allow_origins=[o.strip() for o in _origins if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 gateway = get_gateway()
@@ -168,6 +196,28 @@ def _conflict(_: Request, exc: Conflict) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
+@app.exception_handler(control_plane.Missing)
+def _workflow_missing(_: Request, exc: control_plane.Missing) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(control_plane.VersionConflict)
+def _workflow_version(_: Request, exc: control_plane.VersionConflict) -> JSONResponse:
+    return JSONResponse(status_code=412, content={"detail": str(exc)})
+
+
+@app.exception_handler(control_plane.SeparationConflict)
+def _workflow_separation(
+    _: Request, exc: control_plane.SeparationConflict
+) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(control_plane.StoreError)
+def _workflow_conflict(_: Request, exc: control_plane.StoreError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
 # -- who is asking ------------------------------------------------------------
 
 _verifier: auth.Verifier | None = None
@@ -185,6 +235,22 @@ def _optional_bearer(header: str | None) -> str | None:
     if not header or not header.lower().startswith("bearer "):
         return None
     return header.split(" ", 1)[1].strip()
+
+
+def _expected_browser_origin() -> str:
+    parsed = urlparse(_web_url())
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _require_same_origin(origin: str | None) -> None:
+    """Protect opaque-cookie sessions from cross-site request forgery.
+
+    Bearer and local-development-header clients do not use ambient credentials
+    and therefore do not pass through this check.
+    """
+    expected = _expected_browser_origin()
+    if not origin or not secrets.compare_digest(origin.rstrip("/"), expected):
+        raise Forbidden("browser session request has an invalid origin")
 
 
 def identify(token: str | None, dev_user: str | None,
@@ -231,6 +297,13 @@ def caller(request: Request) -> Principal:
         raise Forbidden(
             f"{dev.name}'s device token may only record; sign in to do this")
     cfg = auth.config()
+    if cfg.enabled:
+        session = browser_session_store.resolve(
+            request.cookies.get(browser_sessions.session_cookie_name()))
+        if session is not None:
+            if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+                _require_same_origin(request.headers.get("origin"))
+            return session.principal
     token = _bearer(request.headers.get("authorization")) if cfg.enabled else None
     return identify(token,
                     request.headers.get(auth.DEV_USER),
@@ -249,9 +322,25 @@ def analyst(who: Principal = Depends(caller)) -> Principal:
     """Only the security office. The fleet views read across every
     developer's memory, which is precisely what a developer must not see of
     their colleagues."""
-    if not who.analyst:
+    if not who.has("fleet.read"):
         raise Forbidden("this view belongs to the security office")
     return who
+
+
+def ciso(who: Principal = Depends(caller)) -> Principal:
+    """The accountable policy and approval authority."""
+    if not who.ciso:
+        raise Forbidden("this action requires the CISO role")
+    return who
+
+
+def require_capability(capability: str):
+    """Create a FastAPI dependency from the server-owned capability map."""
+    def dependency(who: Principal = Depends(caller)) -> Principal:
+        if not who.has(capability):
+            raise Forbidden(f"this action requires {capability}")
+        return who
+    return dependency
 
 
 def _may_read(run_id: str, who: Principal) -> None:
@@ -279,6 +368,15 @@ def _may_read(run_id: str, who: Principal) -> None:
 # -- the audit log ------------------------------------------------------------
 
 audit_log = audit.Log(base=paths.base_dir())
+
+# Mutable workflow state belongs beside, but not inside, the evidence graph.
+# Cases and approvals can change state; the HyperMesh relations they reference
+# remain immutable evidence.
+workflow_store = control_plane.load(paths.base_dir())
+
+# OIDC transactions and browser sessions are server-owned. Only hashes of the
+# opaque cookie values are retained; access tokens never enter browser storage.
+browser_session_store = browser_sessions.Store(paths.base_dir())
 
 #: Registered machines. Beside the audit log and the run index rather than in
 #: the hypergraph: who is allowed to write to memory is not itself a belief
@@ -308,6 +406,99 @@ def _web_url() -> str:
     it and the setup screen generates commands against it, and the two
     disagreeing sends a developer to a port nothing is listening on."""
     return os.environ.get("MESHAGENT_WEB_URL", "http://localhost:5173")
+
+
+def _cookie(response: JSONResponse | RedirectResponse, name: str, value: str,
+            *, max_age: int) -> None:
+    response.set_cookie(
+        name, value, max_age=max_age, httponly=True,
+        secure=auth.is_production(), samesite="lax", path="/",
+    )
+
+
+def _delete_cookie(response: JSONResponse | RedirectResponse, name: str) -> None:
+    response.delete_cookie(
+        name, path="/", httponly=True,
+        secure=auth.is_production(), samesite="lax",
+    )
+
+
+@app.get("/auth/login", include_in_schema=False)
+def browser_login(return_to: str = "/") -> RedirectResponse:
+    """Begin Authorization Code + PKCE without exposing tokens to JavaScript."""
+    location, transaction = browser_sessions.authorization_url(
+        browser_session_store, return_to)
+    response = RedirectResponse(location, status_code=302)
+    _cookie(response, browser_sessions.transaction_cookie_name(), transaction,
+            max_age=browser_sessions.TRANSACTION_TTL)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/auth/callback", include_in_schema=False)
+def browser_callback(request: Request, code: str | None = None,
+                     state: str | None = None,
+                     error: str | None = None) -> RedirectResponse:
+    """Consume a one-time OIDC transaction and establish an application session."""
+    transaction = request.cookies.get(browser_sessions.transaction_cookie_name())
+    if error:
+        try:
+            browser_session_store.consume(transaction, state)
+        except AuthError:
+            pass
+        response = RedirectResponse("/?auth_error=provider", status_code=303)
+        _delete_cookie(response, browser_sessions.transaction_cookie_name())
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    global _verifier
+    try:
+        if _verifier is None:
+            _verifier = auth.Verifier(auth.config())
+        session, expires_at, return_to = browser_sessions.exchange_code(
+            browser_session_store, transaction=transaction, state=state,
+            code=code, verifier=_verifier)
+    except AuthError:
+        response = RedirectResponse("/?auth_error=failed", status_code=303)
+        _delete_cookie(response, browser_sessions.transaction_cookie_name())
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    response = RedirectResponse(return_to, status_code=303)
+    _cookie(response, browser_sessions.session_cookie_name(), session,
+            max_age=max(1, expires_at - int(time.time())))
+    _delete_cookie(response, browser_sessions.transaction_cookie_name())
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/auth/session", include_in_schema=False)
+def browser_session(request: Request) -> JSONResponse:
+    session = browser_session_store.resolve(
+        request.cookies.get(browser_sessions.session_cookie_name()))
+    if session is None:
+        return JSONResponse(
+            status_code=401,
+            content={"authenticated": False, "expires_at": None,
+                     "reauth_required": True},
+            headers={"Cache-Control": "no-store"},
+        )
+    return JSONResponse(
+        content={"authenticated": True, "expires_at": session.expires_at,
+                 "reauth_required": False},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/auth/logout", include_in_schema=False)
+def browser_logout(request: Request) -> JSONResponse:
+    _require_same_origin(request.headers.get("origin"))
+    browser_session_store.revoke(
+        request.cookies.get(browser_sessions.session_cookie_name()))
+    response = JSONResponse(
+        content={"signed_out": True}, headers={"Cache-Control": "no-store"})
+    _delete_cookie(response, browser_sessions.session_cookie_name())
+    return response
 
 
 def _checkout() -> str:
@@ -348,7 +539,8 @@ def health() -> HealthOut:
 def me(who: Principal = Depends(caller)) -> Me:
     """Who the API believes the caller is, and whether it checked."""
     return Me(subject=who.subject, name=who.name, email=who.email,
-              role=who.role, verified=who.verified)
+              role=who.role, primary_role=who.role,
+              capabilities=sorted(who.capabilities), verified=who.verified)
 
 
 # -- device tokens: logging in a thing that has no browser --------------------
@@ -419,8 +611,7 @@ def pair_token(req: dict[str, str]) -> PairToken:
 
 @app.get("/api/devices", response_model=list[DeviceOut])
 def list_devices(who: Principal = Depends(caller)) -> list[DeviceOut]:
-    """A developer's own machines; every machine for the security office,
-    whose job includes knowing what is allowed to write."""
+    """A person's own machines; every machine only for the CISO role."""
     return [_device_out(d) for d in device_store.owned_by(who)]
 
 
@@ -482,7 +673,7 @@ def recommendations(_: Principal = Depends(analyst)) -> list[Recommendation]:
 
 @app.post("/api/recommendations/{rec_id}/apply", response_model=ApplyReceipt)
 def apply_recommendation(rec_id: str,
-                         who: Principal = Depends(analyst)) -> ApplyReceipt:
+                         who: Principal = Depends(ciso)) -> ApplyReceipt:
     """Apply a recommendation and return the receipt. The receipt says whether
     governed memory actually changed, so nothing is claimed that did not."""
     # Cut recommendations delete governed memory. Audit before invoking the
@@ -490,6 +681,333 @@ def apply_recommendation(rec_id: str,
     note(who, "recommendation.apply", rec_id, "requested", require_commit=True)
     receipt = gateway.apply_recommendation(rec_id, actor=who.subject)
     return receipt
+
+
+# -- Analyst casework and CISO governance -------------------------------------
+
+def _correlation(request: Request) -> str:
+    supplied = request.headers.get("x-correlation-id", "").strip()
+    return supplied[:128] if supplied else f"req_{secrets.token_hex(8)}"
+
+
+def _origin() -> dict[str, Any]:
+    runs = gateway.runs(owner=None)
+    seeded = sum(bool(run.seeded or run.sample) for run in runs)
+    live = len(runs) - seeded
+    if live and seeded:
+        kind = "mixed"
+    elif live:
+        kind = "live"
+    else:
+        kind = "sample"
+    overview = gateway.fleet_overview()
+    return control_plane.Origin(
+        data_origin=kind,
+        source_time=max((run.created_at for run in runs), default=0),
+        seeded_count=seeded,
+        coverage_known=max(0, live - overview.runs_unscanned),
+        coverage_unknown=overview.runs_unscanned,
+        coverage_basis="authenticated, non-seeded runs observed by MeshAgent",
+    ).wire()
+
+
+@app.get("/api/cases", response_model=CaseListOut)
+def list_cases(
+    state: str | None = None,
+    assignee: str | None = None,
+    _: Principal = Depends(require_capability("case.read")),
+) -> CaseListOut:
+    rows = workflow_store.list_cases(state=state, assignee=assignee)
+    return CaseListOut(cases=rows, total=len(rows), origin=OriginOut(**_origin()))
+
+
+@app.post("/api/cases", response_model=CaseOut, status_code=201)
+def create_case(
+    req: CreateCaseRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("case.write")),
+) -> CaseOut:
+    # A case cannot be created around an identifier that the evidence gateway
+    # does not know. This keeps the mutable workflow anchored to immutable data.
+    gateway.run_finding(req.run_id, req.finding_id)
+    evidence_run = gateway.run(req.run_id)
+    note(
+        who, "case.create.request", f"{req.run_id}:{req.finding_id}",
+        req.rationale, require_commit=True,
+    )
+    case = workflow_store.create_case(
+        finding_id=req.finding_id,
+        run_id=req.run_id,
+        title=req.title,
+        severity=req.severity,
+        rationale=req.rationale,
+        actor=who.subject,
+        actor_name=who.name,
+        correlation_id=_correlation(request),
+        origin="sample" if evidence_run.sample or evidence_run.seeded else "live",
+    )
+    return CaseOut(**case)
+
+
+@app.get("/api/cases/{case_id}", response_model=CaseOut)
+def get_case(
+    case_id: str,
+    _: Principal = Depends(require_capability("case.read")),
+) -> CaseOut:
+    return CaseOut(**workflow_store.case(case_id))
+
+
+@app.post("/api/cases/{case_id}/assign", response_model=CaseOut)
+def assign_case(
+    case_id: str,
+    req: AssignCaseRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("case.write")),
+) -> CaseOut:
+    note(
+        who, "case.assign.request", case_id, req.assignee,
+        require_commit=True,
+    )
+    case = workflow_store.assign_case(
+        case_id,
+        expected_version=req.expected_version,
+        assignee=req.assignee,
+        assignee_name=req.assignee_name,
+        sla_due_at=req.sla_due_at,
+        actor=who.subject,
+        actor_name=who.name,
+        correlation_id=_correlation(request),
+    )
+    return CaseOut(**case)
+
+
+@app.post("/api/cases/{case_id}/transition", response_model=CaseOut)
+def transition_case(
+    case_id: str,
+    req: TransitionCaseRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("case.write")),
+) -> CaseOut:
+    note(
+        who, "case.transition.request", case_id, req.to_state,
+        require_commit=True,
+    )
+    case = workflow_store.transition_case(
+        case_id,
+        expected_version=req.expected_version,
+        to_state=req.to_state,
+        disposition=req.disposition,
+        rationale=req.rationale,
+        evidence_ids=req.evidence_ids,
+        actor=who.subject,
+        actor_name=who.name,
+        correlation_id=_correlation(request),
+    )
+    return CaseOut(**case)
+
+
+@app.get("/api/governance/overview", response_model=CisoOverviewOut)
+def governance_overview(
+    _: Principal = Depends(ciso),
+) -> CisoOverviewOut:
+    fleet = gateway.fleet_overview().model_dump()
+    counts = workflow_store.counts()
+    workflow_store.capture_posture(
+        {**fleet, **counts}, origin=_origin()["data_origin"]
+    )
+    data_health = {
+        "durable": paths.durable(),
+        "engine": gateway.mode().engine,
+        "persists": gateway.mode().persists,
+        "audit_intact": audit_log.verify() is None,
+        "identity_verified": auth.config().enabled,
+    }
+    return CisoOverviewOut(
+        fleet=fleet,
+        workflow=counts,
+        trends=workflow_store.posture_trend(),
+        data_health=data_health,
+        origin=OriginOut(**_origin()),
+    )
+
+
+@app.get("/api/policies", response_model=list[PolicyOut])
+def policies(_: Principal = Depends(require_capability("policy.read"))) -> list[PolicyOut]:
+    return [PolicyOut(**row) for row in workflow_store.policies()]
+
+
+@app.post("/api/policies", response_model=PolicyOut, status_code=201)
+def create_policy(
+    req: CreatePolicyRequest,
+    who: Principal = Depends(require_capability("policy.write")),
+) -> PolicyOut:
+    note(
+        who, "policy.create.request", "policy:new", req.scope,
+        require_commit=True,
+    )
+    policy = workflow_store.create_policy(
+        name=req.name,
+        scope=req.scope,
+        severity_threshold=req.severity_threshold,
+        denied_licenses=req.denied_licenses,
+        block_on_unknown=req.block_on_unknown,
+        rationale=req.rationale,
+        actor=who.subject,
+    )
+    return PolicyOut(**policy)
+
+
+@app.get("/api/exceptions", response_model=list[ExceptionOut])
+def exceptions(
+    _: Principal = Depends(require_capability("exception.read")),
+) -> list[ExceptionOut]:
+    return [ExceptionOut(**row) for row in workflow_store.exceptions()]
+
+
+@app.post("/api/exceptions", response_model=ApprovalOut, status_code=201)
+def request_exception(
+    req: CreateExceptionRequest,
+    who: Principal = Depends(require_capability("exception.request")),
+) -> ApprovalOut:
+    note(
+        who, "exception.request", f"policy:{req.policy_id}", req.scope,
+        require_commit=True,
+    )
+    exception, approval = workflow_store.create_exception(
+        policy_id=req.policy_id,
+        scope=req.scope,
+        rationale=req.rationale,
+        controls=req.compensating_controls,
+        owner=req.owner,
+        expires_at=req.expires_at,
+        actor=who.subject,
+        actor_name=who.name,
+    )
+    return ApprovalOut(**approval)
+
+
+@app.get("/api/approvals", response_model=list[ApprovalOut])
+def approvals(
+    status: str | None = None,
+    _: Principal = Depends(require_capability("exception.approve")),
+) -> list[ApprovalOut]:
+    return [ApprovalOut(**row) for row in workflow_store.approvals(status)]
+
+
+@app.post("/api/approvals/{approval_id}/decision", response_model=ApprovalOut)
+def decide_approval(
+    approval_id: str,
+    req: ApprovalDecisionRequest,
+    who: Principal = Depends(require_capability("exception.approve")),
+) -> ApprovalOut:
+    note(
+        who, f"approval.{req.decision}.request", approval_id,
+        req.rationale, require_commit=True,
+    )
+    approval = workflow_store.decide_approval(
+        approval_id,
+        expected_version=req.expected_version,
+        decision=req.decision,
+        rationale=req.rationale,
+        actor=who.subject,
+    )
+    return ApprovalOut(**approval)
+
+
+@app.get("/api/remediations", response_model=list[RemediationOut])
+def remediations(
+    _: Principal = Depends(require_capability("remediation.write")),
+) -> list[RemediationOut]:
+    return [RemediationOut(**row) for row in workflow_store.remediations()]
+
+
+@app.post("/api/remediations", response_model=RemediationOut, status_code=201)
+def create_remediation(
+    req: CreateRemediationRequest,
+    who: Principal = Depends(require_capability("remediation.write")),
+) -> RemediationOut:
+    note(
+        who, "remediation.create.request", f"case:{req.case_id}",
+        req.owner, require_commit=True,
+    )
+    remediation = workflow_store.create_remediation(
+        case_id=req.case_id,
+        title=req.title,
+        owner=req.owner,
+        due_at=req.due_at,
+        target_revision=req.target_revision,
+        actor=who.subject,
+    )
+    return RemediationOut(**remediation)
+
+
+@app.get("/api/reports", response_model=list[ReportOut])
+def reports(
+    _: Principal = Depends(require_capability("report.generate")),
+) -> list[ReportOut]:
+    return [ReportOut(**row) for row in workflow_store.reports()]
+
+
+@app.post("/api/reports", response_model=ReportOut, status_code=201)
+def create_report(
+    req: ReportRequest,
+    who: Principal = Depends(require_capability("report.generate")),
+) -> ReportOut:
+    if not gateway.mode().persists:
+        raise control_plane.StoreError(
+            "reports require the durable engine; sample data is excluded"
+        )
+    live_runs = [
+        run for run in gateway.runs(owner=None)
+        if not run.sample and not run.seeded
+        and req.period_start <= run.created_at <= req.period_end
+    ]
+    if not live_runs:
+        raise control_plane.StoreError(
+            "no authenticated live runs exist in the requested report period"
+        )
+    finding_count, reachable, not_assessed = 0, 0, 0
+    for run in live_runs:
+        findings = gateway.run_findings(run.id)
+        finding_count += findings.present
+        reachable += findings.reachable
+        not_assessed += findings.not_assessed
+    manifest = {
+        "data_origin": "live",
+        "period": {"start": req.period_start, "end": req.period_end},
+        "coverage": {
+            "authenticated_runs": len(live_runs),
+            "basis": "non-sample, non-seeded runs inside the requested period",
+        },
+        "findings": {
+            "present": finding_count,
+            "reachable": reachable,
+            "not_assessed": not_assessed,
+        },
+        "workflow": workflow_store.counts(),
+        "audit_intact": audit_log.verify() is None,
+        "run_ids": [run.id for run in live_runs],
+    }
+    note(
+        who, "report.generate.request", "report:new", req.title,
+        require_commit=True,
+    )
+    report = workflow_store.create_report(
+        title=req.title,
+        period_start=req.period_start,
+        period_end=req.period_end,
+        requested_by=who.subject,
+        manifest=manifest,
+    )
+    return ReportOut(**report)
+
+
+@app.get("/api/reports/{report_id}", response_model=ReportOut)
+def report(
+    report_id: str,
+    _: Principal = Depends(require_capability("report.generate")),
+) -> ReportOut:
+    return ReportOut(**workflow_store.report(report_id))
 
 
 @app.get("/api/runs/{run_id}/graph", response_model=GraphPayload)
@@ -760,10 +1278,15 @@ async def run_stream(ws: WebSocket, run_id: str) -> None:
     dev_user = dev_user or ws.headers.get(auth.DEV_USER)
     dev_role = dev_role or ws.headers.get(auth.DEV_ROLE)
 
-    # identified before the handshake is accepted, so an unauthenticated
-    # caller is refused outright rather than connected and then told
+    # Same-origin browsers carry the HttpOnly application session cookie.
+    # Non-browser clients retain the documented bearer subprotocol/header path.
+    browser_cookie = ws.cookies.get(browser_sessions.session_cookie_name())
     try:
-        who = identify(token, dev_user, dev_role)
+        browser_session = browser_session_store.resolve(browser_cookie)
+        if browser_session is not None:
+            _require_same_origin(ws.headers.get("origin"))
+        who = (browser_session.principal if browser_session is not None
+               else identify(token, dev_user, dev_role))
     except AuthError as exc:
         await ws.close(code=1008, reason=str(exc)[:120])
         return
@@ -781,6 +1304,10 @@ async def run_stream(ws: WebSocket, run_id: str) -> None:
     delay = _stream_delay()
     try:
         while True:
+            if browser_session is not None and browser_session_store.resolve(
+                    browser_cookie) is None:
+                await ws.close(code=4401, reason="browser session expired")
+                return
             frame = await asyncio.to_thread(next, events, None)
             if frame is None:
                 return

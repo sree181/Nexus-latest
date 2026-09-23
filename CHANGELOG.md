@@ -14,6 +14,10 @@ All notable production-v1 operational and repository changes should be recorded 
 - Thread-safe namespaced CLI and adapter state, bounded offline event queues, retry commands, recording-only device credentials, and legacy state migration.
 - Frontend error boundaries, accessible graph relationship tables, resilient WebSocket recovery, device-management states, responsive overflow handling, and automated Vitest coverage.
 - Hash-locked Python dependencies, pinned container bases, CI release gates, SBOM and vulnerability scanning, and non-root production images.
+- Closed Developer, Analyst, and CISO roles with server-owned capabilities, authoritative role landing, and capability-scoped navigation and route guards.
+- Durable Analyst casework: prioritized queue, case assignment and SLA, controlled transitions, immutable events, source labels, and policy-exception requests.
+- Durable CISO governance: executive overview, versioned policy register, separated exception approvals, remediation ownership, and live-source report manifests.
+- API-owned Authorization Code + PKCE, opaque HttpOnly browser sessions, one-time login state, bounded expiry and revocation, exact-origin CSRF checks, and terminal WebSocket session handling.
 
 ### Changed
 
@@ -22,6 +26,8 @@ All notable production-v1 operational and repository changes should be recorded 
 - Governed-memory reads verify graph-to-sidecar content hashes and recover only valid interrupted redactions.
 - RAG streaming and non-streaming paths now share the same citation firewall and reject mixed valid/invented citation tags.
 - FastAPI and PyJWT were upgraded to current advisory-free versions and all dependency lock hashes regenerated.
+- Browser requests now use same-origin opaque sessions; OIDC access tokens no longer enter JavaScript or browser storage. Verified Bearer access remains supported for documented non-browser clients.
+- Production startup now requires distinct Analyst and CISO groups plus the public OIDC client ID used by the API-owned code flow.
 
 ### Fixed
 

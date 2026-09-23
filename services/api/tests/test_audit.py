@@ -43,6 +43,12 @@ def maya():
                                          auth.DEV_ROLE: "developer"})
 
 
+@pytest.fixture
+def alex():
+    return TestClient(main.app, headers={auth.DEV_USER: "alex@example.com",
+                                        auth.DEV_ROLE: "ciso"})
+
+
 @pytest.fixture(autouse=True)
 def fresh_log(monkeypatch, tmp_path):
     """Each test gets its own log, and the app writes to it."""
@@ -112,7 +118,7 @@ def test_a_forget_fails_closed_when_its_audit_commit_fails(monkeypatch):
 def test_a_recommendation_fails_closed_when_its_audit_commit_fails(monkeypatch):
     client = TestClient(
         main.app,
-        headers={auth.DEV_USER: "priya@example.com", auth.DEV_ROLE: "analyst"},
+        headers={auth.DEV_USER: "alex@example.com", auth.DEV_ROLE: "ciso"},
         raise_server_exceptions=False,
     )
 
@@ -128,10 +134,10 @@ def test_a_recommendation_fails_closed_when_its_audit_commit_fails(monkeypatch):
     assert response.status_code == 500
 
 
-def test_a_cut_recommendation_certificate_carries_the_authenticated_actor(priya):
-    receipt = priya.post("/api/recommendations/rec-source/apply")
+def test_a_cut_recommendation_certificate_carries_the_authenticated_actor(alex):
+    receipt = alex.post("/api/recommendations/rec-source/apply")
     assert receipt.status_code == 200
-    assert receipt.json()["certificates"][0]["actor"] == "priya@example.com"
+    assert receipt.json()["certificates"][0]["actor"] == "alex@example.com"
 
 
 def test_production_forget_requires_both_replay_preconditions(monkeypatch):

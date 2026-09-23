@@ -1,22 +1,10 @@
-"""Who is asking, and which of the two jobs they are here to do.
+"""Verified identity, closed role mapping, and server-owned capabilities.
 
-MeshAgent has two users with genuinely different rights. A developer runs
-agents and owns the memory those runs produce. An analyst in the security
-office oversees every developer's runs and is accountable for what they
-contain. Attribution is not decoration here: the analyst's whole job is to
-say *which developer* a reachable finding belongs to, and `forget` destroys
-evidence, so it matters that the caller is who they claim to be.
-
-So identity is an OIDC access token from the company's own provider, verified
-against its published keys -- issuer, audience, signature and expiry all
-checked. Nothing about a role is taken from the client; it is read from the
-claims the provider signed.
-
-There is an unauthenticated mode for working locally, because a developer
-cloning this repo should not need an identity provider to see it run. It is
-reported in every response so no screen can quietly imply it is secure, and
-it is refused outright once an issuer is configured -- a deployment that is
-half-authenticated is worse than either.
+MeshAgent has three production personas with deliberately different authority:
+Developers operate on their own runs, Analysts investigate fleet evidence and
+own cases, and CISOs set policy and approve governed changes. Browsers may use
+roles to choose a landing page, but every API action is authorized here from
+verified claims. Unknown or conflicting privileged mappings fail closed.
 """
 
 from __future__ import annotations
@@ -27,18 +15,49 @@ from typing import Any, Literal, cast
 
 import httpx
 
-Role = Literal["developer", "analyst"]
+Role = Literal["developer", "analyst", "ciso"]
 Environment = Literal["development", "test", "production"]
+Capability = Literal[
+    "run.own",
+    "run.create",
+    "recorder.write",
+    "package.gate",
+    "device.own",
+    "fleet.read",
+    "evidence.read",
+    "case.read",
+    "case.write",
+    "audit.read",
+    "exception.request",
+    "policy.read",
+    "policy.write",
+    "exception.read",
+    "exception.approve",
+    "recommendation.apply",
+    "remediation.write",
+    "report.generate",
+    "device.fleet",
+]
 
 ENVIRONMENTS = frozenset({"development", "test", "production"})
+CAPABILITIES: dict[Role, frozenset[str]] = {
+    "developer": frozenset({
+        "run.own", "run.create", "recorder.write", "package.gate", "device.own",
+    }),
+    "analyst": frozenset({
+        "fleet.read", "evidence.read", "case.read", "case.write", "audit.read",
+        "exception.request", "policy.read", "device.own",
+    }),
+    "ciso": frozenset({
+        "fleet.read", "evidence.read", "case.read", "case.write", "audit.read",
+        "exception.request", "policy.read", "policy.write", "exception.read",
+        "exception.approve", "recommendation.apply", "remediation.write",
+        "report.generate", "device.fleet", "device.own",
+    }),
+}
 
 
 def environment() -> Environment:
-    """The deployment mode, deliberately from a closed set.
-
-    Falling back to development keeps a fresh local checkout usable, but a
-    typo must never silently select permissive local identity handling.
-    """
     value = os.environ.get("MESHAGENT_ENV", "development")
     if value not in ENVIRONMENTS:
         raise RuntimeError(
@@ -51,14 +70,10 @@ def is_production() -> bool:
 
 
 def allows_local_asserted_identities() -> bool:
-    """Only local development and hermetic tests may trust request headers."""
     return environment() in ("development", "test")
 
-# Signature algorithms accepted from the provider. Deliberately asymmetric
-# only: an HMAC algorithm here would let anyone holding the (shared) secret
-# mint tokens, and `none` would let anyone mint them at all.
-ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384"]
 
+ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384"]
 DISCOVERY = "/.well-known/openid-configuration"
 
 
@@ -72,38 +87,38 @@ class Forbidden(Exception):
 
 @dataclass(frozen=True)
 class Principal:
-    """One authenticated human."""
-
-    subject: str                # the IdP's stable id for them; owns runs
+    subject: str
     name: str
     email: str
     role: Role
-    # False when no provider is configured and this identity was simply
-    # asserted by the client. Carried into /api/me so the UI can say so.
     verified: bool = True
-    # Set when the caller is a machine holding a device token rather than a
-    # person at a browser. Routes meant for people refuse it outright: a
-    # token that lives in a file on a laptop should be able to record memory
-    # and nothing else, whoever ends up reading that file.
     device: str | None = None
 
     @property
+    def capabilities(self) -> frozenset[str]:
+        return CAPABILITIES[self.role]
+
+    def has(self, capability: str) -> bool:
+        return capability in self.capabilities
+
+    @property
     def analyst(self) -> bool:
-        return self.role == "analyst"
+        """Compatibility name for cross-fleet investigative access."""
+        return self.role in ("analyst", "ciso")
+
+    @property
+    def ciso(self) -> bool:
+        return self.role == "ciso"
 
 
 @dataclass(frozen=True)
 class Config:
-    """How this deployment identifies people."""
-
     issuer: str = ""
     audience: str = ""
     jwks_url: str = ""
-    # Claim holding the groups or roles the provider assigns. Entra puts them
-    # in `roles` or `groups`, Okta and Keycloak commonly in `groups`.
     role_claim: str = "roles"
-    # Membership of any of these means the security office, not a developer.
     analyst_groups: tuple[str, ...] = ()
+    ciso_groups: tuple[str, ...] = ()
 
     @property
     def enabled(self) -> bool:
@@ -111,29 +126,26 @@ class Config:
 
 
 def _split(raw: str) -> tuple[str, ...]:
-    return tuple(p.strip() for p in raw.split(",") if p.strip())
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
 def config() -> Config:
-    """Read the deployment's identity settings from the environment."""
     return Config(
         issuer=os.environ.get("MESHAGENT_OIDC_ISSUER", "").strip().rstrip("/"),
         audience=os.environ.get("MESHAGENT_OIDC_AUDIENCE", "").strip(),
         jwks_url=os.environ.get("MESHAGENT_OIDC_JWKS_URL", "").strip(),
         role_claim=os.environ.get("MESHAGENT_OIDC_ROLE_CLAIM", "roles").strip(),
         analyst_groups=_split(os.environ.get("MESHAGENT_ANALYST_GROUPS", "")),
+        ciso_groups=_split(os.environ.get("MESHAGENT_CISO_GROUPS", "")),
     )
 
 
 def discover_jwks(cfg: Config, *, timeout: float = 5.0) -> str:
-    """The provider's signing-key URL, taken from its own discovery document
-    rather than guessed from the issuer -- the path differs between Entra,
-    Okta, Google and Keycloak."""
     if cfg.jwks_url:
         return cfg.jwks_url
     try:
         doc = httpx.get(cfg.issuer + DISCOVERY, timeout=timeout).json()
-    except Exception as exc:                        # network, TLS, bad JSON
+    except Exception as exc:
         raise AuthError(f"identity provider unreachable: {exc}") from exc
     url = doc.get("jwks_uri")
     if not url:
@@ -141,26 +153,40 @@ def discover_jwks(cfg: Config, *, timeout: float = 5.0) -> str:
     return str(url)
 
 
-def role_of(claims: dict[str, Any], cfg: Config) -> Role:
-    """The caller's role, from the claims the provider signed.
-
-    Anyone the security office has not put in an analyst group is a
-    developer. Erring the other way would hand fleet-wide visibility to
-    whoever happened to log in."""
+def _held_roles(claims: dict[str, Any], cfg: Config) -> set[str]:
     raw = claims.get(cfg.role_claim)
     if raw is None and cfg.role_claim != "groups":
-        raw = claims.get("groups")          # the other common spelling
+        raw = claims.get("groups")
+    if raw is None:
+        return set()
     if isinstance(raw, str):
-        held = {raw}
-    elif isinstance(raw, list):
-        held = {str(v) for v in raw}
-    else:
-        held = set()
-    return "analyst" if held & set(cfg.analyst_groups) else "developer"
+        return {raw}
+    if isinstance(raw, list) and all(isinstance(value, str) for value in raw):
+        return set(raw)
+    raise AuthError(f"token carries a malformed {cfg.role_claim} claim")
+
+
+def role_of(claims: dict[str, Any], cfg: Config) -> Role:
+    """Map signed group claims onto one non-composable role.
+
+    CISO and Analyst are intentionally not additive. Membership in both groups
+    is a provisioning error, so access is refused instead of silently selecting
+    the more privileged role. An authenticated person in neither privileged
+    group remains a Developer.
+    """
+    held = _held_roles(claims, cfg)
+    analyst = bool(held & set(cfg.analyst_groups))
+    ciso = bool(held & set(cfg.ciso_groups))
+    if analyst and ciso:
+        raise AuthError("identity maps to conflicting Analyst and CISO groups")
+    if ciso:
+        return "ciso"
+    if analyst:
+        return "analyst"
+    return "developer"
 
 
 def principal_of(claims: dict[str, Any], cfg: Config) -> Principal:
-    """The verified claims, read as a person."""
     subject = str(claims.get("sub") or "").strip()
     if not subject:
         raise AuthError("token carries no subject")
@@ -174,12 +200,6 @@ def principal_of(claims: dict[str, Any], cfg: Config) -> Principal:
 
 
 class Verifier:
-    """Verifies access tokens against the provider's published keys.
-
-    The key set is fetched once and cached by PyJWT, which re-fetches when a
-    token arrives signed by a key it has not seen -- so provider key rotation
-    does not need a restart."""
-
     def __init__(self, cfg: Config) -> None:
         self._cfg = cfg
         self._keys: Any = None
@@ -187,7 +207,6 @@ class Verifier:
     def _client(self) -> Any:
         if self._keys is None:
             from jwt import PyJWKClient
-
             self._keys = PyJWKClient(discover_jwks(self._cfg), cache_keys=True)
         return self._keys
 
@@ -195,15 +214,13 @@ class Verifier:
         import jwt
 
         cfg = self._cfg
-        # PyJWT deliberately permits an issuer-only configuration when audience
-        # verification is disabled. That is useful while wiring a local IdP,
-        # but production access tokens must be bound to this API as well.
         if is_production() and not cfg.audience:
             raise AuthError("production OIDC configuration requires an audience")
         try:
             key = self._client().get_signing_key_from_jwt(token).key
             claims = jwt.decode(
-                token, key,
+                token,
+                key,
                 algorithms=ALGORITHMS,
                 audience=cfg.audience or None,
                 issuer=cfg.issuer or None,
@@ -214,40 +231,29 @@ class Verifier:
             )
         except AuthError:
             raise
-        except Exception as exc:        # expired, wrong audience, bad signature
+        except Exception as exc:
             raise AuthError(f"token rejected: {exc}") from exc
         return principal_of(claims, cfg)
 
 
-# -- the unauthenticated local mode -------------------------------------------
-
-# Who you are when no provider is configured. The client says so, and the
-# server believes it, which is exactly why every response marks the identity
-# unverified and the UI has to show that.
 DEV_USER = "X-MeshAgent-User"
 DEV_ROLE = "X-MeshAgent-Role"
 
 
 def local_principal(user: str | None, role: str | None) -> Principal:
-    """An asserted, unverified identity for local work."""
     who = (user or "dev@localhost").strip() or "dev@localhost"
-    wanted: Role = "analyst" if (role or "").strip() == "analyst" else "developer"
-    return Principal(subject=who, name=who, email=who, role=wanted,
-                     verified=False)
+    raw = (role or "developer").strip().lower()
+    wanted: Role = raw if raw in ("developer", "analyst", "ciso") else "developer"  # type: ignore[assignment]
+    return Principal(
+        subject=who, name=who, email=who, role=wanted, verified=False
+    )
 
 
-# WebSocket subprotocols, which is where a browser has to put identity
-# because it cannot set an Authorization header on a socket.
 BEARER = "meshagent.bearer"
 LOCAL = "meshagent.local"
 
 
 def from_subprotocols(offered: list[str]) -> tuple[str | None, str | None, str | None]:
-    """Read (token, asserted user, asserted role) out of the subprotocol list.
-
-    Subprotocol values are HTTP tokens and so cannot contain `@`, which is
-    why the asserted user arrives base64url encoded. There is nothing secret
-    about it -- in local mode there is nothing secret at all."""
     if not offered:
         return None, None, None
     kind = offered[0]
@@ -257,7 +263,9 @@ def from_subprotocols(offered: list[str]) -> tuple[str | None, str | None, str |
         import base64
         raw = offered[1]
         try:
-            user = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode()
+            user = base64.urlsafe_b64decode(
+                raw + "=" * (-len(raw) % 4)
+            ).decode()
         except (ValueError, UnicodeDecodeError):
             return None, None, None
         return None, user, (offered[2] if len(offered) > 2 else None)

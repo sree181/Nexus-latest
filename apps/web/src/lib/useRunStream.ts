@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MemoryEvent, RunStreamEvent, RunSummary } from "./api";
-import { socketProtocols } from "./auth";
+import { handleUnauthorized, socketProtocols } from "./auth";
 
 export type RunStreamStatus =
   | "idle"
@@ -31,6 +31,12 @@ const IDLE: RunStream = {
 };
 
 export const MAX_STREAM_RECONNECTS = 5;
+
+export function terminalCloseMessage(code: number): string | null {
+  if (code === 4401) return "Your company session expired. Sign in again to continue.";
+  if (code === 4403) return "Your access to this run was revoked.";
+  return null;
+}
 
 /** Bounded exponential backoff: quick enough to repair a brief proxy restart,
  * capped so an unavailable service does not keep a browser busy indefinitely. */
@@ -111,8 +117,8 @@ export function useRunStream(
         error: null,
       }));
       try {
-        // the access token rides as a subprotocol: a browser cannot put an
-        // Authorization header on a WebSocket
+        // Production browsers authenticate with the same-origin HttpOnly
+        // session cookie. Local development uses an explicit subprotocol.
         socket = new WebSocket(socketUrl(runId), socketProtocols());
       } catch {
         scheduleReconnect();
@@ -166,7 +172,18 @@ export function useRunStream(
       // make onclose the sole reconnect path so one failed socket schedules one
       // retry rather than two.
       socket.onerror = () => undefined;
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        const terminalMessage = terminalCloseMessage(event.code);
+        if (terminalMessage) {
+          terminal = true;
+          setState((prev) => ({
+            ...prev,
+            status: "error",
+            error: terminalMessage,
+          }));
+          if (event.code === 4401) handleUnauthorized();
+          return;
+        }
         if (!closed && !terminal) scheduleReconnect();
       };
     };

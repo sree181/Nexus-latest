@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api, type Me } from "./api";
+import { api, type Capability, type Me } from "./api";
 
 /** Who the API says you are.
  *
@@ -23,8 +23,11 @@ export function useIdentity() {
     failed: me.isError,
     /** The security office. False while still loading: nothing is shown on
      *  the assumption of a role we have not confirmed. */
-    analyst: me.data?.role === "analyst",
+    analyst: me.data?.role === "analyst" || me.data?.role === "ciso",
     developer: me.data?.role === "developer",
+    ciso: me.data?.role === "ciso",
+    hasCapability: (capability: Capability) =>
+      me.data?.capabilities.includes(capability) ?? false,
   };
 }
 

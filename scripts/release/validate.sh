@@ -40,6 +40,7 @@ export MESHAGENT_OIDC_ISSUER="${MESHAGENT_OIDC_ISSUER:-https://identity.example.
 export MESHAGENT_OIDC_AUDIENCE="${MESHAGENT_OIDC_AUDIENCE:-meshagent-api}"
 export MESHAGENT_OIDC_CLIENT_ID="${MESHAGENT_OIDC_CLIENT_ID:-meshagent-web}"
 export MESHAGENT_ANALYST_GROUPS="${MESHAGENT_ANALYST_GROUPS:-meshagent-security}"
+export MESHAGENT_CISO_GROUPS="${MESHAGENT_CISO_GROUPS:-meshagent-ciso}"
 export MESHAGENT_CORS_ORIGINS="${MESHAGENT_CORS_ORIGINS:-https://meshagent.example.invalid}"
 export MESHAGENT_WEB_URL="${MESHAGENT_WEB_URL:-https://meshagent.example.invalid}"
 export MESHAGENT_WEB_PORT="${MESHAGENT_WEB_PORT:-8080}"

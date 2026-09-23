@@ -1,6 +1,6 @@
 import type { GraphPayload, NodeKind, Severity } from "@meshagent/graph";
 
-import { authHeaders } from "./auth";
+import { authHeaders, handleUnauthorized } from "./auth";
 
 /** Mirrors services/api/app/models.py. For a bigger app, generate this client
  *  from the API's /openapi.json instead of hand-maintaining it. */
@@ -136,12 +136,301 @@ export interface AuditOut {
   durable: boolean;
 }
 
+export type Role = "developer" | "analyst" | "ciso";
+
+export type Capability =
+  | "run.own"
+  | "run.create"
+  | "recorder.write"
+  | "package.gate"
+  | "device.own"
+  | "fleet.read"
+  | "evidence.read"
+  | "case.read"
+  | "case.write"
+  | "audit.read"
+  | "exception.request"
+  | "policy.read"
+  | "policy.write"
+  | "exception.read"
+  | "exception.approve"
+  | "recommendation.apply"
+  | "remediation.write"
+  | "report.generate"
+  | "device.fleet";
+
 export interface Me {
   subject: string;
   name: string;
   email: string;
-  role: "developer" | "analyst";
+  role: Role;
+  primary_role: Role;
+  capabilities: Capability[];
   verified: boolean;
+}
+
+// -- Analyst and CISO control-plane workflows --------------------------------
+
+export type DataOrigin = "live" | "sample" | "mixed";
+
+export interface OriginCoverage {
+  known: number;
+  unknown: number;
+  basis: string;
+}
+
+export interface OriginMetadata {
+  data_origin: DataOrigin;
+  source_time: number;
+  seeded_count: number;
+  coverage: OriginCoverage;
+}
+
+export type WorkflowSeverity =
+  | "critical"
+  | "high"
+  | "medium"
+  | "low"
+  | "unknown";
+
+export type CaseState =
+  | "open"
+  | "triaged"
+  | "investigating"
+  | "remediation"
+  | "resolved"
+  | "closed";
+
+export type CaseTransition =
+  | "triaged"
+  | "investigating"
+  | "remediation"
+  | "resolved"
+  | "closed"
+  | "reopened";
+
+export interface CaseEvent {
+  id: string;
+  case_id: string;
+  actor: string;
+  actor_name: string;
+  action: string;
+  from_state: string | null;
+  to_state: string | null;
+  rationale: string;
+  evidence_ids: string[];
+  at: number;
+  correlation_id: string;
+}
+
+export interface CaseRecord {
+  id: string;
+  finding_id: string;
+  run_id: string;
+  title: string;
+  severity: WorkflowSeverity;
+  state: CaseState;
+  assignee: string | null;
+  assignee_name: string | null;
+  sla_due_at: number | null;
+  disposition: string | null;
+  version: number;
+  created_at: number;
+  updated_at: number;
+  created_by: string;
+  origin: DataOrigin;
+  overdue: boolean;
+  priority: number;
+  priority_reasons: string[];
+  events: CaseEvent[];
+}
+
+export interface CaseList {
+  cases: CaseRecord[];
+  total: number;
+  origin: OriginMetadata;
+}
+
+export interface CreateCaseInput {
+  finding_id: string;
+  run_id: string;
+  title: string;
+  severity: WorkflowSeverity;
+  rationale: string;
+}
+
+export interface AssignCaseInput {
+  expected_version: number;
+  assignee: string;
+  assignee_name: string;
+  sla_due_at: number | null;
+}
+
+export interface TransitionCaseInput {
+  expected_version: number;
+  to_state: CaseTransition;
+  disposition?: string | null;
+  rationale: string;
+  evidence_ids: string[];
+}
+
+export interface PolicyVersion {
+  policy_id: string;
+  version: number;
+  severity_threshold: WorkflowSeverity;
+  denied_licenses: string[];
+  block_on_unknown: boolean;
+  rationale: string;
+  created_at: number;
+  created_by: string;
+}
+
+export interface Policy {
+  id: string;
+  name: string;
+  scope: string;
+  status: string;
+  active_version: number;
+  created_at: number;
+  updated_at: number;
+  created_by: string;
+  current: PolicyVersion;
+}
+
+export interface CreatePolicyInput {
+  name: string;
+  scope: string;
+  severity_threshold: WorkflowSeverity;
+  denied_licenses: string[];
+  block_on_unknown: boolean;
+  rationale: string;
+}
+
+export interface PolicyException {
+  id: string;
+  policy_id: string;
+  scope: string;
+  rationale: string;
+  compensating_controls: string;
+  owner: string;
+  expires_at: number;
+  status: string;
+  version: number;
+  requested_by: string;
+  approved_by: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface CreateExceptionInput {
+  policy_id: string;
+  scope: string;
+  rationale: string;
+  compensating_controls: string;
+  owner: string;
+  expires_at: number;
+}
+
+export type ApprovalDecision = "approve" | "reject";
+
+export interface Approval {
+  id: string;
+  kind: string;
+  resource_id: string;
+  requester: string;
+  requester_name: string;
+  status: string;
+  rationale: string;
+  approver: string | null;
+  decision_rationale: string | null;
+  version: number;
+  expires_at: number;
+  created_at: number;
+  decided_at: number | null;
+}
+
+export interface ApprovalDecisionInput {
+  expected_version: number;
+  decision: ApprovalDecision;
+  rationale: string;
+}
+
+export interface Remediation {
+  id: string;
+  case_id: string;
+  title: string;
+  owner: string;
+  due_at: number;
+  status: string;
+  target_revision: string | null;
+  evidence_ids: string[];
+  version: number;
+  created_by: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface CreateRemediationInput {
+  case_id: string;
+  title: string;
+  owner: string;
+  due_at: number;
+  target_revision?: string | null;
+}
+
+export interface ReportManifest {
+  data_origin: "live";
+  period: { start: number; end: number };
+  coverage: { authenticated_runs: number; basis: string };
+  findings: { present: number; reachable: number; not_assessed: number };
+  workflow: Record<string, number>;
+  audit_intact: boolean;
+  run_ids: string[];
+}
+
+export interface GovernanceReport {
+  id: string;
+  title: string;
+  period_start: number;
+  period_end: number;
+  status: string;
+  requested_by: string;
+  digest: string;
+  created_at: number;
+  manifest: ReportManifest | null;
+}
+
+export interface CreateReportInput {
+  title: string;
+  period_start: number;
+  period_end: number;
+}
+
+export interface PostureTrend {
+  id: string;
+  captured_at: number;
+  metrics: Record<string, number>;
+  origin: DataOrigin;
+}
+
+export interface GovernanceOverview {
+  fleet: FleetOverview;
+  workflow: {
+    open_cases: number;
+    overdue_cases: number;
+    pending_approvals: number;
+    active_exceptions: number;
+    open_remediations: number;
+  };
+  trends: PostureTrend[];
+  data_health: {
+    durable: boolean;
+    engine: boolean;
+    persists: boolean;
+    audit_intact: boolean;
+    identity_verified: boolean;
+  };
+  origin: OriginMetadata;
 }
 
 /** The newest run's id. Runs come back oldest first, so the seeded run is at
@@ -580,7 +869,7 @@ export interface DeviceOut {
   label: string;
   subject: string;
   name: string;
-  role: "developer" | "analyst";
+  role: Role;
   created_at: number;
   last_used: number;
   /** Whether the human who minted it was themselves verified. A bearer
@@ -621,11 +910,15 @@ async function fail(res: Response): Promise<never> {
   } catch {
     // no JSON body; keep the status line
   }
+  if (res.status === 401) handleUnauthorized();
   throw new ApiError(res.status, detail);
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`/api${path}`, { headers: authHeaders() });
+  const res = await fetch(`/api${path}`, {
+    credentials: "same-origin",
+    headers: authHeaders(),
+  });
   if (!res.ok) return fail(res);
   return res.json() as Promise<T>;
 }
@@ -633,6 +926,7 @@ async function get<T>(path: string): Promise<T> {
 async function del<T>(path: string): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: "DELETE",
+    credentials: "same-origin",
     headers: authHeaders(),
   });
   if (!res.ok) return fail(res);
@@ -646,6 +940,7 @@ async function post<T>(
 ): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "content-type": "application/json", ...authHeaders(), ...headers },
     body: JSON.stringify(body),
   });
@@ -677,6 +972,45 @@ export const api = {
   recommendations: () => get<Recommendation[]>("/recommendations"),
   applyRecommendation: (id: string) =>
     post<ApplyReceipt>(`/recommendations/${encodeURIComponent(id)}/apply`, {}),
+
+  cases: (filters?: { state?: CaseState; assignee?: string }) => {
+    const query = new URLSearchParams();
+    if (filters?.state) query.set("state", filters.state);
+    if (filters?.assignee) query.set("assignee", filters.assignee);
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return get<CaseList>(`/cases${suffix}`);
+  },
+  createCase: (input: CreateCaseInput) => post<CaseRecord>("/cases", input),
+  case: (caseId: string) =>
+    get<CaseRecord>(`/cases/${encodeURIComponent(caseId)}`),
+  assignCase: (caseId: string, input: AssignCaseInput) =>
+    post<CaseRecord>(`/cases/${encodeURIComponent(caseId)}/assign`, input),
+  transitionCase: (caseId: string, input: TransitionCaseInput) =>
+    post<CaseRecord>(`/cases/${encodeURIComponent(caseId)}/transition`, input),
+
+  governanceOverview: () => get<GovernanceOverview>("/governance/overview"),
+  policies: () => get<Policy[]>("/policies"),
+  createPolicy: (input: CreatePolicyInput) => post<Policy>("/policies", input),
+  exceptions: () => get<PolicyException[]>("/exceptions"),
+  requestException: (input: CreateExceptionInput) =>
+    post<Approval>("/exceptions", input),
+  approvals: (status?: string) =>
+    get<Approval[]>(
+      `/approvals${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+  decideApproval: (approvalId: string, input: ApprovalDecisionInput) =>
+    post<Approval>(
+      `/approvals/${encodeURIComponent(approvalId)}/decision`,
+      input,
+    ),
+  remediations: () => get<Remediation[]>("/remediations"),
+  createRemediation: (input: CreateRemediationInput) =>
+    post<Remediation>("/remediations", input),
+  reports: () => get<GovernanceReport[]>("/reports"),
+  createReport: (input: CreateReportInput) =>
+    post<GovernanceReport>("/reports", input),
+  report: (reportId: string) =>
+    get<GovernanceReport>(`/reports/${encodeURIComponent(reportId)}`),
 
   runs: () => get<RunSummary[]>("/runs"),
   createRun: (task: string) => post<RunSummary>("/runs", { task }),

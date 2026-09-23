@@ -6,9 +6,18 @@ import {
 } from "@tanstack/react-router";
 import { ModeBanner } from "./components/ModeBanner";
 import { RequiresAnalyst } from "./components/RequiresAnalyst";
+import { RequiresCapability } from "./components/RequiresCapability";
 import { RouteError, RouteNotFound } from "./components/RouteBoundary";
 import { Sidebar } from "./components/Sidebar";
-import { StartTask } from "./routes/StartTask";
+import { RoleLanding } from "./routes/RoleLanding";
+import { AnalystQueue } from "./routes/AnalystQueue";
+import { AnalystCaseDetail } from "./routes/AnalystCaseDetail";
+import { AnalystInvestigation } from "./routes/AnalystInvestigation";
+import { CisoOverview } from "./routes/CisoOverview";
+import { CisoPolicies } from "./routes/CisoPolicies";
+import { CisoApprovals } from "./routes/CisoApprovals";
+import { CisoRemediation } from "./routes/CisoRemediation";
+import { CisoReports } from "./routes/CisoReports";
 import { FleetGraph } from "./routes/FleetGraph";
 import { FleetOverview } from "./routes/FleetOverview";
 import { FleetRecommendations } from "./routes/FleetRecommendations";
@@ -50,7 +59,55 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: StartTask,
+  component: RoleLanding,
+});
+
+const analystQueueRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/analyst/queue",
+  component: () => <RequiresCapability capability="case.read"><AnalystQueue /></RequiresCapability>,
+});
+
+const analystCaseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/analyst/cases/$caseId",
+  component: () => <RequiresCapability capability="case.read"><AnalystCaseDetail /></RequiresCapability>,
+});
+
+const analystInvestigationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/analyst/investigate/$runId/$findingId",
+  component: () => <RequiresCapability capability="evidence.read"><AnalystInvestigation /></RequiresCapability>,
+});
+
+const cisoOverviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ciso/overview",
+  component: () => <RequiresCapability capability="policy.write"><CisoOverview /></RequiresCapability>,
+});
+
+const cisoPoliciesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ciso/policies",
+  component: () => <RequiresCapability capability="policy.write"><CisoPolicies /></RequiresCapability>,
+});
+
+const cisoApprovalsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ciso/approvals",
+  component: () => <RequiresCapability capability="exception.approve"><CisoApprovals /></RequiresCapability>,
+});
+
+const cisoRemediationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ciso/remediation",
+  component: () => <RequiresCapability capability="remediation.write"><CisoRemediation /></RequiresCapability>,
+});
+
+const cisoReportsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ciso/reports",
+  component: () => <RequiresCapability capability="report.generate"><CisoReports /></RequiresCapability>,
 });
 
 const auditRoute = createRoute({
@@ -172,6 +229,14 @@ const runSupplyRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  analystQueueRoute,
+  analystCaseRoute,
+  analystInvestigationRoute,
+  cisoOverviewRoute,
+  cisoPoliciesRoute,
+  cisoApprovalsRoute,
+  cisoRemediationRoute,
+  cisoReportsRoute,
   structureRoute,
   auditRoute,
   devicesRoute,

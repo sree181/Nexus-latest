@@ -4,7 +4,7 @@
 
 ## 1. Operating model and required production invariants
 
-MeshAgent production v1 is a **single-tenant, customer-network deployment** consisting of a browser-facing web application, a FastAPI control plane, a selected gateway, and durable state. In the supported production mode, `EngineGateway` writes governed-memory records through the bundled HyperMesh Python layer and C core. The API also persists control-plane records under `MESHAGENT_DB_DIR`: HyperMesh stores (`run`, `fleet`, and `run-*`), `index.json` for run inventory and deletion certificates, `devices.json` for registered recording devices, and the hash-chained `audit.jsonl` log. These records must stay together in one durable volume.
+MeshAgent production v1 is a **single-tenant, customer-network deployment** consisting of a browser-facing web application, a FastAPI control plane, a selected gateway, and durable state. In the supported production mode, `EngineGateway` writes governed-memory records through the bundled HyperMesh Python layer and C core. The API also persists control-plane records under `MESHAGENT_DB_DIR`: HyperMesh stores, `index.json`, `control-plane.sqlite3` for cases and governance workflows, `browser_sessions.sqlite3` for hashed opaque sessions and one-time PKCE transactions, `devices.json`, the operation journal, and the hash-chained `audit.jsonl` log. These records must stay together in one durable volume.
 
 > **Production invariant:** `MESHAGENT_ENGINE=1`, a non-temporary `MESHAGENT_DB_DIR`, OIDC configuration, and a TLS-terminating ingress are mandatory for a production claim. The API health endpoint exposes whether engine mode, durable state, and an identity provider are enabled; use it as evidence of configuration, not as a substitute for a security assessment.
 
@@ -18,7 +18,7 @@ Before strict backup verification is adopted, generate and retain at least one l
 |---|---|---|---|---|
 | **Local/sample** | UI exploration and isolated development | `SampleGateway`; state is not a production record | Asserted development headers may be accepted | **Not production** |
 | **Engine development** | Integration testing and operator rehearsal | `EngineGateway`; state may be durable for the test | OIDC may be absent only when access is otherwise isolated | Not a production environment |
-| **Production single tenant** | Customer-operated workload | `EngineGateway`, persistent `MESHAGENT_DB_DIR`, immutable backup copies | OIDC issuer, audience, analyst groups, TLS ingress | Supported v1 mode |
+| **Production single tenant** | Customer-operated workload | `EngineGateway`, persistent `MESHAGENT_DB_DIR`, immutable backup copies | OIDC issuer, audience, distinct Analyst and CISO groups, TLS ingress | Supported v1 mode |
 
 ## 2. Secure deployment configuration matrix
 
@@ -27,7 +27,7 @@ The deployment owner must set secrets through the chosen platform secret facilit
 | Area | Required production configuration | Validation and operational note |
 |---|---|---|
 | Engine and state | `MESHAGENT_ENGINE=1`; absolute `MESHAGENT_DB_DIR` on durable storage; one API writer process per state directory unless concurrency behavior has been validated | `GET /api/health` reports `gateway: EngineGateway` and `durable: true`. Snapshot the complete state directory, not selected files. |
-| Human identity | `MESHAGENT_OIDC_ISSUER`, `MESHAGENT_OIDC_AUDIENCE`, public browser `MESHAGENT_OIDC_CLIENT_ID`, `MESHAGENT_OIDC_ROLE_CLAIM`, and non-empty `MESHAGENT_ANALYST_GROUPS`; optionally `MESHAGENT_OIDC_SCOPE` and `MESHAGENT_OIDC_JWKS_URL` | The API validates asymmetric OIDC signatures, issuer, expiry, and audience. The Compose build injects the public issuer, client ID, and scopes into the static web bundle. Rebuild the web image after changing them. Confirm `identity_provider: true`; verify analyst access and developer isolation during acceptance. |
+| Human identity | `MESHAGENT_OIDC_ISSUER`, `MESHAGENT_OIDC_AUDIENCE`, public `MESHAGENT_OIDC_CLIENT_ID`, `MESHAGENT_OIDC_ROLE_CLAIM`, non-empty `MESHAGENT_ANALYST_GROUPS`, and non-empty `MESHAGENT_CISO_GROUPS`; optionally `MESHAGENT_OIDC_SCOPE` and `MESHAGENT_OIDC_JWKS_URL` | The API owns discovery, Authorization Code + PKCE, token exchange and verification, and opaque HttpOnly sessions. It validates issuer, expiry, audience, exact browser origins, and non-overlapping Analyst/CISO groups. The static bundle receives only public issuer/client indicators used to choose the sign-in boundary; access tokens never enter browser storage. Confirm `identity_provider: true`; test expiry, logout, Developer isolation, Analyst casework, and CISO-only mutations. |
 | API exposure | Put the API behind a customer-managed TLS ingress; restrict network access to approved browser, automation, and IdP paths; set exact `MESHAGENT_CORS_ORIGINS` and `MESHAGENT_WEB_URL` | Do not expose development ports or allow arbitrary origins. The repository compose file is a local starting point, not a complete production perimeter. |
 | Device recorders | Approve device pairing only through authenticated humans; periodically list and revoke inactive devices | Device tokens are intentionally recording-only. Treat their storage on endpoints as a credential-management concern. |
 | Audit and evidence | Preserve `audit.jsonl`, `index.json`, and state stores in every backup; configure alerting on audit-chain failure | The audit chain detects line changes or removals unless an attacker rewrites the chain. It is not externally signed in v1. Export or independently protect evidence if stronger tamper resistance is required. |
@@ -40,7 +40,7 @@ The deployment owner must set secrets through the chosen platform secret facilit
 
 1. Record the deployment release identifier, image digests, change ticket, state-volume identifier, and configuration-owner approvals.
 2. Confirm `curl -fsS https://<api-host>/api/health` reports status `ok`, engine mode, durable state, and an enabled identity provider. Keep the response in the change record without copying sensitive configuration.
-3. Sign in as a developer and as an analyst. Confirm that a developer cannot access another developer's non-seeded run and that an analyst can view fleet information.
+3. Sign in as a Developer, Analyst, and CISO. Confirm the browser contains only an opaque HttpOnly session cookie, not an access token. Confirm that a Developer cannot access another developer's non-seeded run; an Analyst can investigate fleet evidence and manage cases but cannot create policy or approve recommendations; and a CISO can use governance mutations. Confirm that a requester cannot approve their own exception and that expired/revoked sessions terminate live streams.
 4. Pair a dedicated test device, record a benign event, then revoke it and confirm a subsequent recorder request is rejected.
 5. Create an encrypted backup, verify it, and complete the disaster-recovery drill procedure before accepting a new environment.
 

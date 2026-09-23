@@ -22,8 +22,8 @@ def client():
     seeded run, which belongs to no developer, so the analyst is the role
     that can legitimately see all of it. Scoping itself is tested in
     test_identity.py, from both sides."""
-    return TestClient(app, headers={auth.DEV_ROLE: "analyst",
-                                    auth.DEV_USER: "priya@example.com"})
+    return TestClient(app, headers={auth.DEV_ROLE: "ciso",
+                                    auth.DEV_USER: "alex@example.com"})
 
 
 def test_health_names_the_gateway(client):
