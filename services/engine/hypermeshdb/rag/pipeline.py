@@ -352,11 +352,32 @@ class RAGPipeline:
             keywords   = parsed.keywords,
         )
 
-        context, _ = self._assembler.build(edges, parsed.time_start, parsed.time_end, query_text)
+        context, included_tags = self._assembler.build(
+            edges, parsed.time_start, parsed.time_end, query_text
+        )
         sys_prompt = self._assembler.build_system_prompt()
 
-        token_stream = self._generator.stream(sys_prompt, context, query_text)
-        return parsed, edges, token_stream
+        raw_stream = self._generator.stream(sys_prompt, context, query_text)
+
+        async def verified_stream() -> AsyncIterator[str]:
+            """Buffer generation until citations can be verified.
+
+            Returning unverified tokens and retracting them later is not a
+            security control. Production callers therefore receive one
+            sanitized chunk after generation completes. A future sentence-level
+            protocol can restore incremental display without weakening this
+            boundary.
+            """
+            chunks: list[str] = []
+            async for chunk in raw_stream:
+                chunks.append(chunk)
+            checked = self._firewall.check(
+                "".join(chunks), set(included_tags), proved=False,
+                require_proof=False,
+            )
+            yield checked.answer
+
+        return parsed, edges, verified_stream()
 
     # ── Neuro-symbolic helpers ──────────────────────────────────────────────────
 

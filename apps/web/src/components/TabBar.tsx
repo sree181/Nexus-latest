@@ -15,16 +15,16 @@ export function TabBar({ label, tabs }: { label: string; tabs: Tab[] }) {
   return (
     <nav
       aria-label={label}
-      className="flex shrink-0 items-center gap-1 border-b border-line bg-surface px-6"
+      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-surface px-3 sm:px-6"
     >
       {tabs.map((tab) => (
         <Link
           key={`${String(tab.to)}${JSON.stringify(tab.params ?? {})}`}
           to={tab.to}
           params={tab.params}
-          className={`${base} my-2 text-slate hover:bg-surface-2 hover:text-ink`}
+          className={`${base} my-2 shrink-0 whitespace-nowrap text-slate hover:bg-surface-2 hover:text-ink`}
           activeProps={{
-            className: `${base} my-2 bg-accent-soft font-medium text-accent`,
+            className: `${base} my-2 shrink-0 whitespace-nowrap bg-accent-soft font-medium text-accent`,
             "aria-current": "page",
           }}
           activeOptions={{ exact: true }}

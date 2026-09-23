@@ -87,9 +87,11 @@ class HallucinationFirewall:
                 kept.append(sent)
                 continue
             factual += 1
-            tags = {f"[{t}]" for t in _TAG_RE.findall(sent)}
-            tags = {t.strip("[]") for t in tags}
-            if tags & allowed_tags:
+            tags = set(_TAG_RE.findall(sent))
+            # A sentence that cites one real edge and one invented edge is not
+            # supported. Accepting it would let a model launder an unsupported
+            # claim through any valid citation placed beside the fake one.
+            if tags and tags <= allowed_tags:
                 kept.append(sent)
                 supported.append(sent)
             else:

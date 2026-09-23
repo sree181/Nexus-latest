@@ -1,0 +1,152 @@
+name: Release validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+# Avoid concurrent scans for the same branch, while never cancelling a tagged release.
+concurrency:
+  group: release-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  frontend:
+    name: Frontend check, lint, test, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          node-version: '22.13.0'
+          cache: pnpm
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@9.12.0
+      - name: Install locked workspace
+        run: pnpm install --frozen-lockfile
+      - run: pnpm run check:web
+      - run: pnpm run lint:web
+      - run: pnpm run test:web
+      - run: pnpm run build:web
+
+  python:
+    name: Python API tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12.3'
+          cache: pip
+          cache-dependency-path: services/api/requirements-dev.lock.txt
+      - name: Install hash-locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r services/api/requirements-dev.lock.txt
+      - name: Run hermetic API tests
+        env:
+          PYTHONPATH: services/api:services/engine
+        run: python -m pytest -q services/api/tests
+
+  native:
+    name: Native library and test suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build native library and run all native tests
+        run: make -C services/engine/hypermesh_core clean native-test
+
+  containers:
+    name: Reproducible container artifacts
+    runs-on: ubuntu-24.04
+    needs: [frontend, python, native]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate production Compose substitutions and topology
+        env:
+          MESHAGENT_OIDC_ISSUER: https://identity.example.invalid
+          MESHAGENT_OIDC_AUDIENCE: meshagent-api
+          MESHAGENT_OIDC_CLIENT_ID: meshagent-web
+          MESHAGENT_ANALYST_GROUPS: meshagent-security
+          MESHAGENT_CORS_ORIGINS: https://meshagent.example.invalid
+          MESHAGENT_WEB_URL: https://meshagent.example.invalid
+          MESHAGENT_WEB_PORT: '8080'
+        run: |
+          docker compose -f docker-compose.production.yml --profile production config > /tmp/production-compose.yml
+          ! grep -A35 '^  api:' /tmp/production-compose.yml | grep -q 'published:'
+      - name: Build production images without cache
+        run: |
+          docker build --pull=false --no-cache -f services/api/Dockerfile -t meshagent-api:${{ github.sha }} .
+          docker build --pull=false --no-cache \
+            --build-arg VITE_OIDC_ISSUER=https://identity.example.invalid \
+            --build-arg VITE_OIDC_CLIENT_ID=meshagent-web \
+            -f apps/web/Dockerfile -t meshagent-web:${{ github.sha }} .
+      - name: Export and verify image checksums
+        run: |
+          mkdir -p release-artifacts
+          docker save meshagent-api:${{ github.sha }} -o release-artifacts/meshagent-api.tar
+          docker save meshagent-web:${{ github.sha }} -o release-artifacts/meshagent-web.tar
+          (cd release-artifacts && sha256sum meshagent-api.tar meshagent-web.tar > SHA256SUMS && sha256sum --check SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: meshagent-container-artifacts-${{ github.sha }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  supply-chain:
+    name: Dependency, SBOM, and vulnerability gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Verify generated Python locks are current
+        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a # v5.1.0
+        with:
+          version: '0.6.3'
+      - name: Check Python lock reproducibility
+        run: |
+          uv pip compile --generate-hashes services/api/requirements.txt -o /tmp/requirements.lock.txt
+          uv pip compile --generate-hashes services/api/requirements-dev.txt -o /tmp/requirements-dev.lock.txt
+          diff -u services/api/requirements.lock.txt /tmp/requirements.lock.txt
+          diff -u services/api/requirements-dev.lock.txt /tmp/requirements-dev.lock.txt
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@006b7ce8314066bdf1765b4500370d40fa6917a3 # v0.24.2
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: release-artifacts/meshagent.sbom.cdx.json
+      - name: Scan dependencies against OSV
+        uses: google/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --lockfile=services/api/requirements.lock.txt
+            --lockfile=services/api/requirements-dev.lock.txt
+      - name: Scan filesystem and Dockerfiles for HIGH/CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          format: table
+      - name: Check SBOM checksum
+        run: |
+          sha256sum release-artifacts/meshagent.sbom.cdx.json > release-artifacts/meshagent.sbom.cdx.json.sha256
+          sha256sum --check release-artifacts/meshagent.sbom.cdx.json.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: meshagent-supply-chain-${{ github.sha }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 14

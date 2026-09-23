@@ -454,10 +454,11 @@ def test_recommendations_derive_from_the_real_decomposition(gw):
 
 def test_applying_a_cut_really_forgets(fresh):
     cut = next(r for r in fresh.recommendations() if r.id.startswith("rec-cut-"))
-    receipt = fresh.apply_recommendation(cut.id)
+    receipt = fresh.apply_recommendation(cut.id, actor="priya@example.com")
     assert receipt.changed_memory is True
     assert receipt.certificates and receipt.certificates[0].purged_count >= 3
     assert receipt.certificates[0].node == "source:poisoned-mirror"
+    assert receipt.certificates[0].actor == "priya@example.com"
     assert fresh.fleet_overview().deletion_certificates == 1
 
     # The class, its finding edges and the reachability the scan derived from

@@ -34,8 +34,10 @@ against the repo-relative path and against the bare filename, so both
 Point the hook at your deployment and register the machine:
 
 ```bash
-export MESHAGENT_API=https://meshagent.internal    # default http://localhost:8000
-python cli/meshagent.py login --label "work laptop"
+python3 -m pip install /abs/path/to/meshagent-production-v1
+meshagent config set-endpoint https://meshagent.internal
+meshagent login --label "work laptop"
+meshagent doctor
 ```
 
 `login` prints a short code. Open MeshAgent's **Devices** screen in a browser
@@ -109,6 +111,14 @@ and is delivered, in order, with the next successful post. The one exception is
 the `PreToolUse` gate above, and it refuses only what the deployment's policy
 refuses — a hook deciding for itself which installs to stop would be the exact
 overreach this product argues against.
+
+The queue is bounded by count and bytes and stored under a repository/editor
+namespace with process locks. Inspect or replay it without printing secrets:
+
+```bash
+meshagent status
+meshagent replay
+```
 
 **It does not record reads.** Only what changed. The action log says the same
 thing on the wire, so its silence is not mistaken for evidence that nobody

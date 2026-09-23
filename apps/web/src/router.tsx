@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { ModeBanner } from "./components/ModeBanner";
 import { RequiresAnalyst } from "./components/RequiresAnalyst";
+import { RouteError, RouteNotFound } from "./components/RouteBoundary";
 import { Sidebar } from "./components/Sidebar";
 import { StartTask } from "./routes/StartTask";
 import { FleetGraph } from "./routes/FleetGraph";
@@ -32,7 +33,7 @@ function Layout() {
   return (
     <div className="flex h-screen flex-col bg-paper">
       <ModeBanner />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <Sidebar />
         <Outlet />
       </div>
@@ -40,7 +41,11 @@ function Layout() {
   );
 }
 
-const rootRoute = createRootRoute({ component: Layout });
+const rootRoute = createRootRoute({
+  component: Layout,
+  notFoundComponent: RouteNotFound,
+  errorComponent: RouteError,
+});
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,

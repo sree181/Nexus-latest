@@ -259,9 +259,10 @@ def test_every_recommendation_names_the_agents_it_would_touch(gw):
 
 
 def test_applying_the_cut_returns_a_certificate(gw):
-    receipt = gw.apply_recommendation("rec-source")
+    receipt = gw.apply_recommendation("rec-source", actor="priya@example.com")
     assert receipt.changed_memory is True
     assert receipt.certificates[0].classes_pruned == ["class:UnsafeShardLoader"]
+    assert receipt.certificates[0].actor == "priya@example.com"
     assert receipt.sample is True
 
 

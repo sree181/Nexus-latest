@@ -40,6 +40,12 @@ import time
 import urllib.error
 import urllib.request
 
+try:
+    from meshagent_cli import state as local_state
+except ImportError:  # source checkout, before `pip install meshagent-cli`
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cli"))
+    from meshagent_cli import state as local_state
+
 AGENT = "claude-code"
 CONFIG = ".meshagent.json"
 
@@ -73,28 +79,35 @@ def home() -> str:
     """The adapter's state directory. Sessions and the failure queue live
     here, outside any repository, because they are about the developer's
     machine rather than the code."""
-    base = os.environ.get("MESHAGENT_HOOK_HOME") or os.path.expanduser(
-        "~/.meshagent")
-    os.makedirs(base, exist_ok=True)
-    return base
+    return local_state.home()
 
 
-def session_path(session_id: str) -> str:
-    return os.path.join(home(), f"session-{session_id}.json")
+def session_path(session_id: str, repository: str | None = None) -> str:
+    return local_state.state_path(session_id, repository=repository, editor=AGENT)
 
 
-def read_session(session_id: str) -> dict:
+def read_session(session_id: str, repository: str | None = None) -> dict:
+    found = local_state.read_session(session_id, repository=repository, editor=AGENT)
+    # Older callers used the helpers without a workspace.  Only use that
+    # compatibility location when the properly namespaced state is absent.
+    if not found and repository:
+        found = local_state.read_session(session_id, editor=AGENT)
+    if not found:
+        legacy = os.path.join(home(), f"session-{session_id}.json")
+        try:
+            with open(legacy, encoding="utf-8") as handle:
+                candidate = json.load(handle)
+        except (OSError, json.JSONDecodeError, TypeError):
+            candidate = {}
+        if isinstance(candidate, dict) and candidate:
+            found = candidate
+            write_session(session_id, found, repository=repository)
+    return found
+
+
+def write_session(session_id: str, state: dict, repository: str | None = None) -> None:
     try:
-        with open(session_path(session_id)) as fh:
-            return json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def write_session(session_id: str, state: dict) -> None:
-    try:
-        with open(session_path(session_id), "w") as fh:
-            json.dump(state, fh)
+        local_state.write_session(session_id, state, repository=repository, editor=AGENT)
     except OSError:
         pass            # state is an optimisation, not a correctness condition
 
@@ -143,42 +156,29 @@ def module_name(file_path: str, cwd: str) -> str:
 # -- posting, and what to do when that fails ----------------------------------
 
 def queue_path() -> str:
-    return os.path.join(home(), "queue.jsonl")
+    # Compatibility helper for callers that previously displayed this path.
+    return local_state.queue_path("default", editor=AGENT)
 
 
-def enqueue(batch: dict) -> None:
+def enqueue(batch: dict, repository: str | None = None) -> None:
     """Hold a batch that could not be delivered.
 
     The alternative to a queue is dropping the events, which would make the
     recorder quietly lossy in exactly the conditions -- a restarting API, a
     laptop on a train -- where a developer is most likely to be working."""
     try:
-        with open(queue_path(), "a") as fh:
-            fh.write(json.dumps(batch) + "\n")
+        local_state.enqueue(batch, repository=repository, editor=AGENT)
     except OSError:
         pass
 
 
-def drain() -> list[dict]:
+def drain(repository: str | None = None) -> list[dict]:
     """Take everything queued, leaving the queue empty.
 
     Read-and-truncate rather than read-then-delete-on-success: a second hook
     firing while this one is posting would otherwise send the same batches
     again."""
-    try:
-        with open(queue_path(), "r+") as fh:
-            lines = fh.readlines()
-            fh.seek(0)
-            fh.truncate()
-    except OSError:
-        return []
-    out = []
-    for line in lines:
-        try:
-            out.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return out
+    return local_state.drain_matching(repository=repository, editor=AGENT)
 
 
 def post(batch: dict) -> dict | None:
@@ -186,11 +186,17 @@ def post(batch: dict) -> dict | None:
 
     Every failure mode is the same failure mode here -- the developer's agent
     carries on either way -- so they are deliberately not distinguished."""
-    api = os.environ.get("MESHAGENT_API", "http://localhost:8000").rstrip("/")
+    api = local_state.endpoint()
+    headers = _headers()
+    headers["Idempotency-Key"] = local_state.batch_key(batch)
+    keys = [str(event.get("idempotency_key") or "")
+            for event in batch.get("events") or []]
+    if keys:
+        headers["X-MeshAgent-Event-Keys"] = ",".join(keys)
     req = urllib.request.Request(
         f"{api}/api/recorder",
         data=json.dumps(batch).encode(),
-        headers=_headers(),
+        headers=headers,
         method="POST",
     )
     try:
@@ -206,12 +212,7 @@ def device_token() -> str:
     Read on every post rather than cached, so `meshagent logout` takes effect
     on the next file write instead of whenever the editor happens to
     restart."""
-    path = os.path.join(home(), "credentials.json")
-    try:
-        with open(path) as fh:
-            return str(json.load(fh).get("token") or "").strip()
-    except (OSError, json.JSONDecodeError, AttributeError):
-        return ""
+    return local_state.device_token()
 
 
 def _headers() -> dict[str, str]:
@@ -223,20 +224,21 @@ def _headers() -> dict[str, str]:
     still recorded, but the API marks the identity unverified and the
     coverage table says so rather than naming them as though it knew."""
     headers = {"Content-Type": "application/json"}
-    if token := (device_token() or os.environ.get("MESHAGENT_TOKEN", "").strip()):
+    if token := device_token():
         headers["Authorization"] = f"Bearer {token}"
     elif user := os.environ.get("MESHAGENT_USER", "").strip():
         headers["X-MeshAgent-User"] = user
     return headers
 
 
-def send(session_id: str, events: list[dict]) -> dict | None:
+def send(session_id: str, events: list[dict], repository: str | None = None) -> dict | None:
     """Deliver these events, oldest queued batches first.
 
     Order matters more than throughput: a code event that arrives before the
     session event that opens its run would be refused."""
-    batch = {"agent": AGENT, "session": session_id, "events": events}
-    pending = drain() + [batch]
+    keyed = local_state.add_event_keys(AGENT, session_id, events, repository=repository)
+    batch = {"agent": AGENT, "session": session_id, "events": keyed}
+    pending = drain(repository) + [batch]
     last = None
     for item in pending:
         got = post(item)
@@ -244,7 +246,7 @@ def send(session_id: str, events: list[dict]) -> dict | None:
             # Re-queue this one and everything after it, so the order the
             # developer worked in survives the outage.
             for rest in pending[pending.index(item):]:
-                enqueue(rest)
+                enqueue(rest, repository)
             return None
         last = got
     return last
@@ -259,7 +261,7 @@ def on_prompt(payload: dict, cfg: dict) -> list[dict]:
     the protocol has no source event yet -- filing them as decisions would
     attribute the developer's words to the agent."""
     del cfg
-    state = read_session(payload.get("session_id", ""))
+    state = read_session(payload.get("session_id", ""), payload.get("cwd"))
     if state.get("opened"):
         return []
     task = (payload.get("prompt") or "").strip()
@@ -282,7 +284,8 @@ def on_tool(payload: dict, cfg: dict) -> list[dict]:
     return []
 
 
-def claimed_decision(session_id: str, module: str) -> str | None:
+def claimed_decision(session_id: str, module: str,
+                     repository: str | None = None) -> str | None:
     """The decision an agent said explains this file, if it said so.
 
     Written by the MCP server when the agent calls `record_decision` and
@@ -292,7 +295,7 @@ def claimed_decision(session_id: str, module: str) -> str | None:
     failure available to this product."""
     if not session_id:
         return None
-    claims = read_session(session_id).get("claims") or {}
+    claims = read_session(session_id, repository).get("claims") or {}
     found = claims.get(module)
     return str(found) if found else None
 
@@ -323,7 +326,7 @@ def _code_events(args: dict, cwd: str, cfg: dict,
     # the MCP server. Otherwise none: the hook saw the write and not the
     # reason for it, and MeshAgent records that absence rather than this
     # adapter inventing one.
-    if because := claimed_decision(session_id, module):
+    if because := claimed_decision(session_id, module, cwd):
         event["because"] = because
     return [event]
 
@@ -364,7 +367,7 @@ def pinned_packages(command: str) -> list[tuple[str, str]]:
 def on_session_end(payload: dict, cfg: dict) -> list[dict]:
     """The developer closed the session, so the run is no longer recording."""
     del cfg
-    state = read_session(payload.get("session_id", ""))
+    state = read_session(payload.get("session_id", ""), payload.get("cwd"))
     if not state.get("opened"):
         return []       # nothing was ever opened; nothing to close
     return [{"type": "session", "agent": AGENT,
@@ -386,7 +389,7 @@ def ask_gate(package: str, version: str, session_id: str) -> dict | None:
     Deliberately not merged with `post`: that one queues on failure so
     nothing is lost, and queuing a question whose answer arrives after the
     install would be worse than not asking."""
-    api = os.environ.get("MESHAGENT_API", "http://localhost:8000").rstrip("/")
+    api = local_state.endpoint()
     req = urllib.request.Request(
         f"{api}/api/gate/package",
         data=json.dumps({"package": package, "version": version,
@@ -499,15 +502,16 @@ def main() -> int:
     if not events:
         return 0
 
-    receipt = send(session_id, events)
-    state = read_session(session_id)
+    repository = payload.get("cwd") or os.getcwd()
+    receipt = send(session_id, events, repository)
+    state = read_session(session_id, repository)
     if any(e["type"] == "session" and not e.get("ends") for e in events):
         state["opened"] = True
         state["task"] = next(e["task"] for e in events if e["type"] == "session")
     if receipt:
         state["run_id"] = receipt.get("run_id")
         state["last_ok"] = int(time.time())
-    write_session(session_id, state)
+    write_session(session_id, state, repository)
     return 0            # always. See the module docstring.
 
 

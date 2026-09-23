@@ -147,12 +147,15 @@ function Approve() {
   );
 }
 
-function Device({ device }: { device: DeviceOut }) {
+export function Device({ device }: { device: DeviceOut }) {
   const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
   const revoke = useMutation({
     mutationFn: () => api.revokeDevice(device.id),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: ["devices"] }),
+    onSuccess: () => {
+      setConfirming(false);
+      void queryClient.invalidateQueries({ queryKey: ["devices"] });
+    },
   });
 
   return (
@@ -165,14 +168,39 @@ function Device({ device }: { device: DeviceOut }) {
         {/* the same honesty the audit log carries: a token minted by an
             asserted identity records under an asserted name */}
         {!device.verified && <Badge tone="warn">identity asserted</Badge>}
-        <button
-          type="button"
-          onClick={() => revoke.mutate()}
-          disabled={revoke.isPending}
-          className="ml-auto rounded-lg border border-line px-3 py-1.5 text-[12.5px] text-ink disabled:opacity-50"
-        >
-          {revoke.isPending ? "Revoking…" : "Revoke"}
-        </button>
+        {!confirming ? (
+          <button
+            type="button"
+            onClick={() => {
+              revoke.reset();
+              setConfirming(true);
+            }}
+            disabled={revoke.isPending}
+            className="ml-auto rounded-lg border border-line px-3 py-1.5 text-[12.5px] text-ink disabled:opacity-50"
+          >
+            Revoke
+          </button>
+        ) : (
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2" role="group" aria-label={`Confirm revoke ${device.label}`}>
+            <span className="text-[12px] text-risk">Stop this machine from recording?</span>
+            <button
+              type="button"
+              onClick={() => revoke.mutate()}
+              disabled={revoke.isPending}
+              className="rounded-lg border border-risk bg-risk-soft px-3 py-1.5 text-[12.5px] text-risk disabled:opacity-50"
+            >
+              {revoke.isPending ? "Revoking…" : "Confirm revoke"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={revoke.isPending}
+              className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] text-ink disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
       <p className="font-mono text-[11.5px] text-slate">
         added {timestamp(device.created_at)} ·{" "}
@@ -180,6 +208,13 @@ function Device({ device }: { device: DeviceOut }) {
           ? `last recorded ${timestamp(device.last_used)}`
           : "has not recorded anything yet"}
       </p>
+      {revoke.isError && (
+        <p role="alert" className="font-mono text-[11.5px] leading-snug text-risk">
+          {revoke.error instanceof Error
+            ? `Could not revoke this device: ${revoke.error.message}`
+            : "Could not revoke this device. Try again."}
+        </p>
+      )}
     </li>
   );
 }

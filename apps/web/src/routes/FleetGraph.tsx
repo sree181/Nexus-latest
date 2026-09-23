@@ -22,10 +22,10 @@ export function FleetGraph() {
     <main className="flex h-full flex-1 flex-col overflow-hidden">
       <PageHeader
         section="Fleet"
-        title="Hypergraph"
+        title="Fleet relation map"
         meta={
           <span>
-            live query · {data ? `${data.hits.length} agents matched` : "…"}
+            live query · {data ? `${data.hits.length} agents matched` : "…"} · direct links + recorded n-ary facts
           </span>
         }
       />

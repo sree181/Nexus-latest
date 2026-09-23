@@ -44,6 +44,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+try:
+    from meshagent_cli import state as local_state
+except ImportError:  # source checkout, before `pip install meshagent-cli`
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cli"))
+    from meshagent_cli import state as local_state
+
 PROTOCOL = "2024-11-05"
 NAME = "meshagent"
 VERSION = "0.1.0"
@@ -54,37 +60,54 @@ TIMEOUT = float(os.environ.get("MESHAGENT_MCP_TIMEOUT", "8.0"))
 # server records and a file that server records have to end up on the same
 # run, and the session file is what joins them.
 def home() -> str:
-    base = os.environ.get("MESHAGENT_HOOK_HOME") or os.path.expanduser(
-        "~/.meshagent")
-    os.makedirs(base, exist_ok=True)
-    return base
+    return local_state.home()
 
 
 def api() -> str:
-    return os.environ.get("MESHAGENT_API", "http://localhost:8000").rstrip("/")
+    return local_state.endpoint()
 
 
-def token() -> str:
-    try:
-        with open(os.path.join(home(), "credentials.json")) as fh:
-            return str(json.load(fh).get("token") or "").strip()
-    except (OSError, json.JSONDecodeError, AttributeError):
-        return os.environ.get("MESHAGENT_TOKEN", "").strip()
+def device_token() -> str:
+    """The recording-only token used for decision and gate writes."""
+    return local_state.device_token()
 
 
-def headers() -> dict[str, str]:
+def read_token() -> str:
+    """A human/delegated token; never substituted with a device writer token."""
+    return local_state.read_token()
+
+
+def write_headers() -> dict[str, str]:
+    """Headers for MCP write verbs: device scope stays recorder/gate only."""
     out = {"Content-Type": "application/json"}
-    if tok := token():
+    if tok := device_token():
         out["Authorization"] = f"Bearer {tok}"
     elif user := os.environ.get("MESHAGENT_USER", "").strip():
         out["X-MeshAgent-User"] = user
-        # Only meaningful when no identity provider is configured, where the
-        # server believes what the client says. Sent because reading is
-        # scoped by role -- without it an analyst cannot reach the runs
-        # their own UI shows them.
+    return out
+
+
+def read_headers() -> dict[str, str]:
+    """Headers for MCP read verbs, intentionally separate from write_headers.
+
+    A recording token stored by ``meshagent login`` cannot read runs.  A human
+    or explicitly delegated bearer must be configured using
+    MESHAGENT_READ_TOKEN or ``meshagent credentials set-read-token``.  The
+    asserted local-mode fallback remains available only for local development.
+    """
+    out = {"Content-Type": "application/json"}
+    if tok := read_token():
+        out["Authorization"] = f"Bearer {tok}"
+    elif user := os.environ.get("MESHAGENT_USER", "").strip():
+        out["X-MeshAgent-User"] = user
         if role := os.environ.get("MESHAGENT_ROLE", "").strip():
             out["X-MeshAgent-Role"] = role
     return out
+
+
+def headers() -> dict[str, str]:
+    """Compatibility alias for integrations that historically inspected headers."""
+    return write_headers()
 
 
 def call(path: str, body: dict) -> tuple[dict | None, str]:
@@ -92,7 +115,7 @@ def call(path: str, body: dict) -> tuple[dict | None, str]:
     says what went wrong is more use to an agent than a stack trace."""
     req = urllib.request.Request(f"{api()}/api{path}",
                                  data=json.dumps(body).encode(),
-                                 headers=headers(), method="POST")
+                                 headers=write_headers(), method="POST")
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
             return json.loads(res.read().decode()), ""
@@ -117,7 +140,7 @@ def get(path: str, params: dict | None = None) -> tuple[dict | None, str]:
     normal answer and has to arrive as readable text rather than a traceback."""
     query = f"?{urllib.parse.urlencode(params)}" if params else ""
     req = urllib.request.Request(f"{api()}/api{path}{query}",
-                                 headers=headers(), method="GET")
+                                 headers=read_headers(), method="GET")
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
             return json.loads(res.read().decode()), ""
@@ -143,6 +166,21 @@ def active_session() -> tuple[str, dict] | tuple[None, None]:
     would be worse than not attaching it."""
     best: tuple[float, str, dict] | None = None
     cutoff = time.time() - 12 * 3600
+    repository = os.environ.get("MESHAGENT_REPOSITORY") or os.getcwd()
+    for path, state in local_state.sessions(repository=repository):
+        try:
+            when = os.path.getmtime(path)
+        except OSError:
+            continue
+        session_id = str(state.get("session_id") or "").strip()
+        if when < cutoff or not session_id or not state.get("opened"):
+            continue
+        if best is None or when > best[0]:
+            best = (when, session_id, state)
+
+    # Compatibility with state written by pre-v1 hooks. New hooks never write
+    # here; this read-only migration path prevents an in-flight editor session
+    # from losing its reasoning during upgrade.
     try:
         names = os.listdir(home())
     except OSError:
@@ -174,6 +212,31 @@ def claim_modules(session_id: str, decision_id: str,
 
     The hook reads this when it next writes one of them. Nothing is inferred
     from timing; a file is explained only because the agent named it."""
+    repository = os.environ.get("MESHAGENT_REPOSITORY") or os.getcwd()
+    candidates = [
+        (path, state)
+        for path, state in local_state.sessions(repository=repository)
+        if str(state.get("session_id") or "") == session_id
+    ]
+    if candidates:
+        _, current = max(candidates, key=lambda item: os.path.getmtime(item[0]))
+        editor = str(current.get("editor") or "unknown")
+
+        def add_claims(state: dict) -> dict:
+            claims = state.setdefault("claims", {})
+            for module in modules:
+                if cleaned := module.strip():
+                    claims[cleaned] = decision_id
+            return state
+
+        local_state.update_session(
+            session_id,
+            add_claims,
+            repository=str(current.get("repository") or repository),
+            editor=editor,
+        )
+        return
+
     path = os.path.join(home(), f"session-{session_id}.json")
     try:
         with open(path) as fh:

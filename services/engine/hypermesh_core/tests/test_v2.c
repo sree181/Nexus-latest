@@ -281,10 +281,10 @@ int main(void)
 
         /* Run migration tool */
         char cmd[512];
+        /* make v2_test runs this executable from tests/, where the migration
+         * binary built by the same target is one directory up. */
         snprintf(cmd, sizeof(cmd),
-                 "cd /tmp && "
-                 "%s/hmdb_migrate %s >/dev/null 2>&1",
-                 "/Users/sreehasgopinathan/Documents/Auburn/Research/Hyerpmesh/hypermesh-workbench/hypermesh_core",
+                 "../hmdb_migrate %s >/dev/null 2>&1",
                  TEST_V1);
         int mrc = system(cmd);
         CHECK(mrc == 0, "TV08c: hmdb_migrate exits 0");

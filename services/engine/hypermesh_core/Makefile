@@ -36,7 +36,7 @@ else
     PTHREAD  := -lpthread
 endif
 
-.PHONY: all test parser_test write_test v2_test wal_test compact_test demo coordinator clean install migrate
+.PHONY: all test parser_test write_test v2_test wal_test compact_test native-test demo coordinator clean install migrate
 
 all: $(LIB)
 
@@ -46,7 +46,20 @@ $(LIB): $(SRC) src/format.h src/tpi.h src/fmi.h src/wal.h src/hypermesh.h $(PARS
 	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(SRC) $(LDFLAGS) $(PTHREAD)
 	@echo "Built $@"
 
-test: $(LIB) tests/test_basic.c
+# The original smoke fixture was outside this repository. Generate the same
+# deterministic 1,774-record, 20-drone shape locally so `make test` works from
+# any checkout without relying on a developer machine or an untracked file.
+tests/fixtures/hyperedges.csv:
+	@mkdir -p tests/fixtures
+	@{ \
+	  printf '%s\n' 'event_ts,members,member_count,weight,mean_dist_m,formation'; \
+	  i=0; while [ $$i -lt 1774 ]; do \
+	    printf '%s,"[8, %s]",2,0.9,50.0,WEDGE\n' $$((i % 1000)) $$((i % 20 + 1)); \
+	    i=$$((i + 1)); \
+	  done; \
+	} > $@
+
+test: $(LIB) tests/test_basic.c tests/fixtures/hyperedges.csv
 	$(CC) $(CFLAGS) -o tests/test_basic tests/test_basic.c \
 	    -L. -lhypermesh $(PTHREAD) -Wl,-rpath,.
 	@echo "Running smoke tests..."
@@ -96,12 +109,15 @@ compact_test: $(LIB) tests/test_compact_scale.c
 	@echo "Running compaction scale + reconciliation tests..."
 	@cd tests && DYLD_LIBRARY_PATH=.. LD_LIBRARY_PATH=.. ./test_compact_scale
 
+# The blocking release gate exercises every portable native test target.
+native-test: test parser_test write_test v2_test wal_test compact_test
+
 migrate: src/hmdb_migrate.c src/format.h
 	$(CC) $(CFLAGS) -o hmdb_migrate src/hmdb_migrate.c
 	@echo "Built hmdb_migrate"
 
 clean:
-	rm -f $(LIB) tests/test_basic tests/test_parser tests/test_write tests/test_v2 tests/test_wal_recovery tests/test_compact_scale demo/edge_demo hmdb_migrate
+	rm -f $(LIB) tests/test_basic tests/test_parser tests/test_write tests/test_v2 tests/test_wal_recovery tests/test_compact_scale demo/edge_demo hmdb_migrate tests/fixtures/hyperedges.csv
 
 # Copy the shared library to ../server/ so the Python bridge can find it
 install: $(LIB)

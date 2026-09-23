@@ -1,0 +1,40 @@
+# Source control and CI metadata are not runtime build inputs.
+.git/
+.github/
+
+# Local dependencies and generated outputs.
+node_modules/
+**/node_modules/
+dist/
+build/
+coverage/
+.release-venv/
+release-artifacts/
+.pnpm-store/
+
+# Python and test caches.
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.venv/
+
+# Native build products and generated native fixture.
+services/engine/hypermesh_core/libhypermesh.so
+services/engine/hypermesh_core/libhypermesh.dylib
+services/engine/hypermesh_core/hmdb_migrate
+services/engine/hypermesh_core/tests/test_basic
+services/engine/hypermesh_core/tests/test_parser
+services/engine/hypermesh_core/tests/test_write
+services/engine/hypermesh_core/tests/test_v2
+services/engine/hypermesh_core/tests/test_wal_recovery
+services/engine/hypermesh_core/tests/test_compact_scale
+services/engine/hypermesh_core/tests/fixtures/
+
+# Never send deployment credentials or editor state to a Docker daemon.
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.idea/
+.vscode/

@@ -15,7 +15,11 @@ def _load_env() -> None:
     gateway decides at import time whether a model is configured. A real
     environment variable always wins: this fills gaps, it does not override.
     """
-    root = Path(__file__).resolve().parents[3]
+    here = Path(__file__).resolve()
+    root = next(
+        (parent for parent in here.parents if (parent / "package.json").is_file()),
+        Path.cwd(),
+    )
     env = root / ".env"
     try:
         lines = env.read_text().splitlines()

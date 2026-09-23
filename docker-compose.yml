@@ -28,9 +28,10 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
-      - "8080:80"
+      - "8080:8080"
 
 # Named, so MESHAGENT_DB_DIR means what it says: a rebuilt container comes back
 # to the same memory rather than to an empty store that looks like a fresh

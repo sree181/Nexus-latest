@@ -47,6 +47,12 @@ import time
 import urllib.error
 import urllib.request
 
+try:
+    from meshagent_cli import state as local_state
+except ImportError:  # source checkout, before `pip install meshagent-cli`
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cli"))
+    from meshagent_cli import state as local_state
+
 AGENT = "cursor"
 CONFIG = ".meshagent.json"
 
@@ -63,62 +69,52 @@ INSTALL_WORDS = {"pip", "pip3", "npm", "yarn", "uv", "poetry", "python",
 # -- state, shared with every other MeshAgent adapter on this machine ---------
 
 def home() -> str:
-    base = os.environ.get("MESHAGENT_HOOK_HOME") or os.path.expanduser(
-        "~/.meshagent")
-    os.makedirs(base, exist_ok=True)
-    return base
+    return local_state.home()
 
 
-def session_path(session_id: str) -> str:
-    return os.path.join(home(), f"session-{session_id}.json")
+def session_path(session_id: str, repository: str | None = None) -> str:
+    return local_state.state_path(session_id, repository=repository, editor=AGENT)
 
 
-def read_session(session_id: str) -> dict:
+def read_session(session_id: str, repository: str | None = None) -> dict:
+    found = local_state.read_session(session_id, repository=repository, editor=AGENT)
+    if not found and repository:
+        found = local_state.read_session(session_id, editor=AGENT)
+    if not found:
+        legacy = os.path.join(home(), f"session-{session_id}.json")
+        try:
+            with open(legacy, encoding="utf-8") as handle:
+                candidate = json.load(handle)
+        except (OSError, json.JSONDecodeError, TypeError):
+            candidate = {}
+        if isinstance(candidate, dict) and candidate:
+            found = candidate
+            write_session(session_id, found, repository=repository)
+    return found
+
+
+def write_session(session_id: str, state: dict, repository: str | None = None) -> None:
     try:
-        with open(session_path(session_id)) as fh:
-            return json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def write_session(session_id: str, state: dict) -> None:
-    try:
-        tmp = session_path(session_id) + ".tmp"
-        with open(tmp, "w") as fh:
-            json.dump(state, fh)
-        os.replace(tmp, session_path(session_id))
+        local_state.write_session(session_id, state, repository=repository, editor=AGENT)
     except OSError:
         pass            # losing session state is not worth failing a hook for
 
 
 def queue_path() -> str:
-    return os.path.join(home(), "queue.jsonl")
+    return local_state.queue_path("default", editor=AGENT)
 
 
-def enqueue(batch: dict) -> None:
+def enqueue(batch: dict, repository: str | None = None) -> None:
     try:
-        with open(queue_path(), "a") as fh:
-            fh.write(json.dumps(batch) + "\n")
+        local_state.enqueue(batch, repository=repository, editor=AGENT)
     except OSError:
         pass
 
 
-def drain() -> list[dict]:
+def drain(repository: str | None = None) -> list[dict]:
     """Everything waiting, read and cleared together so a second hook firing
     at the same moment cannot send it twice."""
-    try:
-        with open(queue_path()) as fh:
-            lines = fh.readlines()
-        os.unlink(queue_path())
-    except OSError:
-        return []
-    out = []
-    for line in lines:
-        try:
-            out.append(json.loads(line))
-        except (json.JSONDecodeError, ValueError):
-            continue
-    return out
+    return local_state.drain_matching(repository=repository, editor=AGENT)
 
 
 # -- opting in ----------------------------------------------------------------
@@ -170,16 +166,12 @@ def module_name(file_path: str, cwd: str) -> str:
 def token() -> str:
     """The credential `meshagent login` left. Read every time rather than
     cached, so `meshagent logout` takes effect on the next write."""
-    try:
-        with open(os.path.join(home(), "credentials.json")) as fh:
-            return str(json.load(fh).get("token") or "").strip()
-    except (OSError, json.JSONDecodeError, AttributeError):
-        return ""
+    return local_state.device_token()
 
 
 def _headers() -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
-    if tok := (token() or os.environ.get("MESHAGENT_TOKEN", "").strip()):
+    if tok := token():
         headers["Authorization"] = f"Bearer {tok}"
     elif user := os.environ.get("MESHAGENT_USER", "").strip():
         headers["X-MeshAgent-User"] = user
@@ -187,10 +179,16 @@ def _headers() -> dict[str, str]:
 
 
 def post(batch: dict) -> dict | None:
-    api = os.environ.get("MESHAGENT_API", "http://localhost:8000").rstrip("/")
+    api = local_state.endpoint()
+    headers = _headers()
+    headers["Idempotency-Key"] = local_state.batch_key(batch)
+    keys = [str(event.get("idempotency_key") or "")
+            for event in batch.get("events") or []]
+    if keys:
+        headers["X-MeshAgent-Event-Keys"] = ",".join(keys)
     req = urllib.request.Request(f"{api}/api/recorder",
                                  data=json.dumps(batch).encode(),
-                                 headers=_headers(), method="POST")
+                                 headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
             return json.loads(res.read().decode())
@@ -198,24 +196,25 @@ def post(batch: dict) -> dict | None:
         return None
 
 
-def send(session_id: str, events: list[dict]) -> dict | None:
+def send(session_id: str, events: list[dict], repository: str | None = None) -> dict | None:
     """Oldest queued batches first: a code event arriving before the session
     event that opens its run would be refused."""
-    batch = {"agent": AGENT, "session": session_id, "events": events}
-    pending = drain() + [batch]
+    keyed = local_state.add_event_keys(AGENT, session_id, events, repository=repository)
+    batch = {"agent": AGENT, "session": session_id, "events": keyed}
+    pending = drain(repository) + [batch]
     last = None
     for item in pending:
         got = post(item)
         if got is None:
             for rest in pending[pending.index(item):]:
-                enqueue(rest)
+                enqueue(rest, repository)
             return None
         last = got
     return last
 
 
 def ask_gate(package: str, version: str, session_id: str) -> dict | None:
-    api = os.environ.get("MESHAGENT_API", "http://localhost:8000").rstrip("/")
+    api = local_state.endpoint()
     req = urllib.request.Request(
         f"{api}/api/gate/package",
         data=json.dumps({"package": package, "version": version,
@@ -236,7 +235,7 @@ def on_prompt(payload: dict, cfg: dict) -> list[dict]:
     as such."""
     del cfg
     session_id = conversation(payload)
-    if read_session(session_id).get("opened"):
+    if read_session(session_id, workspace(payload)).get("opened"):
         return []
     task = (payload.get("prompt") or "").strip()
     if not task:
@@ -263,15 +262,16 @@ def on_file_edit(payload: dict, cfg: dict) -> list[dict]:
     event = {"type": "code", "module": module, "code": code}
     # A reason only where the agent volunteered one about this exact file,
     # through the MCP server. Never inferred from timing.
-    if because := claimed_decision(conversation(payload), module):
+    if because := claimed_decision(conversation(payload), module, workspace(payload)):
         event["because"] = because
     return [event]
 
 
-def claimed_decision(session_id: str, module: str) -> str | None:
+def claimed_decision(session_id: str, module: str,
+                     repository: str | None = None) -> str | None:
     if not session_id:
         return None
-    claims = read_session(session_id).get("claims") or {}
+    claims = read_session(session_id, repository).get("claims") or {}
     found = claims.get(module)
     return str(found) if found else None
 
@@ -332,7 +332,7 @@ def installs(command: str) -> list[tuple[str, str]]:
 def on_session_end(payload: dict, cfg: dict) -> list[dict]:
     del cfg
     session_id = conversation(payload)
-    state = read_session(session_id)
+    state = read_session(session_id, workspace(payload))
     if not state.get("opened"):
         return []
     return [{"type": "session", "agent": AGENT,
@@ -426,8 +426,8 @@ def main() -> int:
     if not events:
         return 0
 
-    receipt = send(session_id, events)
-    state = read_session(session_id)
+    receipt = send(session_id, events, cwd)
+    state = read_session(session_id, cwd)
     if any(e["type"] == "session" and not e.get("ends") for e in events):
         state["opened"] = True
         state["task"] = next(e["task"] for e in events
@@ -435,7 +435,7 @@ def main() -> int:
     if receipt:
         state["run_id"] = receipt.get("run_id")
         state["last_ok"] = int(time.time())
-    write_session(session_id, state)
+    write_session(session_id, state, cwd)
     return 0            # always. See the module docstring.
 
 

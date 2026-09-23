@@ -83,11 +83,22 @@ class Registry:
         }
         fd, tmp = tempfile.mkstemp(dir=self.base, prefix=".index-")
         try:
+            os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w") as fh:
                 json.dump(body, fh, indent=2)
+                fh.flush()
+                os.fsync(fh.fileno())
             os.replace(tmp, self.path)
+            directory = os.open(self.base, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
         except BaseException:
-            os.unlink(tmp)
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
             raise
 
 

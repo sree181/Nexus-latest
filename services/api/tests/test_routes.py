@@ -71,6 +71,38 @@ def test_empty_task_is_rejected(client):
     assert client.post("/api/runs", json={"task": "   "}).status_code == 422
 
 
+def test_task_length_is_bounded_at_the_api_boundary(client):
+    response = client.post("/api/runs", json={"task": "x" * 4_097})
+    assert response.status_code == 422
+
+
+def test_recorder_batch_and_code_fields_are_bounded(client):
+    too_many = client.post("/api/recorder", json={
+        "agent": "claude-code", "session": "too-many",
+        "events": [{"type": "tool", "name": "test"}] * 101,
+    })
+    assert too_many.status_code == 422
+
+    too_large_code = client.post("/api/recorder", json={
+        "agent": "claude-code", "session": "too-large-code",
+        "events": [{"type": "code", "module": "module.py",
+                    "code": "x" * 200_001}],
+    })
+    assert too_large_code.status_code == 422
+
+
+def test_package_gate_and_sarif_top_level_containers_are_bounded(client):
+    package = client.post("/api/gate/package", json={
+        "package": "p" * 257, "version": "1.0",
+    })
+    assert package.status_code == 422
+
+    sarif = client.post(f"/api/runs/{RUN}/scan", json={
+        "runs": [{}] * 101,
+    })
+    assert sarif.status_code == 422
+
+
 def test_why_requires_the_node_query_param(client):
     assert client.get(f"/api/runs/{RUN}/why").status_code == 422
     ok = client.get(f"/api/runs/{RUN}/why", params={"node": "class:UnsafeShardLoader"})

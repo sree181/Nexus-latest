@@ -1,25 +1,9 @@
 #!/usr/bin/env python3
-"""`meshagent` -- the command a developer runs once so their hooks have a name.
+"""MeshAgent developer CLI.
 
-The recorder's value depends on it running unattended, which means the thing
-doing the recording is a shell command with no browser. It cannot do the OIDC
-redirect the web UI does. Until this existed it fell back to asserting a name
-in a header, which meant the coverage report named developers against gaps on
-the strength of a string anyone could type into curl.
-
-So: the device authorization grant, in shape. This command asks the API to
-start a pairing, prints a short code, and waits. The developer opens
-MeshAgent in a browser they are already signed into and approves that code.
-Only then does a token exist, and it records as the human who approved it.
-
-The token is scoped to recording and nothing else, because it is about to be
-written to a file on a laptop and left there. Worst case is fabricated
-memory, which is visible in the audit log and recoverable; the alternative --
-a general-purpose credential in the same file -- would be read access to
-every run in the fleet.
-
-Standard library only, like the hooks that use what it writes: a developer
-should not need a virtualenv to log in.
+The recording device credential is deliberately kept separate from delegated
+human read credentials.  Hooks only use the former; the MCP server selects a
+read credential only for read routes.  This command never prints either.
 """
 
 from __future__ import annotations
@@ -31,179 +15,325 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from typing import Any
 
-HOME_ENV = "MESHAGENT_HOOK_HOME"
-API_ENV = "MESHAGENT_API"
-DEFAULT_API = "http://localhost:8000"
+from meshagent_cli import state
 
-CREDENTIALS = "credentials.json"
-
-# The developer is reading a code off one screen and typing it into another.
-# Long enough to be worth showing progress, short enough that an abandoned
-# login does not sit there being phishable.
 GIVE_UP_AFTER = 600
 
 
-def home() -> str:
-    """Where the adapter keeps its state. The same directory the hooks read,
-    deliberately: a login the hook cannot find has not logged anything in."""
-    base = os.environ.get(HOME_ENV) or os.path.expanduser("~/.meshagent")
-    os.makedirs(base, mode=0o700, exist_ok=True)
-    return base
+def _api_url(path: str) -> str:
+    return f"{state.endpoint()}/api{path}"
 
 
-def credentials_path() -> str:
-    return os.path.join(home(), CREDENTIALS)
-
-
-def api() -> str:
-    return os.environ.get(API_ENV, DEFAULT_API).rstrip("/")
-
-
-def load_credentials() -> dict:
-    try:
-        with open(credentials_path()) as fh:
-            got = json.load(fh)
-        return got if isinstance(got, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def save_credentials(body: dict) -> None:
-    """Write the token 0600, and create it 0600 rather than fixing the mode
-    afterwards -- between the two there is a moment where it is not."""
-    path = credentials_path()
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        json.dump(body, fh, indent=2)
+def _request(path: str, body: dict | None = None, *, method: str = "POST",
+             token: str | None = None, timeout: float = 10.0,
+             headers: dict[str, str] | None = None) -> dict:
+    request_headers = {"Content-Type": "application/json"}
+    request_headers.update(headers or {})
+    if token:
+        request_headers["Authorization"] = f"Bearer {token}"
+    data = None if method == "GET" else json.dumps(body or {}).encode("utf-8")
+    request = urllib.request.Request(_api_url(path), data=data,
+                                     headers=request_headers, method=method)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read().decode("utf-8")
+        decoded = json.loads(raw or "{}")
+        return decoded if isinstance(decoded, dict) else {}
 
 
 def call(path: str, body: dict | None = None, *, method: str = "POST",
-         token: str | None = None, timeout: float = 10.0) -> dict:
-    """One API call, with errors turned into something a person can read."""
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(
-        f"{api()}/api{path}",
-        data=json.dumps(body or {}).encode() if method != "GET" else None,
-        headers=headers, method=method)
+         token: str | None = None, timeout: float = 10.0,
+         headers: dict[str, str] | None = None) -> dict:
+    """One API call, with response bodies reduced to safe operator messages."""
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:
-            return json.loads(res.read().decode() or "{}")
+        return _request(path, body, method=method, token=token, timeout=timeout,
+                        headers=headers)
     except urllib.error.HTTPError as exc:
         detail = ""
         try:
-            detail = json.loads(exc.read().decode()).get("detail", "")
+            parsed = json.loads(exc.read().decode("utf-8"))
+            detail = str(parsed.get("detail") or "") if isinstance(parsed, dict) else ""
         except Exception:
             pass
-        raise SystemExit(f"meshagent: {detail or exc.reason} ({exc.code})")
-    except (urllib.error.URLError, OSError) as exc:
-        raise SystemExit(f"meshagent: cannot reach {api()}: {exc}")
+        raise SystemExit(f"meshagent: {detail or exc.reason} ({exc.code})") from None
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        raise SystemExit(f"meshagent: cannot reach {state.safe_endpoint_for_display()}: {exc}") from None
 
 
-# -- commands ------------------------------------------------------------------
+def _credentials_for_login(token_response: dict) -> dict:
+    device = token_response.get("device") or {}
+    existing = state.load_credentials()
+    body: dict[str, Any] = {
+        "token": token_response["token"],
+        "api": state.endpoint(),
+        "device_id": device.get("id", ""),
+        "subject": device.get("subject", ""),
+        "name": device.get("name", ""),
+        "verified": bool(device.get("verified")),
+        "grants": token_response.get("grants", []),
+    }
+    # Preserve a separately configured read token when rotating a device token.
+    if existing.get("read_token"):
+        body["read_token"] = existing["read_token"]
+    return body
+
 
 def login(args: argparse.Namespace) -> int:
-    """Pair this machine with the human at the browser."""
-    label = args.label or f"{os.uname().nodename}"
+    """Pair this machine and persist a recording-only device token."""
+    if args.api:
+        try:
+            state.set_endpoint(args.api)
+        except state.ConfigurationError as exc:
+            print(f"meshagent: invalid API endpoint: {exc}", file=sys.stderr)
+            return 2
+    label = args.label or os.uname().nodename
     start = call("/devices/pair", {"label": label})
-
     print(f"\n  Open  {start['verify_url']}")
     print(f"  Enter {start['user_code']}\n")
     print(f"  This will let {label} record as you. It grants "
-          f"{', '.join(start.get('grants') or ['recording'])} and nothing "
-          f"else -- it cannot read runs or delete anything.\n")
-
+          f"{', '.join(start.get('grants') or ['recording'])} and nothing else.\n")
     interval = max(1, int(start.get("interval", 2)))
     deadline = time.time() + min(GIVE_UP_AFTER, int(start.get("expires_in", 600)))
     while time.time() < deadline:
         got = call("/devices/token", {"device_code": start["device_code"]})
         if got.get("status") == "granted":
-            device = got.get("device") or {}
-            save_credentials({
-                "token": got["token"],
-                "api": api(),
-                "device_id": device.get("id", ""),
-                "subject": device.get("subject", ""),
-                "name": device.get("name", ""),
-                # Carried so `whoami` can say it without another call, and so
-                # the developer is told plainly when this deployment has no
-                # identity provider and their name was only asserted.
-                "verified": bool(device.get("verified")),
-                "grants": got.get("grants", []),
-            })
-            who = device.get("name") or device.get("subject") or "you"
+            state.save_credentials(_credentials_for_login(got))
+            who = (got.get("device") or {}).get("name") or (got.get("device") or {}).get("subject") or "you"
             print(f"  Signed in. This machine now records as {who}.")
-            if not device.get("verified"):
-                print("  Note: this deployment has no identity provider, so "
-                      "that name was asserted, not proven.")
-            print(f"  Token stored in {credentials_path()} (mode 0600).")
+            print(f"  Recording credential stored in {state.credentials_path()} (mode 0600).")
             return 0
         time.sleep(interval)
-
-    print("meshagent: nobody approved that code in time. Try again.",
-          file=sys.stderr)
+    print("meshagent: nobody approved that code in time. Try again.", file=sys.stderr)
     return 1
 
 
 def logout(_: argparse.Namespace) -> int:
-    """Revoke the token and remove it. Revoking first, because a token
-deleted locally but still live on the server is not revoked."""
-    creds = load_credentials()
-    if not creds.get("token"):
+    """Best-effort server revocation followed by credential removal."""
+    creds = state.load_credentials()
+    token = state.device_token()
+    if not token:
         print("meshagent: not signed in.")
         return 0
     if device_id := creds.get("device_id"):
-        # Best effort: the point of the command is that the local copy is
-        # gone, and a server that cannot be reached must not leave it behind.
         try:
-            call(f"/devices/{device_id}", method="DELETE",
-                 token=creds["token"])
+            call(f"/devices/{device_id}", method="DELETE", token=token)
         except SystemExit as exc:
             print(f"  Could not revoke on the server: {exc}", file=sys.stderr)
-            print("  Revoke it from the Devices screen when you can.",
-                  file=sys.stderr)
-    try:
-        os.unlink(credentials_path())
-    except OSError:
-        pass
-    print("  Signed out.")
+            print("  Revoke it from the Devices screen when you can.", file=sys.stderr)
+    # Retain a separately supplied read credential only when it was deliberately
+    # configured.  It cannot be used for hooks, and logout must remove the
+    # device writer even during an outage.
+    retained = {"read_token": creds["read_token"]} if creds.get("read_token") else {}
+    if retained:
+        state.save_credentials(retained)
+    else:
+        try:
+            os.unlink(state.credentials_path())
+        except OSError:
+            pass
+    print("  Signed out of recording.")
     return 0
 
 
 def whoami(_: argparse.Namespace) -> int:
-    """What this machine records as, and whether anyone verified it."""
-    creds = load_credentials()
-    if not creds.get("token"):
+    """Show only non-secret facts about the recording device."""
+    creds = state.load_credentials()
+    if not state.device_token():
         print("Not signed in. Run `meshagent login`.")
         return 1
-    print(f"  Recording as : {creds.get('name') or creds.get('subject')}")
-    print(f"  Identity     : "
-          f"{'verified by the provider' if creds.get('verified') else 'asserted, not verified'}")
+    print(f"  Recording as : {creds.get('name') or creds.get('subject') or 'unknown'}")
+    print("  Identity     : " + ("verified by the provider" if creds.get("verified") else "asserted, not verified"))
     print(f"  Grants       : {', '.join(creds.get('grants') or ['recording'])}")
-    print(f"  API          : {creds.get('api')}")
-    print(f"  Device       : {creds.get('device_id')}")
+    print(f"  API          : {state.safe_endpoint_for_display()}")
+    print(f"  Device       : {creds.get('device_id') or 'unknown'}")
+    print("  Read token   : " + ("configured (redacted)" if state.read_token() else "not configured"))
     return 0
 
 
-COMMANDS = {"login": login, "logout": logout, "whoami": whoami}
+def config_get(_: argparse.Namespace) -> int:
+    print(state.safe_endpoint_for_display())
+    return 0
+
+
+def config_set(args: argparse.Namespace) -> int:
+    try:
+        endpoint = state.set_endpoint(args.endpoint)
+    except state.ConfigurationError as exc:
+        print(f"meshagent: invalid API endpoint: {exc}", file=sys.stderr)
+        return 2
+    print(f"API endpoint saved: {endpoint}")
+    return 0
+
+
+def credentials_set_read(args: argparse.Namespace) -> int:
+    try:
+        state.set_read_token(args.token)
+    except state.ConfigurationError as exc:
+        print(f"meshagent: {exc}", file=sys.stderr)
+        return 2
+    print("Delegated read token saved (redacted). Hooks will not use it.")
+    return 0
+
+
+def credentials_clear_read(_: argparse.Namespace) -> int:
+    state.clear_read_token()
+    print("Delegated read token removed.")
+    return 0
+
+
+def _health() -> tuple[dict | None, str]:
+    try:
+        return _request("/health", method="GET", timeout=3.0), ""
+    except urllib.error.HTTPError as exc:
+        return None, f"HTTP {exc.code}"
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return None, str(exc)
+
+
+def status(args: argparse.Namespace) -> int:
+    local = state.diagnostic()
+    health, problem = _health()
+    if args.json:
+        print(json.dumps({"local": local, "health": health, "health_error": problem or None},
+                         indent=2, sort_keys=True))
+    else:
+        print(f"Endpoint: {local['endpoint']} ({local['endpoint_source']})")
+        print(f"Recording device: {'configured' if local['credentials']['device'] else 'not configured'}")
+        print(f"Delegated read credential: {'configured' if local['credentials']['read'] else 'not configured'}")
+        print(f"Queued batches: {local['queued_batches']} across {local['queues']} queue(s)")
+        if health:
+            print(f"API: {health.get('status', 'unknown')} ({health.get('gateway', 'unknown')})")
+            mode = health.get("mode") or {}
+            print("Persistence: " + ("durable" if health.get("durable") else "not durable")
+                  + (f"; {mode.get('note')}" if mode.get("note") else ""))
+        else:
+            print(f"API: unreachable ({problem})")
+    return 0 if health else 1
+
+
+def doctor(args: argparse.Namespace) -> int:
+    details = state.diagnostic()
+    problems: list[str] = []
+    if details["home_mode"] != "0o700":
+        problems.append("MeshAgent home must have mode 0700")
+    if details["credentials_present"] and details["credentials_mode"] != "0o600":
+        problems.append("credentials file must have mode 0600")
+    health, problem = _health()
+    if not health:
+        problems.append(f"API health check failed: {problem}")
+    elif not health.get("durable"):
+        problems.append("API reports non-durable/sample mode; recordings will not persist")
+    report = {"diagnostic": details, "health": health, "problems": problems}
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print("MeshAgent doctor")
+        print(f"  endpoint: {details['endpoint']} ({details['endpoint_source']})")
+        print(f"  state home: {details['home']} ({details['home_mode']})")
+        print(f"  credentials: {'present' if details['credentials_present'] else 'absent'} ({details['credentials_mode']})")
+        print(f"  device recording credential: {'present' if details['credentials']['device'] else 'absent'}")
+        print(f"  delegated read credential: {'present' if details['credentials']['read'] else 'absent'}")
+        print(f"  queued batches: {details['queued_batches']} across {details['queues']} queue(s)")
+        for issue in problems:
+            print(f"  FAIL: {issue}")
+        if not problems:
+            print("  OK: local configuration and API health check passed")
+    return 1 if problems else 0
+
+
+def _post_replay(batch: dict) -> tuple[dict | None, str]:
+    token = state.device_token()
+    if not token:
+        return None, "recording device credential is not configured"
+    keyed_events = state.add_event_keys(str(batch.get("agent") or "unknown"),
+                                        str(batch.get("session") or ""),
+                                        list(batch.get("events") or []))
+    payload = dict(batch)
+    payload["events"] = keyed_events
+    headers = {
+        "Idempotency-Key": state.batch_key(payload),
+        # Kept separate from Authorization and never printed.  Current API
+        # versions ignore it safely; deployments that understand event keys can
+        # deduplicate individual events without changing the adapter contract.
+        "X-MeshAgent-Event-Keys": ",".join(e["idempotency_key"] for e in keyed_events),
+    }
+    try:
+        return _request("/recorder", payload, token=token, headers=headers), ""
+    except urllib.error.HTTPError as exc:
+        return None, f"HTTP {exc.code}"
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return None, str(exc)
+
+
+def replay(args: argparse.Namespace) -> int:
+    paths = state.queue_files()
+    attempted = delivered = retained = 0
+    for path in paths:
+        pending = state.drain_path(path)
+        for index, batch in enumerate(pending):
+            attempted += 1
+            _, problem = _post_replay(batch)
+            if problem:
+                remaining = pending[index:]
+                state.enqueue_path(path, remaining)
+                retained += len(remaining)
+                break
+            delivered += 1
+    if args.json:
+        print(json.dumps({"queues": len(paths), "attempted": attempted,
+                          "delivered": delivered, "retained": retained}, sort_keys=True))
+    else:
+        print(f"Replay: delivered {delivered}/{attempted} queued batch(es); retained {retained}.")
+    return 0 if retained == 0 else 1
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="meshagent",
-        description="Register this machine so its agent hooks record as you.")
+    parser = argparse.ArgumentParser(prog="meshagent", description="MeshAgent developer integrations")
     subs = parser.add_subparsers(dest="command", required=True)
 
-    p_login = subs.add_parser("login", help="pair this machine")
-    p_login.add_argument("--label", default="",
-                         help="what to call this machine in the UI")
-    subs.add_parser("logout", help="revoke this machine's token")
-    subs.add_parser("whoami", help="show what this machine records as")
+    p_login = subs.add_parser("login", help="pair this machine for recording")
+    p_login.add_argument("--label", default="", help="machine label shown in MeshAgent")
+    p_login.add_argument("--api", default="", help="validate and save the API origin before pairing")
+    subs.add_parser("logout", help="revoke and remove this recording device")
+    subs.add_parser("whoami", help="show non-secret device identity details")
+
+    config_parser = subs.add_parser("config", help="manage durable CLI configuration")
+    config_subs = config_parser.add_subparsers(dest="config_command", required=True)
+    config_subs.add_parser("get", help="show effective API endpoint")
+    p_config_set = config_subs.add_parser("set", help="validate and persist an API origin")
+    p_config_set.add_argument("endpoint")
+
+    credential_parser = subs.add_parser("credentials", help="manage local credentials")
+    credential_subs = credential_parser.add_subparsers(dest="credential_command", required=True)
+    p_set_read = credential_subs.add_parser("set-read-token", help="save delegated human read credential")
+    p_set_read.add_argument("token", help="credential value (never printed)")
+    credential_subs.add_parser("clear-read-token", help="remove delegated human read credential")
+
+    for name, help_text in (("status", "show local state and API health"),
+                            ("doctor", "validate safe local setup and API health"),
+                            ("replay", "replay locally queued recorder batches")):
+        command = subs.add_parser(name, help=help_text)
+        command.add_argument("--json", action="store_true", help="machine-readable diagnostic output")
 
     args = parser.parse_args(argv)
-    return COMMANDS[args.command](args)
+    if args.command == "login":
+        return login(args)
+    if args.command == "logout":
+        return logout(args)
+    if args.command == "whoami":
+        return whoami(args)
+    if args.command == "config":
+        return config_get(args) if args.config_command == "get" else config_set(args)
+    if args.command == "credentials":
+        return credentials_set_read(args) if args.credential_command == "set-read-token" else credentials_clear_read(args)
+    if args.command == "status":
+        return status(args)
+    if args.command == "doctor":
+        return doctor(args)
+    if args.command == "replay":
+        return replay(args)
+    return 2
 
 
 if __name__ == "__main__":

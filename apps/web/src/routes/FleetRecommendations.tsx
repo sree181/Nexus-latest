@@ -85,12 +85,12 @@ function Receipt({ receipt }: { receipt: ApplyReceipt }) {
 
 function Detail({
   rec,
-  onApply,
+  onRequestApply,
   pending,
   error,
 }: {
   rec: Recommendation;
-  onApply: () => void;
+  onRequestApply: () => void;
   pending: boolean;
   error: unknown;
 }) {
@@ -144,7 +144,7 @@ function Detail({
         )}
 
         <div className="mt-2 flex items-center gap-3 border-t border-line pt-4">
-          <Button disabled={pending} onClick={onApply}>
+          <Button disabled={pending} onClick={onRequestApply}>
             {pending
               ? "Applying…"
               : `Apply to ${rec.agents} agent${rec.agents === 1 ? "" : "s"}`}
@@ -155,7 +155,7 @@ function Detail({
           </p>
         </div>
         {error !== null && (
-          <p className="font-mono text-[11.5px] leading-snug text-risk">
+          <p role="alert" className="font-mono text-[11.5px] leading-snug text-risk">
             {error instanceof Error ? error.message : "apply failed"}
           </p>
         )}
@@ -166,6 +166,7 @@ function Detail({
 
 function Rail({ recs }: { recs: Recommendation[] }) {
   const [selected, setSelected] = useState(recs[0].id);
+  const [confirming, setConfirming] = useState<Recommendation | null>(null);
   const rec = recs.find((r) => r.id === selected) ?? recs[0];
   const client = useQueryClient();
 
@@ -177,6 +178,7 @@ function Rail({ recs }: { recs: Recommendation[] }) {
     mutationFn: (id: string) => api.applyRecommendation(id),
     onSuccess: (r) => {
       setReceipt(r);
+      setConfirming(null);
       void client.invalidateQueries({ queryKey: ["recommendations"] });
       void client.invalidateQueries({ queryKey: ["fleetOverview"] });
       void client.invalidateQueries({ queryKey: ["fleetQuery"] });
@@ -202,6 +204,7 @@ function Rail({ recs }: { recs: Recommendation[] }) {
               aria-current={active ? "true" : undefined}
               onClick={() => {
                 setSelected(r.id);
+                setConfirming(null);
                 apply.reset();
               }}
               className={`flex flex-col gap-1.5 rounded-xl border px-3.5 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
@@ -224,10 +227,43 @@ function Rail({ recs }: { recs: Recommendation[] }) {
         })}
       </nav>
       <div className="flex flex-1 flex-col gap-5 overflow-auto">
+        {confirming && (
+          <section
+            aria-labelledby="apply-confirmation-title"
+            className="flex flex-col gap-3 rounded-2xl border border-warn bg-warn-soft p-5"
+          >
+            <div>
+              <h2 id="apply-confirmation-title" className="font-serif text-[17px] text-ink">
+                Apply this recommendation?
+              </h2>
+              <p className="mt-1 text-[13px] leading-snug text-ink">
+                <span className="font-medium">{confirming.title}</span> will be
+                applied to {confirming.agents} agent{confirming.agents === 1 ? "" : "s"}.
+                The receipt will distinguish governed-memory changes from an
+                accepted decision recorded outside MeshAgent.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="danger"
+                disabled={apply.isPending}
+                onClick={() => apply.mutate(confirming.id)}
+              >
+                {apply.isPending ? "Applying…" : "Confirm apply"}
+              </Button>
+              <Button variant="ghost" disabled={apply.isPending} onClick={() => setConfirming(null)}>
+                Cancel
+              </Button>
+            </div>
+          </section>
+        )}
         <Detail
           key={rec.id}
           rec={rec}
-          onApply={() => apply.mutate(rec.id)}
+          onRequestApply={() => {
+            apply.reset();
+            setConfirming(rec);
+          }}
           pending={apply.isPending}
           error={apply.error}
         />

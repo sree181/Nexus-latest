@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+import tempfile
 from collections.abc import Iterator
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from urllib.parse import urlparse
 
 from typing import Any
 
@@ -17,7 +19,7 @@ from fastapi.responses import JSONResponse
 
 from . import __version__, audit, auth, devices, paths
 from .auth import AuthError, Forbidden, Principal
-from .gateway import NotFound, Stale, get_gateway
+from .gateway import Conflict, NotFound, Stale, get_gateway
 from .models import (
     ApplyReceipt,
     ApproveRequest,
@@ -56,12 +58,76 @@ from .models import (
     SbomOut,
     ScaleOut,
     ScanOut,
+    SarifDocument,
     WhyOut,
 )
 
-app = FastAPI(title="MeshAgent API", version=__version__)
+def validate_startup() -> None:
+    """Reject incomplete production configuration before serving traffic."""
+    environment = auth.environment()  # validates the closed MESHAGENT_ENV set
+    if environment != "production":
+        return
 
-_origins = os.environ.get("MESHAGENT_CORS_ORIGINS", "http://localhost:5173").split(",")
+    cfg = auth.config()
+    parsed = urlparse(_web_url())
+    problems: list[str] = []
+    if os.environ.get("MESHAGENT_ENGINE", "").strip() != "1":
+        problems.append("MESHAGENT_ENGINE=1")
+    if not cfg.issuer:
+        problems.append("MESHAGENT_OIDC_ISSUER")
+    if not cfg.audience:
+        problems.append("MESHAGENT_OIDC_AUDIENCE")
+    if not cfg.analyst_groups:
+        problems.append("MESHAGENT_ANALYST_GROUPS")
+    db_raw = os.environ.get("MESHAGENT_DB_DIR", "").strip()
+    if not db_raw:
+        problems.append("MESHAGENT_DB_DIR")
+    else:
+        db_path = Path(db_raw).expanduser()
+        temp_path = Path(tempfile.gettempdir()).resolve()
+        try:
+            resolved_db = db_path.resolve()
+        except OSError:
+            resolved_db = db_path.absolute()
+        if not db_path.is_absolute() or (
+            resolved_db == temp_path or temp_path in resolved_db.parents
+        ):
+            problems.append("MESHAGENT_DB_DIR (must be absolute and non-temporary)")
+    if not audit.strict_enabled():
+        problems.append("MESHAGENT_STRICT_AUDIT")
+    if parsed.scheme != "https" or not parsed.netloc:
+        problems.append("MESHAGENT_WEB_URL (must be an HTTPS URL)")
+    cors = [
+        origin.strip()
+        for origin in os.environ.get("MESHAGENT_CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    web_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else ""
+    if (
+        not cors
+        or "*" in cors
+        or any(urlparse(origin).scheme != "https" for origin in cors)
+        or web_origin not in cors
+    ):
+        problems.append(
+            "MESHAGENT_CORS_ORIGINS (must contain the exact HTTPS web origin)"
+        )
+    if problems:
+        raise RuntimeError(
+            "production startup requires: " + ", ".join(problems))
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    validate_startup()
+    yield
+
+
+app = FastAPI(title="MeshAgent API", version=__version__, lifespan=_lifespan)
+
+_origins = os.environ.get(
+    "MESHAGENT_CORS_ORIGINS", "http://localhost:5173"
+).split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _origins if o.strip()],
@@ -96,6 +162,12 @@ def _stale(_: Request, exc: Stale) -> JSONResponse:
     return JSONResponse(status_code=412, content={"detail": str(exc)})
 
 
+@app.exception_handler(Conflict)
+def _conflict(_: Request, exc: Conflict) -> JSONResponse:
+    """The key exists, but it identifies a different request."""
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
 # -- who is asking ------------------------------------------------------------
 
 _verifier: auth.Verifier | None = None
@@ -126,6 +198,8 @@ def identify(token: str | None, dev_user: str | None,
     global _verifier
     cfg = auth.config()
     if not cfg.enabled:
+        if not auth.allows_local_asserted_identities():
+            raise AuthError("local asserted identities are disabled in production")
         return auth.local_principal(dev_user, dev_role)
     if _verifier is None:
         _verifier = auth.Verifier(cfg)
@@ -212,16 +286,20 @@ audit_log = audit.Log(base=paths.base_dir())
 device_store = devices.load(paths.base_dir())
 
 
-def note(who: Principal, action: str, target: str, detail: str = "") -> None:
-    """Record something a person did. Never lets a logging failure take down
-    the request it is describing -- but a failure to log is itself worth
-    knowing, so it is re-raised in tests via MESHAGENT_STRICT_AUDIT."""
+def note(who: Principal, action: str, target: str, detail: str = "",
+         *, require_commit: bool = False) -> None:
+    """Record something a person did.
+
+    Routine audit failures do not take down a request unless strict auditing is
+    enabled. Destructive operations pass ``require_commit`` and log before the
+    mutation, so a failed append/fsync prevents the destructive gateway call.
+    """
     try:
         audit_log.record(
             actor=who.subject, actor_name=who.name, role=who.role,
             verified=who.verified, action=action, target=target, detail=detail)
     except OSError:
-        if os.environ.get("MESHAGENT_STRICT_AUDIT"):
+        if require_commit or audit.strict_enabled():
             raise
 
 
@@ -241,7 +319,14 @@ def _checkout() -> str:
     there and the hook fails silently. This is the only party that knows where
     the adapters actually are -- and it still does not know the editor is on
     this filesystem, which is why it is reported rather than asserted."""
-    return str(Path(__file__).resolve().parents[3])
+    configured = os.environ.get("MESHAGENT_CHECKOUT", "").strip()
+    if configured:
+        return configured
+    here = Path(__file__).resolve()
+    return str(next(
+        (parent for parent in here.parents if (parent / "adapters").is_dir()),
+        Path.cwd(),
+    ))
 
 
 @app.get("/api/health", response_model=HealthOut)
@@ -400,8 +485,10 @@ def apply_recommendation(rec_id: str,
                          who: Principal = Depends(analyst)) -> ApplyReceipt:
     """Apply a recommendation and return the receipt. The receipt says whether
     governed memory actually changed, so nothing is claimed that did not."""
-    receipt = gateway.apply_recommendation(rec_id)
-    note(who, "recommendation.apply", rec_id, receipt.note[:160])
+    # Cut recommendations delete governed memory. Audit before invoking the
+    # gateway so a failed durable commit leaves the recommendation untouched.
+    note(who, "recommendation.apply", rec_id, "requested", require_commit=True)
+    receipt = gateway.apply_recommendation(rec_id, actor=who.subject)
     return receipt
 
 
@@ -531,12 +618,24 @@ def run_forget(run_id: str, req: ForgetRequest, request: Request,
     without a human ever reading a preview; when a human did read one, sending
     it back is what stops them confirming one closure and purging another."""
     _may_read(run_id, who)
+    expected_version = request.headers.get("if-match")
+    idempotency_key = request.headers.get("idempotency-key")
+    if expected_version is not None and len(expected_version) > 128:
+        raise HTTPException(status_code=400, detail="If-Match is too long")
+    if idempotency_key is not None and not 1 <= len(idempotency_key) <= 128:
+        raise HTTPException(status_code=400, detail="Idempotency-Key is too long")
+    if auth.is_production() and not expected_version:
+        raise HTTPException(status_code=428,
+                            detail="If-Match is required for production forget")
+    if auth.is_production() and not idempotency_key:
+        raise HTTPException(status_code=428,
+                            detail="Idempotency-Key is required for production forget")
+    # The audit entry is a precondition for destruction, never an afterthought.
+    note(who, "run.forget", f"{run_id}:{req.node}",
+         f"requested: {req.reason}", require_commit=True)
     cert = gateway.run_forget(
         run_id, req.node, req.reason, actor=who.subject,
-        expected_version=request.headers.get("if-match"),
-        idempotency_key=request.headers.get("idempotency-key"))
-    note(who, "run.forget", f"{run_id}:{req.node}",
-         f"purged {cert.purged_count} edge(s): {req.reason}")
+        expected_version=expected_version, idempotency_key=idempotency_key)
     return cert
 
 
@@ -560,7 +659,7 @@ def run_finding(run_id: str, sink: str,
 # -- supply chain -------------------------------------------------------------
 
 @app.post("/api/runs/{run_id}/scan", response_model=ScanOut)
-def ingest_scan(run_id: str, sarif: dict[str, Any],
+def ingest_scan(run_id: str, sarif: SarifDocument,
                 who: Principal = Depends(caller)) -> ScanOut:
     """Accept a SARIF document from an external scanner.
 
@@ -568,7 +667,7 @@ def ingest_scan(run_id: str, sarif: dict[str, Any],
     own authority, so this is the preferred way it gets made: Semgrep or
     CodeQL traced the flow, and MeshAgent records who said so."""
     _may_read(run_id, who)
-    got = gateway.ingest_scan(run_id, sarif)
+    got = gateway.ingest_scan(run_id, sarif.model_dump())
     note(who, "scan.ingest", run_id,
          f"{got.tool}: {got.reachable} reachable of {got.results} result(s) "
          f"over {len(got.modules)} module(s)")

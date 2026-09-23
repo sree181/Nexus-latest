@@ -1,3 +1,5 @@
+> **ARCHIVED — NON-AUTHORITATIVE.** This historical integration guide is retained for context only. It does not describe MeshAgent production v1 or its supported interfaces, configuration, or operations. Use the root [README](../../README.md) and [Production Operations](../PRODUCTION_OPERATIONS.md).
+
 # Cursor Backend Integration Guide
 
 **Audience:** Engineers using Cursor to connect the MeshAgent Security Workbench frontend to a production backend.

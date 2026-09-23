@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from .._types import HyperMeshError
-from ._content import ContentStore
+from ._content import ContentStore, sha256_of
 from .gate import GateRejection, WriteGate
 from ._envelope import (
     DERIVATION_PROPS_DDL,
@@ -314,17 +314,39 @@ class MemoryStore:
         if not rows:
             return None
         row = rows[0].to_dict()
-        payload, _, redacted = self._content.get(ulid)
+        envelope = Envelope.from_row(row)
+        payload, sidecar_sha, redacted = self._content.get(ulid)
+        graph_sha = envelope.content_sha
+        if graph_sha != (sidecar_sha or ""):
+            raise HyperMeshError(
+                f"content integrity failure for {ulid}: graph and sidecar hashes differ"
+            )
+        if payload is not None and sha256_of(payload) != sidecar_sha:
+            raise HyperMeshError(
+                f"content integrity failure for {ulid}: payload hash differs"
+            )
+        tombstoned = self._tombstone_ts(ulid, node) is not None
+        if tombstoned and not redacted:
+            # The graph tombstone is written before the sidecar is redacted.
+            # A process can die between those writes; completing the second
+            # step here makes the operation restart-safe and never re-exposes
+            # content that the authoritative graph says was deleted.
+            self._content.redact(ulid)
+            payload, redacted = None, True
+        if redacted and not tombstoned:
+            raise HyperMeshError(
+                f"content integrity failure for {ulid}: payload is missing without a tombstone"
+            )
         names = self._registry.names_of([int(m) for m in row["members"]])
         return Memory(
             ulid=ulid,
-            envelope=Envelope.from_row(row),
+            envelope=envelope,
             event_ts=int(row["event_ts"]),
             member_names=[names.get(int(m), str(m)) for m in row["members"]],
             content=payload,
             redacted=redacted,
             superseded_by=self._superseded_by(ulid, node),
-            tombstoned=self._tombstone_ts(ulid, node) is not None,
+            tombstoned=tombstoned,
         )
 
     def find_by_subject(self, subject: str) -> list[str]:

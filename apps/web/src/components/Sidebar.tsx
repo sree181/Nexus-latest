@@ -3,6 +3,7 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api, latestRun } from "../lib/api";
 import { useIdentity, type Me } from "../lib/useIdentity";
+import { oidcEnabled, signOut } from "../lib/auth";
 
 function Icon({ d }: { d: string }) {
   return (
@@ -95,10 +96,14 @@ export function Sidebar() {
   const { me, analyst } = useIdentity();
   const runId = latestRun(runs.data);
   const params = runId ? { runId } : undefined;
-  const noRun = runs.isPending ? "Loading runs…" : "No run has memory yet";
+  const noRun = runs.isPending
+    ? "Loading runs…"
+    : runs.isError
+      ? "Could not load runs; retry from Start a task"
+      : "No run has memory yet";
 
   return (
-    <aside className="flex h-full w-[244px] shrink-0 flex-col overflow-auto bg-rail px-3.5 py-5">
+    <aside className="flex max-h-[42vh] w-full shrink-0 flex-col overflow-auto bg-rail px-3.5 py-3 md:h-full md:max-h-none md:w-[244px] md:py-5">
       <div className="flex items-center gap-3 px-2.5 pb-5 pt-1.5">
         <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-accent">
           <svg
@@ -123,7 +128,7 @@ export function Sidebar() {
         </span>
       </div>
 
-      <nav aria-label="Main" className="flex flex-col">
+      <nav aria-label="Main" className="flex flex-col md:min-w-[216px]">
         <p className="mx-3 mb-2 mt-1.5 font-mono text-[11px] tracking-widest text-rail-ink-faint">
           WORKSPACE
         </p>
@@ -181,6 +186,11 @@ export function Sidebar() {
               Supply chain
             </Unavailable>
           </>
+        )}
+        {runs.isError && (
+          <p role="status" className="mx-3 mt-2 text-[11px] leading-snug text-rail-ink-faint">
+            Run links are unavailable because the run list could not be loaded.
+          </p>
         )}
 
         {/* The fleet reads across every developer's memory, so it is the
@@ -251,6 +261,15 @@ function Identity({ me }: { me: Me | undefined }) {
           this browser says it is — nothing has verified it.
         </p>
       ) : null}
+      {oidcEnabled && (
+        <button
+          type="button"
+          onClick={signOut}
+          className="mt-3 w-full rounded-lg border border-rail-line px-3 py-2 text-left text-[12px] text-rail-ink-dim transition hover:bg-rail-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright"
+        >
+          Sign out
+        </button>
+      )}
     </div>
   );
 }

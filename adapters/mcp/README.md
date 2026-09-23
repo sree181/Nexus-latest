@@ -26,7 +26,7 @@ exist underneath, and why coverage is measured at all.
     "meshagent": {
       "command": "python3",
       "args": ["/abs/path/to/meshagent-app/adapters/mcp/meshagent_mcp.py"],
-      "env": { "MESHAGENT_API": "http://localhost:8000" }
+      "env": { "MESHAGENT_API": "https://meshagent.internal" }
     }
   }
 }
@@ -43,7 +43,18 @@ applies to the hook commands under `adapters/cursor` and
 MeshAgent's **Connect your editor** screen generates this block with the path
 already filled in, as the API process sees it.
 
-It uses the same credential as the hooks, so `meshagent login` covers both.
+Run `meshagent config set-endpoint https://meshagent.internal` and
+`meshagent login` first. The resulting `mesh_...` device credential is used
+only by `record_decision` and `check_package`. Read tools never inherit that
+credential. They require an explicitly delegated human/OIDC bearer in
+`MESHAGENT_READ_TOKEN` or `meshagent credentials set-read-token`; leave it
+unset when the MCP process should not read governed memory.
+
+Session state is stored under
+`~/.meshagent/state/<repository>/<editor>/<session>.json`. Repository and
+editor namespacing prevents two open workspaces from attaching a decision to
+the wrong run; locking prevents the MCP server and editor hook from losing one
+another's updates.
 
 ## The tools
 

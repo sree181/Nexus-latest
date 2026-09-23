@@ -23,11 +23,36 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 
 Role = Literal["developer", "analyst"]
+Environment = Literal["development", "test", "production"]
+
+ENVIRONMENTS = frozenset({"development", "test", "production"})
+
+
+def environment() -> Environment:
+    """The deployment mode, deliberately from a closed set.
+
+    Falling back to development keeps a fresh local checkout usable, but a
+    typo must never silently select permissive local identity handling.
+    """
+    value = os.environ.get("MESHAGENT_ENV", "development")
+    if value not in ENVIRONMENTS:
+        raise RuntimeError(
+            "MESHAGENT_ENV must be one of development, test, or production")
+    return cast(Environment, value)
+
+
+def is_production() -> bool:
+    return environment() == "production"
+
+
+def allows_local_asserted_identities() -> bool:
+    """Only local development and hermetic tests may trust request headers."""
+    return environment() in ("development", "test")
 
 # Signature algorithms accepted from the provider. Deliberately asymmetric
 # only: an HMAC algorithm here would let anyone holding the (shared) secret
@@ -170,6 +195,11 @@ class Verifier:
         import jwt
 
         cfg = self._cfg
+        # PyJWT deliberately permits an issuer-only configuration when audience
+        # verification is disabled. That is useful while wiring a local IdP,
+        # but production access tokens must be bound to this API as well.
+        if is_production() and not cfg.audience:
+            raise AuthError("production OIDC configuration requires an audience")
         try:
             key = self._client().get_signing_key_from_jwt(token).key
             claims = jwt.decode(

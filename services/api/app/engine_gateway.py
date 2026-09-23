@@ -19,8 +19,8 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-from . import analysis, engine_seed, gateway, registry
-from .gateway import Gateway, NotFound, Stale, new_run_id
+from . import analysis, engine_seed, gateway, operations, registry
+from .gateway import Conflict, Gateway, NotFound, Stale, new_run_id
 from .models import (
     AgentHit,
     ApplyReceipt,
@@ -215,6 +215,7 @@ class EngineGateway(Gateway):
 
         self._fleet = engine_seed.seed_fleet_store()
         self._registry = registry.load(engine_seed.base_dir())
+        self._operations = operations.load(engine_seed.base_dir())
         seeded = self._registry.runs.get(engine_seed.RUN_ID)
         self._runs: dict[str, _Run] = {
             engine_seed.RUN_ID: _Run(
@@ -230,10 +231,8 @@ class EngineGateway(Gateway):
         }
         self._certificates: list[DeletionCertificate] = list(
             self._registry.certificates)
-        # idempotency key -> the certificate that key already issued. Process
-        # local: a replay only has to survive the retry, not the restart.
-        self._forgotten: dict[str, DeletionCertificate] = {}
         self._reopen()
+        self._recover_operations()
 
     def _reopen(self) -> None:
         """Bring back the runs a previous process recorded.
@@ -278,6 +277,16 @@ class EngineGateway(Gateway):
         }
         self._registry.certificates = list(self._certificates)
         self._registry.save()
+
+    def _recover_operations(self) -> None:
+        """Finish deletions whose process ended after durable preparation.
+
+        Startup fails if recovery cannot complete. Serving traffic while an
+        approved deletion is half-applied would make both the graph and its
+        certificate unreliable.
+        """
+        for operation in self._operations.incomplete():
+            self._finish_forget_operation(operation)
 
     # -- run bookkeeping --
 
@@ -521,7 +530,7 @@ class EngineGateway(Gateway):
         return out
 
     @_serialized
-    def apply_recommendation(self, rec_id: str) -> ApplyReceipt:
+    def apply_recommendation(self, rec_id: str, *, actor: str = "") -> ApplyReceipt:
         """Perform what MeshAgent can actually perform. A cut recommendation is
         a real forget, so it runs and returns its certificate. Everything else
         is a change in the agents' own repositories, so the engine records the
@@ -537,7 +546,14 @@ class EngineGateway(Gateway):
                 if held is None:
                     continue
                 node = _entity_of(held) or ulid
-                cert = self._certificate(run, ulid, node, f"applied {rec_id}")
+                cert = self.run_forget(
+                    run.id,
+                    node,
+                    f"applied {rec_id}",
+                    actor=actor,
+                    expected_version=self._version(run.store),
+                    idempotency_key=f"recommendation:{rec_id}:{actor}",
+                )
                 return ApplyReceipt(
                     recommendation_id=rec_id, title=rec.title,
                     action=(f"Forgot {node} and the {cert.purged_count - 1} "
@@ -911,22 +927,158 @@ class EngineGateway(Gateway):
             "".join(sorted(r.ulid for r in _live(store))).encode()
         ).hexdigest()[:16]
 
+    def _finish_forget_operation(
+        self, operation: operations.OperationRecord,
+    ) -> DeletionCertificate:
+        """Complete a prepared deletion using its immutable approved closure."""
+        if operation.certificate is not None and operation.state == "committed":
+            return operation.certificate
+        run = self._run(operation.run_id)
+        persisted = next((
+            certificate
+            for certificate in self._certificates
+            if certificate.run_id == operation.run_id
+            and certificate.root == operation.root
+            and certificate.actor == (operation.actor or _ACTOR)
+            and certificate.reason == operation.reason
+        ), None)
+        if persisted is not None:
+            complete = all(
+                (memory := run.store.get(edge.ulid)) is not None
+                and memory.tombstoned
+                and memory.redacted
+                for edge in operation.planned
+            )
+            if complete:
+                self._operations.transition(
+                    operation.idempotency_key,
+                    "committed",
+                    certificate=persisted,
+                )
+                return persisted
+        self._operations.transition(operation.idempotency_key, "mutating")
+        issued_at = int(time.time())
+        purged: list[PurgedEdge] = []
+        classes_pruned: set[str] = set()
+        try:
+            for planned in operation.planned:
+                rec = run.store.get(planned.ulid)
+                if rec is None:
+                    raise RuntimeError(
+                        f"prepared deletion references missing memory {planned.ulid}"
+                    )
+                classes_pruned |= {
+                    member
+                    for member in rec.member_names
+                    if member.startswith("class:")
+                }
+                result = run.store.tombstone(
+                    planned.ulid,
+                    reason=operation.reason,
+                    actor=operation.actor or _ACTOR,
+                    event_ts=issued_at,
+                )
+                retained = result["content_sha_retained"] or planned.content_sha
+                if retained != planned.content_sha:
+                    raise RuntimeError(
+                        f"content hash changed during deletion of {planned.ulid}"
+                    )
+                purged.append(PurgedEdge(
+                    ulid=planned.ulid,
+                    entity=planned.entity,
+                    content_sha_retained=retained,
+                ))
+            cert = DeletionCertificate(
+                run_id=operation.run_id,
+                node=operation.node,
+                root=operation.root,
+                reason=operation.reason,
+                actor=operation.actor or _ACTOR,
+                issued_at=issued_at,
+                purged_count=len(purged),
+                classes_pruned=sorted(classes_pruned),
+                retained_hash=DeletionCertificate.digest(
+                    [edge.content_sha_retained for edge in purged]
+                ),
+                purged=purged,
+            )
+            if not any(
+                existing.run_id == cert.run_id
+                and existing.root == cert.root
+                and existing.actor == cert.actor
+                and existing.reason == cert.reason
+                for existing in self._certificates
+            ):
+                self._certificates.append(cert)
+            self._remember()
+            self._operations.transition(
+                operation.idempotency_key, "committed", certificate=cert
+            )
+            return cert
+        except BaseException as exc:
+            self._operations.transition(
+                operation.idempotency_key, "mutating", error=str(exc)[:500]
+            )
+            raise
+
     @_serialized
     def run_forget(self, run_id: str, node: str, reason: str, *,
                    actor: str = "", expected_version: str | None = None,
                    idempotency_key: str | None = None) -> DeletionCertificate:
+        gateway.require_actor(actor)
         run = self._run(run_id)
         if idempotency_key is not None:
-            if (seen := self._forgotten.get(idempotency_key)) is not None:
-                return seen
+            if seen := self._operations.get(idempotency_key):
+                if not seen.matches(
+                    run_id=run_id,
+                    node=node,
+                    reason=reason,
+                    actor=actor,
+                    expected_version=expected_version,
+                ):
+                    raise Conflict(
+                        "Idempotency-Key was already used for a different request"
+                    )
+                if seen.state == "committed" and seen.certificate is not None:
+                    return seen.certificate
+                if seen.state == "failed":
+                    raise Conflict(
+                        "the previous deletion attempt failed; operator review is required"
+                    )
+                return self._finish_forget_operation(seen)
         if (expected_version is not None
                 and expected_version != self._version(run.store)):
             raise Stale("the memory moved since that preview; look again")
-        cert = self._certificate(run, self._ulid_for(run.store, node), node,
-                                 reason, actor=actor)
-        if idempotency_key is not None:
-            self._forgotten[idempotency_key] = cert
-        return cert
+        if idempotency_key is None:
+            return self._certificate(
+                run, self._ulid_for(run.store, node), node, reason, actor=actor
+            )
+
+        root = self._ulid_for(run.store, node)
+        approved_version = expected_version or self._version(run.store)
+        planned: list[operations.PlannedEdge] = []
+        for ulid in [root, *run.store.closure(root)]:
+            rec = run.store.get(ulid)
+            if rec is None:
+                raise NotFound(f"memory {ulid} disappeared before deletion")
+            planned.append(operations.PlannedEdge(
+                ulid=ulid,
+                entity=_entity_of(rec),
+                content_sha=rec.envelope.content_sha,
+            ))
+        operation = operations.OperationRecord(
+            idempotency_key=idempotency_key,
+            kind="forget",
+            run_id=run_id,
+            node=node,
+            root=root,
+            reason=reason,
+            actor=actor,
+            expected_version=approved_version,
+            planned=planned,
+        )
+        prepared = self._operations.prepare(operation)
+        return self._finish_forget_operation(prepared)
 
     def _certificate(self, run: _Run, ulid: str, node: str,
                      reason: str, *, actor: str = "") -> DeletionCertificate:

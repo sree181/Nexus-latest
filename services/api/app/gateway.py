@@ -32,7 +32,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 
-from . import analysis, gate, sample
+from . import analysis, auth, gate, sample
 from .models import (
     ApplyReceipt,
     CodeOut,
@@ -75,6 +75,24 @@ class Stale(Exception):
     Routes map this to 412. It is a refusal, not a failure: the closure the
     operator read and approved is no longer the closure that would be
     destroyed, and forget is not a verb that gets to be approximately right."""
+
+
+class Conflict(Exception):
+    """An idempotency key was reused for a different operation."""
+
+
+class ActorRequired(PermissionError):
+    """A production mutation arrived without an authenticated actor."""
+
+
+def require_actor(actor: str) -> None:
+    """Keep direct gateway callers from bypassing production attribution.
+
+    Routes pass an authenticated subject. The development/test exception keeps
+    existing local gateway exercises useful without weakening production.
+    """
+    if auth.is_production() and not actor.strip():
+        raise ActorRequired("production destructive actions require an actor")
 
 
 def gate_decision(req: GateRequest, *, fleet_agents: int,
@@ -120,7 +138,13 @@ class Gateway(ABC):
     def recommendations(self) -> list[Recommendation]: ...
 
     @abstractmethod
-    def apply_recommendation(self, rec_id: str) -> ApplyReceipt: ...
+    def apply_recommendation(self, rec_id: str, *, actor: str = "") -> ApplyReceipt:
+        """Apply a recommendation as ``actor``.
+
+        Route callers always pass the authenticated subject. The empty default
+        remains solely for local sample and direct gateway tests, which have no
+        request identity layer.
+        """
 
     # -- runs --
     @abstractmethod
@@ -293,15 +317,16 @@ class SampleGateway(Gateway):
     def recommendations(self) -> list[Recommendation]:
         return sample.recommendations()
 
-    def apply_recommendation(self, rec_id: str) -> ApplyReceipt:
+    def apply_recommendation(self, rec_id: str, *, actor: str = "") -> ApplyReceipt:
         """Applies the one curated recommendation that is a forget (that much
         this gateway can really do) and records the rest as accepted."""
+        require_actor(actor)
         rec = next((r for r in self.recommendations() if r.id == rec_id), None)
         if rec is None:
             raise NotFound(f"unknown recommendation {rec_id}")
         if rec_id == "rec-source":
             cert = self.run_forget(sample.RUN_ID, "source:poisoned-mirror",
-                                   f"applied {rec_id}")
+                                   f"applied {rec_id}", actor=actor)
             return ApplyReceipt(
                 recommendation_id=rec_id, title=rec.title,
                 action=(f"Forgot {cert.node} and the {cert.purged_count - 1} "
@@ -396,6 +421,7 @@ class SampleGateway(Gateway):
     def run_forget(self, run_id: str, node: str, reason: str, *,
                    actor: str = "", expected_version: str | None = None,
                    idempotency_key: str | None = None) -> DeletionCertificate:
+        require_actor(actor)
         self._require_curated(run_id)
         if expected_version is not None and expected_version != sample.VERSION:
             raise Stale("the memory moved since that preview; look again")

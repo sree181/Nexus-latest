@@ -7,12 +7,20 @@ same developer behaviour.
 
 ## Install
 
-Copy `hooks.json` into `.cursor/hooks.json`, then:
+Install the CLI once, configure the deployment origin, and pair this machine:
 
 ```bash
-export MESHAGENT_API=https://meshagent.internal    # default http://localhost:8000
-python cli/meshagent.py login --label "work laptop"
+python3 -m pip install /abs/path/to/meshagent-production-v1
+meshagent config set-endpoint https://meshagent.internal
+meshagent login --label "work laptop"
+meshagent doctor
 ```
+
+Then merge `hooks.json` into `.cursor/hooks.json`. The packaged hook resolves
+the endpoint and recording credential from `~/.meshagent`; an explicit
+`MESHAGENT_API` remains available as a validated CI override. Do not place a
+human OIDC token in `MESHAGENT_TOKEN`: only `mesh_...` recording tokens are
+accepted there.
 
 Opt the repository in with `.meshagent.json` at its root:
 
@@ -72,3 +80,15 @@ the refusals.
 The hooks record what happened and never why. `adapters/mcp` lets the agent
 volunteer the reasoning, and a file becomes explained only because the agent
 named it — never because of when it was written.
+
+## Offline recovery
+
+Recorder batches are kept in bounded, locked queues under
+`~/.meshagent/queues/<repository>/<editor>/`. When the service returns, hooks
+replay them in order. Operators can inspect and force replay without exposing
+credentials:
+
+```bash
+meshagent status
+meshagent replay
+```

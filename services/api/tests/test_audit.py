@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import audit, auth, gateway as gw, main, sample
+from app.auth import Principal
 
 RUN = sample.RUN_ID
 
@@ -84,6 +85,81 @@ def test_a_deletion_is_written_to_the_action_log(priya, fresh_log):
     assert entries[0].actor == "priya@example.com"
     assert entries[0].role == "analyst"
     assert "poisoned" in entries[0].detail
+
+
+def test_a_forget_fails_closed_when_its_audit_commit_fails(monkeypatch):
+    """The gateway must not receive a destructive request without an audit fsync."""
+    client = TestClient(
+        main.app,
+        headers={auth.DEV_USER: "priya@example.com", auth.DEV_ROLE: "analyst"},
+        raise_server_exceptions=False,
+    )
+
+    def broken_record(**_kwargs):
+        raise OSError("audit volume unavailable")
+
+    monkeypatch.setattr(main.audit_log, "record", broken_record)
+    monkeypatch.setattr(
+        main.gateway, "run_forget",
+        lambda *_args, **_kwargs: pytest.fail("forget reached the gateway"),
+    )
+    response = client.post(f"/api/runs/{RUN}/forget", json={
+        "node": "source:poisoned-mirror", "reason": "poisoned",
+    })
+    assert response.status_code == 500
+
+
+def test_a_recommendation_fails_closed_when_its_audit_commit_fails(monkeypatch):
+    client = TestClient(
+        main.app,
+        headers={auth.DEV_USER: "priya@example.com", auth.DEV_ROLE: "analyst"},
+        raise_server_exceptions=False,
+    )
+
+    def broken_record(**_kwargs):
+        raise OSError("audit volume unavailable")
+
+    monkeypatch.setattr(main.audit_log, "record", broken_record)
+    monkeypatch.setattr(
+        main.gateway, "apply_recommendation",
+        lambda *_args, **_kwargs: pytest.fail("recommendation reached the gateway"),
+    )
+    response = client.post("/api/recommendations/rec-source/apply")
+    assert response.status_code == 500
+
+
+def test_a_cut_recommendation_certificate_carries_the_authenticated_actor(priya):
+    receipt = priya.post("/api/recommendations/rec-source/apply")
+    assert receipt.status_code == 200
+    assert receipt.json()["certificates"][0]["actor"] == "priya@example.com"
+
+
+def test_production_forget_requires_both_replay_preconditions(monkeypatch):
+    """Development/test keep compatibility; production rejects unsafe POSTs."""
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    principal = Principal(subject="priya", name="Priya", email="p@example.com",
+                          role="analyst")
+    main.app.dependency_overrides[main.caller] = lambda: principal
+    try:
+        client = TestClient(main.app)
+        missing = client.post(f"/api/runs/{RUN}/forget", json={
+            "node": "source:poisoned-mirror",
+        })
+        assert missing.status_code == 428
+        assert "If-Match" in missing.json()["detail"]
+
+        only_version = client.post(f"/api/runs/{RUN}/forget", json={
+            "node": "source:poisoned-mirror",
+        }, headers={"If-Match": sample.VERSION})
+        assert only_version.status_code == 428
+        assert "Idempotency-Key" in only_version.json()["detail"]
+
+        accepted = client.post(f"/api/runs/{RUN}/forget", json={
+            "node": "source:poisoned-mirror",
+        }, headers={"If-Match": sample.VERSION, "Idempotency-Key": "prod-forget-1"})
+        assert accepted.status_code == 200
+    finally:
+        main.app.dependency_overrides.clear()
 
 
 def test_starting_a_run_is_recorded_against_its_developer(maya, fresh_log):

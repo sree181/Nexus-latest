@@ -92,6 +92,24 @@ export function StartTask() {
             )}
           </form>
 
+          {runs.isError && (
+            <section role="alert" className="mt-6 rounded-xl border border-risk bg-risk-soft px-4 py-3">
+              <p className="font-mono text-[11.5px] text-risk">Could not read existing runs.</p>
+              <p className="mt-1 text-[13px] leading-snug text-ink">
+                {runs.error instanceof Error ? runs.error.message : "The runs service did not respond."}
+              </p>
+            </section>
+          )}
+
+          {runs.isSuccess && runs.data.length === 0 && (
+            <section className="mt-6 rounded-xl border border-line-2 bg-surface-2 px-4 py-3">
+              <p className="font-serif text-[16px] text-ink">No runs recorded yet</p>
+              <p className="mt-1 text-[13px] leading-snug text-slate">
+                Start a task to create the first governed run for this identity.
+              </p>
+            </section>
+          )}
+
           {runs.data && runs.data.length > 0 && (
             <section aria-label="Recent runs" className="mt-6 flex flex-col gap-2">
               <p className="font-mono text-[11px] tracking-wide text-slate">
@@ -128,6 +146,13 @@ export function StartTask() {
                     }
                   >
                     {run.status}
+                  </Badge>
+                  <Badge tone={run.reference_build ? "warn" : run.model ? "accent" : "neutral"}>
+                    {run.reference_build
+                      ? "reference build"
+                      : run.model
+                        ? "model-backed"
+                        : "external recorder"}
                   </Badge>
                 </button>
               ))}

@@ -1,4 +1,4 @@
 export * from "./types";
 export { toGraphology, downstream } from "./model";
-export { toCytoscape } from "./cytoscape";
-export type { CyElement } from "./cytoscape";
+export { relationRows, toCytoscape } from "./cytoscape";
+export type { CyElement, RelationRow } from "./cytoscape";

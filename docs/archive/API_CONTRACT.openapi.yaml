@@ -1,3 +1,4 @@
+# ARCHIVED — NON-AUTHORITATIVE. This historical contract documents an earlier prototype API and is not the MeshAgent production v1 API contract. Use the root README and current FastAPI OpenAPI endpoint instead.
 openapi: 3.1.0
 info:
   title: MeshAgent UI Integration API

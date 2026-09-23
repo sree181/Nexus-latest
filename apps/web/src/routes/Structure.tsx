@@ -5,6 +5,7 @@ import { api, latestRun } from "../lib/api";
 import { PolygonHypergraph } from "../features/graph/PolygonHypergraph";
 import { PageHeader } from "../components/PageHeader";
 import { TabBar, fleetTabs } from "../components/TabBar";
+import { EmptyState, ErrorState, Loading } from "../components/Async";
 
 export function Structure() {
   const [scaleIdx, setScaleIdx] = useState(0);
@@ -33,6 +34,11 @@ export function Structure() {
 
   const scale = scales.data?.[Math.min(scaleIdx, (scales.data?.length ?? 1) - 1)];
 
+  const stateError = runs.error ?? dec.error ?? scales.error;
+  const noRun = runs.isSuccess && !run;
+  const noScales = scales.isSuccess && scales.data.length === 0;
+  const waiting = runs.isPending || (Boolean(run) && (dec.isPending || scales.isPending));
+
   return (
     <main className="flex h-full flex-1 flex-col overflow-hidden">
       <PageHeader
@@ -42,6 +48,26 @@ export function Structure() {
       />
       <TabBar label="Fleet views" tabs={fleetTabs()} />
 
+      {waiting ? <Loading label="Reading structure analysis…" /> : null}
+      {stateError ? <ErrorState error={stateError} retry={() => {
+        void runs.refetch();
+        void dec.refetch();
+        void scales.refetch();
+      }} /> : null}
+      {noRun ? (
+        <EmptyState
+          title="No recorded run to analyse"
+          detail="Structure is calculated from the newest run you can read. Record a run before opening this fleet analysis."
+        />
+      ) : null}
+      {noScales ? (
+        <EmptyState
+          title="No structure graph was returned"
+          detail="The run exists, but its analysis contains no scale to render. This is different from a successful graph with no entangled blocks."
+        />
+      ) : null}
+
+      {!waiting && !stateError && !noRun && !noScales && (
       <div className="flex flex-1 flex-col gap-5 overflow-hidden p-6 xl:flex-row">
         {/* polygon canvas + scale slider */}
         <div className="flex flex-1 flex-col gap-3 overflow-hidden">
@@ -139,6 +165,7 @@ export function Structure() {
           </p>
         </aside>
       </div>
+      )}
     </main>
   );
 }

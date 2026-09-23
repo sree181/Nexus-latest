@@ -5,9 +5,9 @@ in sync (or generate the TS client from /openapi.json)."""
 from __future__ import annotations
 
 import hashlib
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 NodeKind = Literal[
     "source", "decision", "class", "package", "version",
@@ -183,7 +183,9 @@ class RunSummary(BaseModel):
 
 
 class CreateRunRequest(BaseModel):
-    task: str
+    # A task is persisted into governed memory and audit detail; bounding it
+    # protects both stores from a single oversized API request.
+    task: str = Field(max_length=4_096)
 
 
 class AuditEntry(BaseModel):
@@ -305,8 +307,8 @@ class WhyOut(BaseModel):
 
 
 class ForgetRequest(BaseModel):
-    node: str
-    reason: str = "operator forget"
+    node: str = Field(max_length=512)
+    reason: str = Field(default="operator forget", max_length=2_048)
 
 
 class RewindMemory(BaseModel):
@@ -534,8 +536,8 @@ class SessionEvent(BaseModel):
     """An agent started working on something. Opens the run the rest of the
     batch is recorded against."""
     type: Literal["session"] = "session"
-    agent: str                  # "claude-code", "cursor", "copilot"
-    task: str                   # what the developer asked for
+    agent: str = Field(max_length=128)  # "claude-code", "cursor", "copilot"
+    task: str = Field(max_length=4_096)  # what the developer asked for
     # The developer closed the session. Until this arrives the run is still
     # recording, because a run reported complete while its agent is mid-edit
     # would put a partial picture under a finished heading.
@@ -547,37 +549,37 @@ class DecisionEvent(BaseModel):
     """The agent volunteered why it is about to do something. This is the
     part no hook can observe, and the part worth the most."""
     type: Literal["decision"] = "decision"
-    id: str                     # the adapter's handle, referenced by `because`
-    statement: str
+    id: str = Field(max_length=256)  # the adapter's handle, referenced by `because`
+    statement: str = Field(max_length=4_096)
     at: int | None = None
 
 
 class CodeEvent(BaseModel):
     """The agent wrote a file."""
     type: Literal["code"] = "code"
-    module: str
-    code: str
+    module: str = Field(max_length=512)
+    code: str = Field(max_length=200_000)
     # The DecisionEvent this carries out. Absent is the normal case for a
     # hook, which sees the write and not the reason; it is recorded as
     # explicitly unexplained rather than invented.
-    because: str | None = None
+    because: str | None = Field(default=None, max_length=256)
     at: int | None = None
 
 
 class PackageEvent(BaseModel):
     """A dependency entered the project."""
     type: Literal["package"] = "package"
-    package: str
-    version: str
-    license: str = "unknown"
+    package: str = Field(max_length=256)
+    version: str = Field(max_length=128)
+    license: str = Field(default="unknown", max_length=256)
     at: int | None = None
 
 
 class ToolEvent(BaseModel):
     """The agent invoked something: a shell command, a test run, an install."""
     type: Literal["tool"] = "tool"
-    name: str
-    detail: str = ""
+    name: str = Field(max_length=256)
+    detail: str = Field(default="", max_length=4_096)
     at: int | None = None
 
 
@@ -592,12 +594,12 @@ class RecorderBatch(BaseModel):
 
     Batched because the unit of interest is a coherent change, not a
     keystroke: an adapter reports at file save and session end."""
-    agent: str
+    agent: str = Field(max_length=128)
     # The adapter's own session handle. It is what maps a developer's editor
     # session onto a run across many posts, so re-posting a batch after a
     # network failure lands in the same place rather than opening a run.
-    session: str
-    events: list[RecorderEvent] = []
+    session: str = Field(max_length=256)
+    events: list[RecorderEvent] = Field(default_factory=list, max_length=100)
 
 
 class RecorderReceipt(BaseModel):
@@ -692,12 +694,33 @@ class GateAdvisory(BaseModel):
 
 class GateRequest(BaseModel):
     """An agent is about to install something."""
-    package: str
-    version: str = ""
+    package: str = Field(max_length=256)
+    version: str = Field(default="", max_length=128)
     # The session it belongs to, when there is one. Optional because a gate
     # check is useful before a session exists -- an agent may ask before it
     # has written anything.
-    session: str | None = None
+    session: str | None = Field(default=None, max_length=256)
+
+
+class SarifDocument(BaseModel):
+    """A forward-compatible, bounded SARIF envelope.
+
+    Scanner vendors add extension objects, so nested SARIF content remains raw
+    JSON. The standard ``runs`` container and the top-level member count are
+    nevertheless safe schema-level bounds: they prevent a single upload from
+    fanning out into an unbounded number of scan records without rejecting
+    vendor-specific result shapes.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    runs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def _bounded_members(self) -> "SarifDocument":
+        if len(self.model_dump()) > 64:
+            raise ValueError("SARIF document has too many top-level members")
+        return self
 
 
 class GateDecision(BaseModel):

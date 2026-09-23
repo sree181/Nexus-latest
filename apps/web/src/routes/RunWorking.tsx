@@ -105,7 +105,10 @@ function MemoryCard({ event }: { event: MemoryEvent }) {
 function Stream({ runId }: { runId: string }) {
   const stream = useRunStream(runId);
   const client = useQueryClient();
-  const live = stream.status === "connecting" || stream.status === "streaming";
+  const live =
+    stream.status === "connecting" ||
+    stream.status === "reconnecting" ||
+    stream.status === "streaming";
 
   // once the run stops writing, the run list and every view derived from its
   // memory are stale, so let the other tabs refetch
@@ -135,6 +138,16 @@ function Stream({ runId }: { runId: string }) {
             {notice}
           </p>
         ))}
+        {stream.status === "reconnecting" && (
+          <p role="status" className="rounded-xl border border-warn bg-warn-soft px-3.5 py-2.5 text-[12.5px] text-ink">
+            Connection interrupted. Reconnecting to the run stream…
+          </p>
+        )}
+        {stream.status === "offline" && (
+          <p role="status" className="rounded-xl border border-warn bg-warn-soft px-3.5 py-2.5 text-[12.5px] text-ink">
+            {stream.error}
+          </p>
+        )}
         {stream.status === "error" && (
           <p className="rounded-xl border border-risk bg-risk-soft px-3.5 py-2.5 text-[12.5px] text-risk">
             {stream.error}
@@ -186,7 +199,8 @@ export function RunWorking() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-line bg-surface px-6 py-2.5">
         <p className="text-[13px] text-slate">
-          Streamed from the engine as the run records it.
+          Streamed from the engine as the run records it. Interrupted connections
+          retry automatically; replay requests the recorded stream again.
         </p>
         <Button variant="ghost" onClick={() => setAttempt((n) => n + 1)}>
           Replay stream

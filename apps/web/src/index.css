@@ -16,3 +16,17 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Tables preserve their semantic column headers; on compact screens their
+ * section containers scroll horizontally rather than collapsing cells into an
+ * unreadable pseudo-table. */
+@media (max-width: 640px) {
+  .responsive-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .responsive-table-wrap > table {
+    min-width: 34rem;
+  }
+}

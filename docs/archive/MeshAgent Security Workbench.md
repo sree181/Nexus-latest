@@ -1,3 +1,5 @@
+> **ARCHIVED — NON-AUTHORITATIVE.** This historical prototype document does not describe MeshAgent production v1, its current API, security posture, supported configuration, or operations. Do not use it for deployment or implementation decisions. Use the root [README](../../README.md) and [Production Operations](../PRODUCTION_OPERATIONS.md) instead.
+
 # MeshAgent Security Workbench
 
 MeshAgent Security Workbench is a frontend prototype for governed AI-agent memory, software provenance, reachable security risk, supply-chain analysis, and audit evidence. The application contains separate developer and CISO journeys inside one product shell. Its Relationship Explorer renders first-class multi-entity relationships as interactive ribbons rather than reducing them to pairwise graph edges.

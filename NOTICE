@@ -1,0 +1,7 @@
+# MeshAgent Notices
+
+This notice applies to the MeshAgent repository material licensed in [LICENSE](LICENSE). It does not replace notices, license texts, attribution requirements, or source-offer obligations that may apply to third-party dependencies, container base images, operating-system packages, generated artifacts, fonts, or separately distributed components.
+
+A release-specific dependency inventory should be generated and reviewed before distribution. The repository documentation does not make an independent claim that every transitive dependency or deployment artifact has been exhaustively identified. Operators are responsible for reviewing the licenses and notices associated with the artifacts they build, obtain, deploy, or redistribute.
+
+The names of external products, services, and projects mentioned in this repository may be trademarks of their respective owners. Mention does not imply endorsement, affiliation, certification, or support.

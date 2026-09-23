@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import {
+  clearSignInArtifacts,
   completeSignIn,
   localIdentity,
   oidcEnabled,
@@ -19,19 +20,42 @@ import {
 export function SignInGate({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [returning, setReturning] = useState(
-    () => new URLSearchParams(window.location.search).has("code"),
+    () => {
+      const params = new URLSearchParams(window.location.search);
+      return params.has("code") || params.has("error");
+    },
   );
 
   useEffect(() => {
     if (!returning) return;
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    if (!code) return;
-    completeSignIn(code)
+    const providerError = params.get("error");
+    if (providerError) {
+      const description = params.get("error_description");
+      clearSignInArtifacts();
+      setError(
+        description
+          ? `The identity provider did not complete sign-in: ${description}`
+          : `The identity provider did not complete sign-in (${providerError}).`,
+      );
+      setReturning(false);
+      window.history.replaceState({}, document.title, "/");
+      return;
+    }
+    if (!code) {
+      clearSignInArtifacts();
+      setError("The sign-in response did not include an authorization code.");
+      setReturning(false);
+      window.history.replaceState({}, document.title, "/");
+      return;
+    }
+    completeSignIn(code, params.get("state"))
       .then((back) => window.location.replace(back))
       .catch((exc: unknown) => {
         setError(exc instanceof Error ? exc.message : String(exc));
         setReturning(false);
+        window.history.replaceState({}, document.title, "/");
       });
   }, [returning]);
 

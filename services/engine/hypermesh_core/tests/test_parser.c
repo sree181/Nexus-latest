@@ -249,7 +249,7 @@ static void test_return_order_limit(void) {
     a = parse(
         "MATCH HYPEREDGE (he:Ev) WHERE he.event_ts >= 0 "
         "ORDER BY he.WEIGHT DESC");
-    CHECK(strcmp(hm_ast_order_col(a), "WEIGHT") == 0, "ROL3: order_col=WEIGHT");
+    CHECK(strcmp(hm_ast_order_col(a), "HE.WEIGHT") == 0, "ROL3: order_col=HE.WEIGHT");
     CHECK(hm_ast_order_desc(a) == 1,                  "ROL3: order_desc=1 (DESC)");
     free_ast(a);
 
@@ -278,7 +278,7 @@ static void test_return_order_limit(void) {
     CHECK(hm_ast_kind(a)      == HM_QUERY_TPI_RANGE,   "ROL6: TPI_RANGE");
     CHECK(hm_ast_pred_count(a) == 1,                    "ROL6: 1 predicate");
     CHECK(strstr(hm_ast_return_cols(a), "CONFIDENCE") != NULL, "ROL6: return_cols has CONFIDENCE");
-    CHECK(strcmp(hm_ast_order_col(a), "CONFIDENCE") == 0, "ROL6: order_col=CONFIDENCE");
+    CHECK(strcmp(hm_ast_order_col(a), "HE.CONFIDENCE") == 0, "ROL6: order_col=HE.CONFIDENCE");
     CHECK(hm_ast_order_desc(a) == 1,                    "ROL6: DESC");
     CHECK(hm_ast_limit_n(a)    == 10,                   "ROL6: limit_n=10");
     free_ast(a);

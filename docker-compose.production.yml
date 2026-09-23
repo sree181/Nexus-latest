@@ -1,0 +1,61 @@
+# Production topology. Use this file directly so the development API port in
+# docker-compose.yml can never be inherited into a production deployment:
+# docker compose -f docker-compose.production.yml --profile production up -d
+services:
+  api:
+    profiles: [production]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      MESHAGENT_ENV: production
+      MESHAGENT_ENGINE: "1"
+      MESHAGENT_DB_DIR: /var/lib/meshagent
+      MESHAGENT_STRICT_AUDIT: "true"
+      MESHAGENT_OIDC_ISSUER: "${MESHAGENT_OIDC_ISSUER:?Set MESHAGENT_OIDC_ISSUER}"
+      MESHAGENT_OIDC_AUDIENCE: "${MESHAGENT_OIDC_AUDIENCE:?Set MESHAGENT_OIDC_AUDIENCE}"
+      MESHAGENT_ANALYST_GROUPS: "${MESHAGENT_ANALYST_GROUPS:?Set MESHAGENT_ANALYST_GROUPS}"
+      MESHAGENT_OIDC_ROLE_CLAIM: "${MESHAGENT_OIDC_ROLE_CLAIM:-roles}"
+      MESHAGENT_CORS_ORIGINS: "${MESHAGENT_CORS_ORIGINS:?Set MESHAGENT_CORS_ORIGINS to the public web origin}"
+      MESHAGENT_WEB_URL: "${MESHAGENT_WEB_URL:?Set MESHAGENT_WEB_URL to the public web URL}"
+    volumes:
+      - memory:/var/lib/meshagent
+    networks: [meshagent]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+
+  web:
+    profiles: ["production"]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_OIDC_ISSUER: "${MESHAGENT_OIDC_ISSUER:?Set MESHAGENT_OIDC_ISSUER}"
+        VITE_OIDC_CLIENT_ID: "${MESHAGENT_OIDC_CLIENT_ID:?Set MESHAGENT_OIDC_CLIENT_ID}"
+        VITE_OIDC_SCOPE: "${MESHAGENT_OIDC_SCOPE:-openid profile email}"
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${MESHAGENT_WEB_PORT:?Set MESHAGENT_WEB_PORT}:8080"
+    networks: [meshagent]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+
+networks:
+  meshagent:
+    driver: bridge
+
+volumes:
+  memory:
+    name: "${MESHAGENT_MEMORY_VOLUME:-meshagent-memory}"

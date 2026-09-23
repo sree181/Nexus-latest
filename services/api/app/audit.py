@@ -32,6 +32,17 @@ LOG = "audit.jsonl"
 GENESIS = "0" * 64
 
 
+def strict_enabled() -> bool:
+    """Whether audit persistence failures must reject the request.
+
+    Keep the accepted values explicit so an accidental value such as ``0`` or
+    ``false`` cannot enable strict mode by merely being non-empty.
+    """
+    return os.environ.get("MESHAGENT_STRICT_AUDIT", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
 @dataclass
 class Entry:
     """One thing someone did."""

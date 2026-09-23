@@ -40,8 +40,10 @@ import json
 import os
 import secrets
 import tempfile
+import threading
 import time
 from dataclasses import asdict, dataclass, field
+from functools import wraps
 from typing import Any
 
 from .auth import AuthError, Principal, Role
@@ -67,6 +69,15 @@ PAIRING_TTL = 600
 # omits the characters people get wrong doing that: O/0, I/1/L, U/V.
 ALPHABET = "ABCDEFGHJKMNPQRSTWXYZ23456789"
 CODE_LEN = 8
+
+
+def _synchronized(method):
+    """Serialize one device-store operation across FastAPI worker threads."""
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return guarded
 
 
 def _digest(secret: str) -> str:
@@ -142,6 +153,7 @@ class Store:
     base: str
     devices: dict[str, Device] = field(default_factory=dict)
     pairings: dict[str, Pairing] = field(default_factory=dict)
+    _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @property
     def path(self) -> str:
@@ -149,6 +161,7 @@ class Store:
 
     # -- persistence ----------------------------------------------------------
 
+    @_synchronized
     def save(self) -> None:
         os.makedirs(self.base, exist_ok=True)
         body = {
@@ -163,13 +176,24 @@ class Store:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w") as fh:
                 json.dump(body, fh, indent=2)
+                fh.flush()
+                os.fsync(fh.fileno())
             os.replace(tmp, self.path)
+            directory = os.open(self.base, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
         except BaseException:
-            os.unlink(tmp)
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
             raise
 
     # -- pairing (the device authorization grant, in shape) -------------------
 
+    @_synchronized
     def start(self, label: str) -> tuple[str, str]:
         """Begin a login. Returns (device_code, user_code).
 
@@ -189,6 +213,7 @@ class Store:
         self.save()
         return device_code, pairing.user_code
 
+    @_synchronized
     def pending(self, user_code: str) -> Pairing:
         """The pairing a human is being asked to approve."""
         pairing = self.pairings.get(user_code.strip().upper())
@@ -196,6 +221,7 @@ class Store:
             raise AuthError("no pairing with that code")
         return pairing
 
+    @_synchronized
     def approve(self, user_code: str, who: Principal) -> Pairing:
         """A human says yes: bind the pairing to them.
 
@@ -216,6 +242,7 @@ class Store:
         self.save()
         return pairing
 
+    @_synchronized
     def claim(self, device_code: str) -> tuple[Device, str] | None:
         """The CLI collecting its token. None while nobody has approved yet.
 
@@ -256,6 +283,7 @@ class Store:
 
     # -- using one -----------------------------------------------------------
 
+    @_synchronized
     def verify(self, token: str) -> Principal:
         """The human behind a device token, or AuthError.
 
@@ -279,6 +307,7 @@ class Store:
             self.save()
         return device.principal()
 
+    @_synchronized
     def revoke(self, device_id: str, who: Principal) -> Device:
         """Retire a device. Its own owner, or the security office."""
         device = self.devices.get(device_id)
@@ -290,6 +319,7 @@ class Store:
         self.save()
         return device
 
+    @_synchronized
     def owned_by(self, who: Principal) -> list[Device]:
         """Devices this caller may see: their own, or all of them for the
         security office, whose job is to know what is recording."""
@@ -298,6 +328,7 @@ class Store:
              if d.active and (who.analyst or d.subject == who.subject)),
             key=lambda d: d.created_at, reverse=True)
 
+    @_synchronized
     def sweep(self) -> None:
         """Drop pairings nobody completed. An expired code left lying around
         is one more thing a phisher can try to get approved."""

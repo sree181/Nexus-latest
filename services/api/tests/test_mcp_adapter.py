@@ -154,6 +154,29 @@ def test_a_stale_session_is_not_attached_to(tmp_path, monkeypatch, answers):
     assert mcp.active_session() == (None, None)
 
 
+def test_namespaced_session_is_discovered_and_updated(tmp_path, monkeypatch):
+    monkeypatch.setenv("MESHAGENT_HOOK_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("MESHAGENT_REPOSITORY", str(tmp_path / "repo"))
+    mcp.local_state.write_session(
+        "namespaced",
+        {"opened": True, "task": "Harden upload", "run_id": "r2"},
+        repository=str(tmp_path / "repo"),
+        editor="claude-code",
+    )
+
+    session_id, session = mcp.active_session()
+    assert session_id == "namespaced"
+    assert session["run_id"] == "r2"
+
+    mcp.claim_modules("namespaced", "validate-size", ["src/upload.py"])
+    stored = mcp.local_state.read_session(
+        "namespaced",
+        repository=str(tmp_path / "repo"),
+        editor="claude-code",
+    )
+    assert stored["claims"] == {"src/upload.py": "validate-size"}
+
+
 def test_both_fields_are_required(state, answers):
     assert "required" in mcp.tool_record_decision({"id": "d"})
     assert answers == []

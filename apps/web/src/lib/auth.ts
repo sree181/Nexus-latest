@@ -18,6 +18,7 @@ const SCOPE = import.meta.env.VITE_OIDC_SCOPE ?? "openid profile email";
 export const oidcEnabled = Boolean(ISSUER && CLIENT_ID);
 
 const VERIFIER = "meshagent.pkce.verifier";
+const STATE = "meshagent.pkce.state";
 const RETURN_TO = "meshagent.pkce.return";
 const TOKEN = "meshagent.access.token";
 
@@ -65,12 +66,50 @@ function redirectUri(): string {
   return `${window.location.origin}/auth/callback`;
 }
 
+/** The callback state is short and randomly generated. This comparison avoids
+ * an early-exit character comparison, which is the closest useful browser-side
+ * equivalent of constant-time validation. The provider still validates the
+ * authorization code and PKCE verifier at its token endpoint. */
+export function constantTimeStateEquals(
+  expected: string | null,
+  received: string | null | undefined,
+): boolean {
+  if (!expected || !received) return false;
+  let difference = expected.length ^ received.length;
+  // Always walk the expected state length. State is fixed length in this app,
+  // so a mismatched input cannot reveal which character first differed.
+  for (let index = 0; index < expected.length; index += 1) {
+    difference |= expected.charCodeAt(index) ^ (received.charCodeAt(index) || 0);
+  }
+  return difference === 0;
+}
+
+/** Remove transient OAuth artifacts after a completed, rejected, or abandoned
+ * authorization. Keeping a verifier or state around invites callback replay
+ * and can accidentally bind a later login to an earlier return location. */
+export function clearSignInArtifacts(): void {
+  sessionStorage.removeItem(VERIFIER);
+  sessionStorage.removeItem(STATE);
+  sessionStorage.removeItem(RETURN_TO);
+}
+
+function safeReturnTo(): string {
+  const back = sessionStorage.getItem(RETURN_TO) ?? "/";
+  // It was written locally, but keep this boundary strict in case storage was
+  // modified: only an in-app absolute path is a valid post-login destination.
+  return back.startsWith("/") && !back.startsWith("//") ? back : "/";
+}
+
 /** Send the browser to the provider. Returns a promise that never resolves,
  *  because the page is navigating away. */
 export async function signIn(): Promise<never> {
   const verifier = randomVerifier();
+  const state = base64url(crypto.getRandomValues(new Uint8Array(16)));
+  // An interrupted attempt must not leave a usable verifier/state pair behind.
+  clearSignInArtifacts();
   sessionStorage.setItem(VERIFIER, verifier);
   sessionStorage.setItem(RETURN_TO, window.location.pathname + window.location.search);
+  sessionStorage.setItem(STATE, state);
 
   const { authorization_endpoint } = await endpoints();
   const url = new URL(authorization_endpoint);
@@ -80,39 +119,50 @@ export async function signIn(): Promise<never> {
   url.searchParams.set("scope", SCOPE);
   url.searchParams.set("code_challenge", await challenge(verifier));
   url.searchParams.set("code_challenge_method", "S256");
-  url.searchParams.set("state", base64url(crypto.getRandomValues(new Uint8Array(16))));
+  url.searchParams.set("state", state);
   window.location.assign(url.toString());
   return new Promise<never>(() => {});
 }
 
 /** Exchange the code the provider redirected back with. Returns where the
  *  user was before they were sent to sign in. */
-export async function completeSignIn(code: string): Promise<string> {
+export async function completeSignIn(
+  code: string,
+  state: string | null | undefined,
+): Promise<string> {
   const verifier = sessionStorage.getItem(VERIFIER);
-  if (!verifier) throw new Error("no sign-in was in progress in this tab");
+  const expectedState = sessionStorage.getItem(STATE);
+  const back = safeReturnTo();
 
-  const { token_endpoint } = await endpoints();
-  const res = await fetch(token_endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      client_id: CLIENT_ID,
-      redirect_uri: redirectUri(),
-      code_verifier: verifier,
-    }),
-  });
-  if (!res.ok) throw new Error(`the provider rejected the sign-in (${res.status})`);
+  try {
+    if (!verifier) throw new Error("no sign-in was in progress in this tab");
+    if (!constantTimeStateEquals(expectedState, state)) {
+      throw new Error("sign-in response could not be verified; please try again");
+    }
 
-  const body = (await res.json()) as { access_token?: string };
-  if (!body.access_token) throw new Error("the provider returned no access token");
+    const { token_endpoint } = await endpoints();
+    const res = await fetch(token_endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: CLIENT_ID,
+        redirect_uri: redirectUri(),
+        code_verifier: verifier,
+      }),
+    });
+    if (!res.ok) throw new Error(`the provider rejected the sign-in (${res.status})`);
 
-  sessionStorage.setItem(TOKEN, body.access_token);
-  sessionStorage.removeItem(VERIFIER);
-  const back = sessionStorage.getItem(RETURN_TO) ?? "/";
-  sessionStorage.removeItem(RETURN_TO);
-  return back;
+    const body = (await res.json()) as { access_token?: string };
+    if (!body.access_token) throw new Error("the provider returned no access token");
+
+    sessionStorage.setItem(TOKEN, body.access_token);
+    return back;
+  } finally {
+    // Consume PKCE artifacts even if state validation or token exchange fails.
+    clearSignInArtifacts();
+  }
 }
 
 export function accessToken(): string | null {
@@ -125,6 +175,7 @@ export function signedIn(): boolean {
 
 export function signOut(): void {
   sessionStorage.removeItem(TOKEN);
+  clearSignInArtifacts();
   window.location.assign("/");
 }
 

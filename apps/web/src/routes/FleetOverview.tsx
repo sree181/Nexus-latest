@@ -135,6 +135,7 @@ function Coverage({ data }: { data: CoverageOut }) {
               {pct !== null && pct >= 80 ? "explained" : "mostly unexplained"}
             </Badge>
           </div>
+          <div className="responsive-table-wrap">
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-line">
@@ -180,6 +181,7 @@ function Coverage({ data }: { data: CoverageOut }) {
               ))}
             </tbody>
           </table>
+          </div>
         </>
       )}
     </section>
@@ -209,6 +211,7 @@ function AgentsTable({ hits }: { hits: AgentHit[] }) {
           no agent in the fleet matches that query
         </p>
       ) : (
+        <div className="responsive-table-wrap">
         <table className="w-full border-collapse text-left">
           <thead>
             <tr className="border-b border-line">
@@ -240,6 +243,7 @@ function AgentsTable({ hits }: { hits: AgentHit[] }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </section>
   );

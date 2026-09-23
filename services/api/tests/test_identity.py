@@ -193,6 +193,77 @@ def test_without_a_provider_the_identity_is_asserted_and_says_so():
         "an asserted identity must not present itself as a verified one")
 
 
+def test_only_the_three_explicit_environment_values_are_accepted(monkeypatch):
+    monkeypatch.setenv("MESHAGENT_ENV", "staging")
+    with pytest.raises(RuntimeError, match="development, test, or production"):
+        auth.environment()
+
+
+def test_production_startup_rejects_every_missing_security_prerequisite(monkeypatch):
+    for key in ("MESHAGENT_OIDC_ISSUER", "MESHAGENT_OIDC_AUDIENCE",
+                "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_DB_DIR",
+                "MESHAGENT_STRICT_AUDIT", "MESHAGENT_WEB_URL",
+                "MESHAGENT_ENGINE", "MESHAGENT_CORS_ORIGINS"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+
+    with pytest.raises(RuntimeError) as exc:
+        main.validate_startup()
+    message = str(exc.value)
+    for required in ("MESHAGENT_OIDC_ISSUER", "MESHAGENT_OIDC_AUDIENCE",
+                     "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_DB_DIR",
+                     "MESHAGENT_STRICT_AUDIT", "MESHAGENT_WEB_URL",
+                     "MESHAGENT_ENGINE", "MESHAGENT_CORS_ORIGINS"):
+        assert required in message
+
+
+def test_complete_production_security_configuration_passes_startup_validation(
+        monkeypatch, tmp_path):
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office")
+    monkeypatch.setenv("MESHAGENT_DB_DIR", "/var/lib/meshagent-test")
+    monkeypatch.setenv("MESHAGENT_ENGINE", "1")
+    monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
+    monkeypatch.setenv("MESHAGENT_WEB_URL", "https://meshagent.example.com")
+    monkeypatch.setenv("MESHAGENT_CORS_ORIGINS", "https://meshagent.example.com")
+
+    main.validate_startup()
+
+
+def test_production_rejects_temporary_storage_and_wildcard_cors(monkeypatch, tmp_path):
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office")
+    monkeypatch.setenv("MESHAGENT_ENGINE", "1")
+    monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
+    monkeypatch.setenv("MESHAGENT_WEB_URL", "https://meshagent.example.com")
+    monkeypatch.setenv("MESHAGENT_DB_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("MESHAGENT_CORS_ORIGINS", "*")
+
+    with pytest.raises(RuntimeError) as exc:
+        main.validate_startup()
+
+    assert "non-temporary" in str(exc.value)
+    assert "exact HTTPS web origin" in str(exc.value)
+
+
+def test_production_refuses_a_locally_asserted_identity(monkeypatch):
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    monkeypatch.delenv("MESHAGENT_OIDC_ISSUER", raising=False)
+    with pytest.raises(AuthError, match="local asserted identities"):
+        main.identify(None, "intruder@example.com", "analyst")
+
+
+def test_production_oidc_verification_requires_an_audience(oidc, monkeypatch):
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    monkeypatch.delenv("MESHAGENT_OIDC_AUDIENCE")
+    with pytest.raises(AuthError, match="requires an audience"):
+        auth.Verifier(auth.config()).verify(mint(oidc))
+
+
 def test_with_a_provider_configured_the_development_headers_are_ignored(oidc):
     """Otherwise a deployment could be talked out of authenticating by
     sending a header."""

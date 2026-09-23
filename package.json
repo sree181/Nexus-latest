@@ -9,6 +9,12 @@
     "dev:web": "pnpm --filter @meshagent/web dev",
     "build": "pnpm --filter @meshagent/web build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "check:web": "pnpm --filter @meshagent/web typecheck",
+    "lint:web": "pnpm --filter @meshagent/web exec tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "test:web": "pnpm --filter @meshagent/web test",
+    "build:web": "pnpm --filter @meshagent/web build",
+    "test:native": "make -C services/engine/hypermesh_core clean native-test",
+    "validate:release": "sh scripts/release/validate.sh"
   }
 }

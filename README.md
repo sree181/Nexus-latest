@@ -1,194 +1,162 @@
-# MeshAgent — Product UI (production scaffold)
+# MeshAgent Production v1
 
-Governed agent memory over a HyperMesh hypergraph. This is a real, runnable
-monorepo, not a mockup: a React + TypeScript frontend with a live Cytoscape
-graph, a FastAPI backend, and a single gateway seam where the MeshAgent engine
-plugs in. It runs today on curated sample data with no engine present.
+MeshAgent is a **single-tenant, customer-operated control plane for governed agent memory**. It records governed-memory relationships, provenance, security and package observations, and deletion certificates; a React web application exposes developer and analyst workflows through a FastAPI API. This README is the authoritative description of the shipped v1 architecture and supported modes. Operational procedures are in [Production Operations](docs/PRODUCTION_OPERATIONS.md), security reporting is in [SECURITY.md](SECURITY.md), and support boundaries are in [SUPPORT.md](SUPPORT.md).
 
-## What is here
+> MeshAgent v1 is software, not an attestation. It does not by itself establish regulatory compliance, immutable audit evidence, availability guarantees, complete vulnerability coverage, or deletion of every copy of data. Deployments must validate controls in their own environment.
 
-```
-meshagent/
-  apps/web/            React + Vite + TypeScript SPA (the product UI)
-    src/features/graph/  the live graph renderer (Cytoscape today)
-    src/routes/          screens (Start a task, Fleet hypergraph)
-  packages/ui/         design system: tokens + accessible components
-  packages/graph/      renderer-agnostic graph model (GraphPayload, graphology)
-  services/api/        FastAPI: REST + WebSocket over the MeshAgent gateway
-    app/gateway.py       THE seam: SampleGateway | EngineGateway (real HyperMesh)
-    app/engine_gateway.py the real gateway; runs on live engine memory
-    app/engine_seed.py   seeds real HyperMesh-backed memory (run + fleet stores)
-    app/models.py        the wire contract (mirrors packages/graph/types.ts)
-    app/hgviz/           structure-aware hypergraph analysis (see below)
-    app/analysis.py      hgviz results -> governance signals (API models)
-  services/engine/     the MeshAgent engine (meshagent + hypermeshdb + hypermesh_core)
-  docker-compose.yml   self-hosted, single-tenant, runs in the customer network
+## Authoritative architecture
+
+```mermaid
+flowchart LR
+    U[Developer / Analyst browser] -->|TLS: REST + WebSocket| I[Customer-managed ingress]
+    A[Cursor / Claude Code adapters] -->|recording-only device token| I
+    M[MCP client] -->|delegated API access| I
+    I --> API[MeshAgent FastAPI control plane]
+    API --> AUTH[OIDC issuer and JWKS]
+    API --> G{Gateway selected at startup}
+    G -->|production| EG[EngineGateway]
+    G -->|development only| SG[SampleGateway]
+    EG --> HM[MeshAgent Python layer\nHyperMesh C core]
+    EG --> STATE[(MESHAGENT_DB_DIR\nHyperMesh stores, index.json, devices.json, audit.jsonl)]
+    API --> FEEDS[Optional OSV / PyPI feeds]
+    API --> MODEL[Optional OpenAI-compatible model endpoint]
+    STATE --> B[Quiesced encrypted backups\nchecksums, retention, restore drills]
 ```
 
-The stack: React 18 + TypeScript, Vite, TanStack Query + Router, Tailwind + a
-small owned component set, Cytoscape for graphs (Sigma/deck.gl/three are the
-documented upgrade paths). FastAPI + Pydantic v2 in front of the Python MeshAgent
-package, since HyperMesh is reached through a Python binding. Everything ships as
-containers so it can run inside a customer's boundary. This is the CISO
-requirement: their code and agent memory never leave their network.
+The authoritative runtime components are listed below. The tree may include historical material, development helpers, and editor adapters; those do not override this architecture.
 
-## Prerequisites
+| Component | Location | Responsibility | Production boundary |
+|---|---|---|---|
+| Web application | `apps/web` | Browser user interface and API client | Served behind a customer-managed TLS ingress. It is not an authorization authority. |
+| API control plane | `services/api/app` | REST/WebSocket endpoints, OIDC verification, device pairing, audit logging, gateway selection | Enforce network controls, exact CORS origins, and identity configuration. |
+| Engine gateway | `services/api/app/engine_gateway.py` | Production-facing gateway over governed HyperMesh memory | Required for production. Serializes engine access in the current process. |
+| MeshAgent / HyperMesh engine | `services/engine` | Governed-memory records, provenance, forget, and graph export primitives | State remains in `MESHAGENT_DB_DIR`; test concurrency and storage behavior for the chosen platform. |
+| Durable state | `MESHAGENT_DB_DIR` | HyperMesh directories (`run`, `fleet`, `run-*`), `index.json`, `devices.json`, `audit.jsonl` | Must be persistent, access-controlled, and backed up as one unit. |
+| Operations package | `scripts/ops` | Quiesced backup, manifest verification, pluggable encryption, clean restore, retention, drill, upgrade preflight, and rollback handoff | Deployment hooks supply service-manager, KMS, and isolated health-check behavior. |
 
-- Node 20+ and pnpm 9 (`corepack enable` gives you pnpm without a global install)
+The API exposes unauthenticated `GET /api/health` so callers can identify the active gateway, durability, and identity-provider status. A healthy response indicates the configured process is reachable; it does not prove that all business, security, or disaster-recovery controls are effective.
+
+## Supported operating modes
+
+| Mode | Start condition | State and identity behavior | Appropriate use |
+|---|---|---|---|
+| **Local sample mode** | Default API configuration | Uses `SampleGateway`; no production persistence claim; local asserted identity may be used | UI development and demonstrations only. |
+| **Engine development mode** | `MESHAGENT_ENGINE=1` | Uses real engine records; `MESHAGENT_DB_DIR` makes state survive restart | Integration testing and operator rehearsal. Use isolated state. |
+| **Production single-tenant mode** | Engine mode, durable state, OIDC, TLS ingress, verified backups | `EngineGateway`; customer-controlled persistent state; OIDC access tokens; controlled recorder devices | Supported v1 deployment mode. |
+
+**Do not deploy sample mode, an unset `MESHAGENT_DB_DIR`, or local asserted identity as production.** Production is intentionally a customer-network deployment. This repository does not ship a multi-tenant service, managed KMS, external audit signing, HA topology, or a complete observability stack.
+
+## Quick start for local development
+
+### Prerequisites
+
+- Node.js 20+ with pnpm 9 (`corepack enable`)
 - Python 3.12+
+- A build environment appropriate for the bundled engine if the supplied artifact is not suitable for your platform
 
-## Run it locally (two terminals)
-
-Terminal 1 — the API:
+Run the API and web application in separate terminals:
 
 ```bash
+# Terminal 1: API in sample mode
 cd services/api
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-Terminal 2 — the web app:
-
 ```bash
+# Terminal 2: web application
 corepack enable
 pnpm install
-cp .env.example .env
 pnpm dev:web
 ```
 
-Open http://localhost:5173. The Vite dev server proxies `/api` to the API on
-:8000, so the Fleet screen runs a real query against the backend and renders the
-result with Cytoscape. Check the API directly at http://localhost:8000/api/health
-and its docs at http://localhost:8000/docs.
+Open the Vite URL (normally `http://localhost:5173`). The API health check is at `http://localhost:8000/api/health`; FastAPI documentation is at `http://localhost:8000/docs`.
 
-### Run on the real engine
-
-By default the API uses the sample gateway. To run on the real MeshAgent engine
-(bundled under `services/engine`), build its compiled core once and start the
-API in engine mode:
+To exercise real engine persistence in an isolated development directory:
 
 ```bash
-make -C services/engine/hypermesh_core        # builds libhypermesh.dylib / .so
+# From the repository root; choose an empty directory outside any production state.
+export MESHAGENT_ENGINE=1
+export MESHAGENT_DB_DIR="$PWD/.local/meshagent-state"
 cd services/api
-MESHAGENT_ENGINE=1 PYTHONPATH=../engine uvicorn app.main:app --reload --port 8000
+PYTHONPATH=../engine uvicorn app.main:app --reload --port 8000
 ```
 
-HyperMesh stores its hypergraph in a C core reached over ctypes, so without that
-library the engine raises `EngineNotInstalledError` and only sample mode runs.
-The repo ships the Linux `.so`; macOS needs the `make` above. Python 3.12 is the
-supported interpreter (pydantic 2.9 has no wheels for 3.14 yet).
+The service uses a temporary directory when `MESHAGENT_DB_DIR` is unset. That behavior is intentional for tests but must not be relied upon for persistent work.
 
-`/api/health` then reports `"gateway":"EngineGateway"`. The API seeds real
-HyperMesh-backed memory (an agent's pickle.load build, and a multi-agent fleet
-sharing the vulnerable numpy), and every structure endpoint is computed from
-genuine engine records via `export_graph` and hyperedge reconstruction, not from
-sample data. Set `MESHAGENT_DB_DIR` to persist the memory across restarts.
-`docker compose up --build` runs in engine mode already.
+## Local containers
 
-## Run it with Docker (one command)
+The included Compose configuration is a convenience for local single-host use:
 
 ```bash
 docker compose up --build
 ```
 
-Web on http://localhost:8080, API on http://localhost:8000. nginx serves the
-static bundle and proxies `/api` (including WebSockets) to the API container.
+It publishes the web application at `http://localhost:8080` and the API at `http://localhost:8000`, with a named Docker volume mounted at `/var/lib/meshagent`. Before treating a container deployment as production, add the external TLS ingress, OIDC configuration, persistent storage controls, backup hooks, retention, monitoring, and change control described in the operations runbook. Do not expose the provided local ports directly to untrusted networks.
 
-## Working in Cursor
+## Production baseline
 
-This repo is set up for Cursor. A `.cursorrules` file at the root teaches Cursor's
-AI the architecture and conventions, so its edits respect the gateway seam, the
-mirrored wire contract, and the design tokens.
+1. Set `MESHAGENT_ENGINE=1` and mount a dedicated persistent `MESHAGENT_DB_DIR`.
+2. Configure the OIDC issuer, API audience, public browser client ID, role claim, and analyst group mapping. Once an issuer is configured, the API rejects development identity headers. Rebuild the web image after changing browser OIDC settings.
+3. Place the service behind TLS, restrict network routes, set exact `MESHAGENT_CORS_ORIGINS`, and configure `MESHAGENT_WEB_URL` to the canonical browser origin.
+4. Provision quiesce and resume hooks, encrypted backup recipients, controlled recovery identities, and a legal-hold register.
+5. Verify an encrypted backup and conduct an isolated application recovery drill before acceptance and at the approved cadence.
+6. Implement the observability plan and release controls in [Production Operations](docs/PRODUCTION_OPERATIONS.md).
 
-1. Open the folder: `cursor .` from the repo root (or File > Open Folder). Open the
-   whole monorepo, not a subfolder, so Cursor indexes the API and the frontend
-   together and can reason across the wire contract.
-2. Recommended extensions (Cursor will suggest them): ESLint, Prettier, Tailwind
-   CSS IntelliSense, Python (Pylance). Point Pylance at `services/api/.venv`.
-3. Two run configs, two terminals, as above. Keep both running while you work;
-   Vite and uvicorn both hot-reload.
-4. Use Cursor's Composer (Cmd/Ctrl+I) for multi-file changes and Chat (Cmd/Ctrl+L)
-   for questions. Good prompts for this repo:
-   - "Add a Recommendations screen: extend the gateway, the API route, the fetcher,
-     and a new route. Follow the steps in .cursorrules."
-   - "Generate a typed API client from the FastAPI /openapi.json and replace the
-     hand-written fetchers in apps/web/src/lib/api.ts."
-   - "Add the isometric planes view for a single run using react-three-fiber,
-     consuming a GraphPayload from /api/runs/{id}/graph."
-   Add files to the prompt context with @ (for example `@gateway.py @api.ts`) so
-   Cursor edits the right seam.
-5. Before committing, run `pnpm typecheck` (web) and keep TypeScript strict-clean.
+See the [secure deployment configuration matrix](docs/PRODUCTION_OPERATIONS.md#2-secure-deployment-configuration-matrix) and [operational command reference](docs/PRODUCTION_OPERATIONS.md#10-operational-command-reference) for complete procedures.
 
-## The structure-aware hypergraph layer (hgviz)
+The hardened single-host Compose baseline requires explicit identity and browser origins:
 
-`services/api/app/hgviz/` implements the topological method of Oliver, Zhang &
-Zhang, *Structure-Aware Simplification for Hypergraph Visualization* (IEEE TVCG
-2024, arXiv:2407.19621), over MeshAgent's governed memory hypergraph, and
-`app/analysis.py` turns its output into governance signals:
+```bash
+export MESHAGENT_OIDC_ISSUER=https://identity.example.com/tenant/v2.0
+export MESHAGENT_OIDC_AUDIENCE=meshagent-api
+export MESHAGENT_OIDC_CLIENT_ID=meshagent-web
+export MESHAGENT_ANALYST_GROUPS=meshagent-security
+export MESHAGENT_CORS_ORIGINS=https://meshagent.example.com
+export MESHAGENT_WEB_URL=https://meshagent.example.com
+docker compose -f docker-compose.production.yml --profile production up --build -d
+```
 
-- **Bipartite (Koenig) representation** of the memory hypergraph (`hypergraph.py`).
-- **Topological decomposition** into blocks / bridges / branches via biconnected
-  components (`decompose.py`).
-- **Entanglement index** eta = B1/|V| per block: a coupling score. The exploitable
-  pickle.load knot comes out as the one entangled block; the fleet numpy exposure
-  as a denser block containing a **forbidden cluster** (unavoidable coupling).
-- **Forbidden sub-hypergraph** detection (`forbidden.py`): the configurations that
-  force unavoidable overlaps, i.e. genuine tight coupling.
-- **Structure-aware simplification** (`simplify.py`): leaf pruning + minimal cycle
-  collapse for the multi-scale view (the scale slider on the Structure screen).
+The API remains internal to the Compose network; the web container is the only published service. Terminate TLS at a customer-managed ingress before the published web port.
 
-Governance reinterpretation: blocks = coupled risk with a score, bridges = single
-points of propagation (cut for maximum decoupling), branches = peripheral,
-forbidden clusters = coupling you cannot design away. The **Structure** screen
-(`/structure`) renders this with the polygon metaphor (`PolygonHypergraph.tsx`,
-d3-force layout + convex-hull polygons colored by structure and entanglement) and
-the scale slider.
+## API and data-handling notes
 
-Endpoints: `/api/runs/{id}/hypergraph`, `/api/runs/{id}/decomposition`,
-`/api/runs/{id}/scales`, `/api/fleet/decomposition`.
+- **Identity:** With OIDC enabled, the API validates issuer, audience, expiry, and asymmetric signatures. Developers see their own non-seeded runs; analysts are selected from signed claim groups and can view fleet data. This is an application boundary that should be independently tested at deployment time.
+- **Devices:** Paired device credentials can use recording routes but are refused on human-only routes. Revoke devices that are lost, retired, or suspicious.
+- **Audit:** `audit.jsonl` is append-only and hash chained. Verification can detect a broken chain but is not an externally signed or immutable log. Preserve the audit file and the registry in backups.
+- **Deletion:** `forget` removes governed-memory content and returns a deletion certificate. Backups, replicas, exported material, and third-party systems require separate records, retention, and legal-hold procedures.
+- **Model and feed egress:** Model use and advisory feeds are optional. Enabling them changes the deployment's external data flows and must be approved by the deployment owner.
 
-Tests: `cd services/api && pip install -r requirements-dev.txt && pytest`. The
-engine is covered by unit tests on hypergraphs with known topology
-(`tests/test_hgviz.py`): Betti numbers, block/bridge/branch classification,
-entanglement values, forbidden bundles, and that simplification changes B1 exactly
-as the theory predicts.
+## Validation
 
-Honesty note: the paper renders with Qu et al.'s primal-dual polygon *optimizer*
-(near-regular polygons). This scaffold uses a force layout plus convex-hull
-polygons, a lighter substitution that carries the metaphor. The analysis (the
-differentiated part) is faithful; the strangled-vertex/hyperedge forbidden
-variants are surfaced through per-block entanglement rather than the full
-cycle-adjacency enumeration. Both are noted in the code.
+The authoritative release gate validates the locked frontend, complete API suite, native engine tests, production Compose substitutions, and optional container builds:
 
-## The engine wiring (done)
+```bash
+scripts/release/validate.sh
+```
 
-The engine is merged into this repo under `services/engine` (the `meshagent`,
-`hypermeshdb` and `hypermesh_core` packages, pure Python here). `EngineGateway`
-(`services/api/app/engine_gateway.py`) implements the same `Gateway` interface as
-the sample one, but every method reads real HyperMesh memory:
+Set `SKIP_CONTAINERS=1` only on a workstation without Docker; CI must run the container build jobs.
 
-- `run_graph` comes from the engine's own `export_graph`.
-- the structure endpoints reconstruct the real hyperedges (each n-ary memory
-  record is one hyperedge) and analyze them with `hgviz`.
-- the fleet endpoints read genuine multi-agent memory.
+Before a release or an operational change, additionally follow the [release checklist](CHANGELOG.md#release-checklist), verify a real backup, and run the appropriate recovery or rollback rehearsal.
 
-`get_gateway()` returns the `EngineGateway` when `MESHAGENT_ENGINE=1`, else the
-`SampleGateway`. Nothing in the UI changes between the two, because both return
-the same Pydantic models. That is the point of the seam.
+## Document authority and archived material
 
-In production you swap the pure-Python engine here for your built HyperMesh wheel
-and point `MESHAGENT_DB_DIR` at its data directory; the gateway code is unchanged.
-Engine-mode tests live in `tests/test_engine_gateway.py` (skipped when the engine
-is absent) and assert the decomposition of the real seeded memory.
+The following documents control production v1 operations and policy:
 
-## What to build next (honest backlog)
+- [README.md](README.md): architecture and supported modes.
+- [docs/PRODUCTION_OPERATIONS.md](docs/PRODUCTION_OPERATIONS.md): operations, recovery, observability, retention, and deployment matrix.
+- [SECURITY.md](SECURITY.md): private security disclosure process.
+- [SUPPORT.md](SUPPORT.md): support boundary and issue-routing guidance.
+- [CHANGELOG.md](CHANGELOG.md): release checklist and change record.
 
-- The isometric planes view is the one screen that needs real 3D
-  (react-three-fiber). It is scaffolded in the design, not yet in code here.
-- Auth: OIDC/SAML against the customer IdP; identity keys the per-developer
-  memory scope. Enforce scopes at the API.
-- Move the two SQLite sidecars (registry, content) to Postgres for concurrent
-  multi-agent writes at fleet scale. The hypergraph itself stays in HyperMesh.
-- Generate the TS client from OpenAPI so the wire contract has one source.
-- OpenTelemetry traces and structured logs for the customer SOC.
+Documents in [`docs/archive/`](docs/archive/) are **archived, historical, and non-authoritative**. They may describe an earlier prototype, an obsolete API shape, or a handoff context. Do not implement or operate against them without reconciling the content with the authoritative documents above.
+
+## License and notices
+
+See [LICENSE](LICENSE) and [NOTICE](NOTICE). The repository has not made an independent claim about licenses of every transitive dependency or deployment artifact; maintain a release-specific dependency inventory and legal review appropriate to your distribution model.
+
+## Getting help and reporting vulnerabilities
+
+For operational and product support, use [SUPPORT.md](SUPPORT.md). Do not open a public issue for a suspected vulnerability; follow [SECURITY.md](SECURITY.md).

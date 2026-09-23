@@ -139,7 +139,8 @@ function SbomTable({ sbom }: { sbom: SbomOut }) {
           {sbom.entries.length} package{sbom.entries.length === 1 ? "" : "s"}
         </span>
       </div>
-      <table className="w-full border-collapse text-left">
+      <div className="responsive-table-wrap">
+      <table className="w-full min-w-[680px] border-collapse text-left">
         <thead>
           <tr className="border-b border-line">
             {["Package", "Version", "License", "Advisories", "Feed"].map((h) => (
@@ -188,6 +189,7 @@ function SbomTable({ sbom }: { sbom: SbomOut }) {
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

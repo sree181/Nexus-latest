@@ -12,13 +12,13 @@ export function PageHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="flex h-[68px] shrink-0 items-center justify-between border-b border-line bg-surface px-8">
-      <h1 className="text-[15px] font-normal text-slate">
+    <header className="flex min-h-[68px] shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-3 sm:px-8">
+      <h1 className="min-w-0 text-[15px] font-normal text-slate">
         {section} <span className="text-slate-3">/</span>{" "}
         <span className="font-medium text-ink">{title}</span>
       </h1>
       {meta !== undefined && (
-        <div className="flex items-center gap-3 font-mono text-xs text-slate">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-xs text-slate sm:gap-3">
           {meta}
         </div>
       )}

@@ -1,3 +1,5 @@
+> **ARCHIVED — NON-AUTHORITATIVE.** This historical handoff prompt refers to an earlier prototype and API shape. Do not use it for MeshAgent production v1 implementation or operations. Use the root [README](../../README.md) and [Production Operations](../PRODUCTION_OPERATIONS.md).
+
 # Cursor Handoff Prompt
 
 Copy the text below into Cursor after opening the repository root.
