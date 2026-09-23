@@ -1,0 +1,18 @@
+flowchart LR
+    A[Cursor / Claude Code] -->|hooks: session, code, tool, package| B[FastAPI control plane]
+    C[MCP server] -->|decision, why, rewind, findings, SBOM| B
+    D[Browser UI] -->|REST + WebSocket| B
+    E[CLI device pairing] -->|recording-only credential| B
+
+    B --> F{Gateway}
+    F -->|demo| G[SampleGateway]
+    F -->|engine mode| H[EngineGateway]
+
+    H --> I[MeshAgent Python layer]
+    I --> J[HyperMesh C core + WAL]
+    I --> K[SQLite content and entity sidecars]
+    H --> L[Run registry + deletion certificates]
+    B --> M[Hash-chained audit JSONL]
+
+    B --> N[OSV package advisory lookup]
+    B --> O[SARIF import from Semgrep / CodeQL]

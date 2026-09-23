@@ -1,0 +1,165 @@
+/*
+ * test_basic.c — Smoke tests for the HyperMesh C library
+ *
+ * Tests:
+ *   1. Build index from the bundled hyperedges.csv
+ *   2. Open the index
+ *   3. Range query: verify record count and that returned timestamps
+ *      are within the requested range
+ *   4. Coalition ranking: verify all 20 drones appear, sorted descending
+ *   5. FMI point lookup: verify node 8 (most active) has >0 appearances
+ *   6. Query plan: verify TPI_BUCKET_PUSHDOWN strategy and real speedup
+ *
+ * Compile and run via:
+ *   make test
+ */
+
+#include "../src/hypermesh.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+
+#define TEST_DB_DIR  "/tmp/hm_test_db"
+#define CSV_PATH     "../../server/swarm_data/hyperedges.csv"
+
+static int passed = 0;
+static int failed = 0;
+
+#define CHECK(cond, msg)                                        \
+    do {                                                        \
+        if (cond) {                                             \
+            printf("  PASS  %s\n", msg); passed++;             \
+        } else {                                                \
+            printf("  FAIL  %s  (line %d)\n", msg, __LINE__); \
+            failed++;                                           \
+        }                                                       \
+    } while (0)
+
+int main(void) {
+    printf("=== HyperMesh Core — Smoke Tests ===\n\n");
+
+    /* ── Test 1: Build ─────────────────────────────────────────────────── */
+    printf("[1] Building index from CSV...\n");
+    int rc = hm_build_from_csv(TEST_DB_DIR, CSV_PATH, 10);
+    CHECK(rc == 0, "hm_build_from_csv returns 0");
+    if (rc != 0) {
+        printf("    Error: %s\n", hm_last_error());
+        printf("FATAL: Cannot proceed without index. Aborting.\n");
+        return 1;
+    }
+
+    /* ── Test 2: Open ──────────────────────────────────────────────────── */
+    printf("[2] Opening index...\n");
+    HmStore *store = hm_open(TEST_DB_DIR);
+    CHECK(store != NULL, "hm_open returns non-NULL handle");
+    if (!store) {
+        printf("    Error: %s\n", hm_last_error());
+        return 1;
+    }
+
+    uint32_t total  = hm_total_records(store);
+    uint32_t nbkt   = hm_bucket_count(store);
+    uint32_t bsec   = hm_bucket_seconds(store);
+    uint32_t nnodes = hm_node_count(store);
+
+    printf("    total_records  = %u\n", total);
+    printf("    bucket_count   = %u\n", nbkt);
+    printf("    bucket_seconds = %u\n", bsec);
+    printf("    node_count     = %u\n", nnodes);
+
+    CHECK(total  == 1774, "total_records == 1774 (drone swarm dataset)");
+    CHECK(nbkt   == 100,  "bucket_count  == 100  (1000s / 10s)");
+    CHECK(bsec   == 10,   "bucket_seconds == 10");
+    CHECK(nnodes == 20,   "node_count == 20 drones");
+
+    /* ── Test 3: Range query ───────────────────────────────────────────── */
+    printf("[3] Range query [100, 130]...\n");
+    HmRangeResult *res = hm_range_query(store, 100, 130);
+    CHECK(res != NULL, "hm_range_query returns non-NULL");
+
+    if (res) {
+        uint32_t cnt = hm_res_count(res);
+        printf("    records returned = %u\n", cnt);
+        CHECK(cnt > 0, "at least one record in [100, 130]");
+
+        /* Verify all returned timestamps are within [100, 130] */
+        int all_in_range = 1;
+        for (uint32_t i = 0; i < cnt; i++) {
+            uint32_t ts = hm_res_timestamp(res, i);
+            if (ts < 100 || ts > 130) { all_in_range = 0; break; }
+        }
+        CHECK(all_in_range, "all returned timestamps in [100, 130]");
+
+        /* Verify member_count > 0 for every record */
+        int all_have_members = 1;
+        for (uint32_t i = 0; i < cnt; i++) {
+            if (hm_res_member_count(res, i) == 0) { all_have_members = 0; break; }
+        }
+        CHECK(all_have_members, "every record has at least one member");
+
+        /* ── Test 6: Query plan ──────────────────────────────────────── */
+        printf("[6] Query plan...\n");
+        const char *strategy = hm_res_strategy(res);
+        uint32_t bs = hm_res_buckets_scanned(res);
+        uint32_t bt = hm_res_total_buckets(res);
+        float    su = hm_res_speedup(res);
+        uint64_t us = hm_res_elapsed_us(res);
+
+        printf("    strategy        = %s\n", strategy ? strategy : "(null)");
+        printf("    buckets_scanned = %u / %u\n", bs, bt);
+        printf("    speedup_factor  = %.1fx\n", su);
+        printf("    elapsed_us      = %llu µs\n", (unsigned long long)us);
+
+        CHECK(strategy && strcmp(strategy, "TPI_BUCKET_PUSHDOWN") == 0,
+              "strategy == TPI_BUCKET_PUSHDOWN");
+        CHECK(bs <= 4, "reads ≤ 4 buckets for 30s window (3 + 1 boundary)");
+        CHECK(bt == 100, "total_buckets == 100");
+        CHECK(su >= 20.0f, "speedup_factor >= 20x for 30s window");
+        CHECK(us > 0, "elapsed_us > 0 (real measurement)");
+
+        hm_range_result_free(res);
+    }
+
+    /* ── Test 4: Coalition ranking ─────────────────────────────────────── */
+    printf("[4] Coalition ranking...\n");
+    HmCoalitionResult *cr = hm_get_coalition_ranking(store);
+    CHECK(cr != NULL, "hm_get_coalition_ranking returns non-NULL");
+
+    if (cr) {
+        uint32_t cn = hm_coal_count(cr);
+        printf("    node count in ranking = %u\n", cn);
+        CHECK(cn == 20, "ranking has 20 entries (one per drone)");
+
+        /* Verify descending order */
+        int sorted_desc = 1;
+        for (uint32_t i = 1; i < cn; i++) {
+            if (hm_coal_appearances(cr, i) > hm_coal_appearances(cr, i-1)) {
+                sorted_desc = 0; break;
+            }
+        }
+        CHECK(sorted_desc, "ranking is sorted descending by appearances");
+
+        /* D08 (node_id=8) is the most active — should be near the top */
+        uint32_t top_appearances = hm_coal_appearances(cr, 0);
+        printf("    top node_id = %u, appearances = %u\n",
+               hm_coal_node_id(cr, 0), top_appearances);
+        CHECK(top_appearances >= 500, "top drone has >= 500 appearances");
+
+        hm_coalition_result_free(cr);
+    }
+
+    /* ── Test 5: FMI point lookup ──────────────────────────────────────── */
+    printf("[5] FMI lookup for node 8...\n");
+    uint32_t lookup_count = 0;
+    uint32_t *ids = hm_fmi_lookup(store, 8, &lookup_count);
+    printf("    node 8 appears in %u hyperedges\n", lookup_count);
+    CHECK(lookup_count >= 500, "node 8 appears in >= 500 hyperedges");
+    free(ids);
+
+    /* ── Teardown ──────────────────────────────────────────────────────── */
+    hm_close(store);
+
+    printf("\n=== Results: %d passed, %d failed ===\n", passed, failed);
+    return (failed == 0) ? 0 : 1;
+}

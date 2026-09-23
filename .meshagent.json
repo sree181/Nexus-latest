@@ -1,0 +1,14 @@
+{
+  "record": true,
+  "gate": true,
+  "exclude": [
+    ".env",
+    "*.env",
+    "*.pem",
+    "secrets/*",
+    "var/*",
+    "node_modules/*",
+    ".venv/*",
+    "__pycache__/*"
+  ]
+}

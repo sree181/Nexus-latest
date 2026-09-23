@@ -1,0 +1,39 @@
+# Self-hosted, single-tenant. Runs entirely inside the customer's network.
+# The API runs on the REAL MeshAgent engine (services/engine) with
+# MESHAGENT_ENGINE=1. Unset it to fall back to the sample gateway.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      MESHAGENT_ENGINE: "1"
+      MESHAGENT_CORS_ORIGINS: "http://localhost:8080"
+      # Where the web app is. The API cannot infer it -- here it is a different
+      # container on a different port -- and `meshagent login` prints this URL
+      # for the developer to go and approve their pairing at. Unset, it prints
+      # the dev server's port and the pairing is abandoned half-done.
+      MESHAGENT_WEB_URL: "http://localhost:8080"
+      # Governed memory, the audit log and the registered devices. Without it
+      # they go to a temporary directory, so every machine that paired has to
+      # log in again after a restart and the audit log starts empty.
+      MESHAGENT_DB_DIR: /var/lib/meshagent
+    volumes:
+      - memory:/var/lib/meshagent
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+# Named, so MESHAGENT_DB_DIR means what it says: a rebuilt container comes back
+# to the same memory rather than to an empty store that looks like a fresh
+# install.
+volumes:
+  memory:

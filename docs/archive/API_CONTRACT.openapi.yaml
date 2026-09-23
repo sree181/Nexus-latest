@@ -1,0 +1,297 @@
+openapi: 3.1.0
+info:
+  title: MeshAgent UI Integration API
+  version: 1.0.0
+  description: Contract required by the MeshAgent Security Workbench frontend.
+servers:
+  - url: http://localhost:8000
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/fleet/snapshot:
+    get:
+      operationId: getFleetSnapshot
+      responses:
+        "200":
+          description: Tenant-scoped fleet snapshot.
+          headers:
+            X-Request-ID:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FleetSnapshot" }
+        default: { $ref: "#/components/responses/ApiError" }
+  /api/v1/graph:
+    get:
+      operationId: getGraph
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/MemoryScope" }
+        - name: effectiveAt
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Exact tenant-scoped graph at the requested effective time.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GraphPayload" }
+        default: { $ref: "#/components/responses/ApiError" }
+  /api/v1/findings/{id}:
+    get:
+      operationId: getFinding
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Normalized security finding with evidence reference.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecurityFinding" }
+        default: { $ref: "#/components/responses/ApiError" }
+  /api/v1/sources/{id}/forget/preview:
+    post:
+      operationId: previewForgetSource
+      description: Computes impact without changing production data.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForgetRequest" }
+      responses:
+        "200":
+          description: Non-destructive removal impact preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForgetPreview" }
+        default: { $ref: "#/components/responses/ApiError" }
+  /api/v1/sources/{id}/forget:
+    post:
+      operationId: forgetSource
+      description: Executes an authorized, atomic, idempotent source removal.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: If-Match
+          in: header
+          required: true
+          description: Expected graph version returned by the preview.
+          schema: { type: string }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForgetRequest" }
+      responses:
+        "200":
+          description: Server-issued immutable deletion certificate.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeletionCertificate" }
+        "412":
+          description: Graph version changed after preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiErrorEnvelope" }
+        default: { $ref: "#/components/responses/ApiError" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    ApiError:
+      description: Structured error response.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiErrorEnvelope" }
+  schemas:
+    MemoryScope:
+      type: string
+      enum: [PRIVATE, PROJECT, ORG]
+    RiskState:
+      type: string
+      enum: [HEALTHY, WATCH, EXPLOITABLE, QUARANTINED]
+    GraphNode:
+      type: object
+      required: [id, label, type]
+      properties:
+        id: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1 }
+        type:
+          type: string
+          enum: [source, decision, class, package, sink, weakness, agent, certificate]
+        state: { $ref: "#/components/schemas/RiskState" }
+        metadata:
+          type: object
+          additionalProperties:
+            oneOf: [{ type: string }, { type: number }, { type: boolean }]
+    GraphEdge:
+      type: object
+      required: [id, source, target, relation, governed]
+      properties:
+        id: { type: string }
+        source: { type: string }
+        target: { type: string }
+        relation:
+          type: string
+          enum: [INFORMED, PRODUCED, IMPORTS, REACHES, AFFECTS, RETRACTS, MEMBER_OF]
+        governed: { type: boolean }
+        evidenceId: { type: string }
+    HyperRelation:
+      type: object
+      required: [id, label, kind, memberIds, state, evidenceIds, validFrom]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        kind:
+          type: string
+          enum: [PROVENANCE, DEPENDENCY, REACHABILITY, OWNERSHIP]
+        memberIds:
+          type: array
+          minItems: 1
+          items: { type: string }
+        state: { $ref: "#/components/schemas/RiskState" }
+        evidenceIds:
+          type: array
+          items: { type: string }
+        validFrom: { type: string, format: date-time }
+        validTo: { type: string, format: date-time }
+    GraphPayload:
+      type: object
+      required: [graphId, tenantId, effectiveAt, scope, nodes, edges]
+      properties:
+        graphId: { type: string }
+        graphVersion: { type: string }
+        policyVersion: { type: string }
+        tenantId: { type: string }
+        effectiveAt: { type: string, format: date-time }
+        scope: { $ref: "#/components/schemas/MemoryScope" }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/GraphNode" }
+        edges:
+          type: array
+          items: { $ref: "#/components/schemas/GraphEdge" }
+        relations:
+          type: array
+          items: { $ref: "#/components/schemas/HyperRelation" }
+        selectedNodeId: { type: string }
+        topology:
+          type: object
+          required: [blocks, bridges, branches, entanglementIndex, forbiddenClusters]
+          properties:
+            blocks: { type: integer, minimum: 0 }
+            bridges: { type: integer, minimum: 0 }
+            branches: { type: integer, minimum: 0 }
+            entanglementIndex: { type: number, minimum: 0 }
+            forbiddenClusters: { type: integer, minimum: 0 }
+    AgentSummary:
+      type: object
+      required: [id, name, owner, project, runtime, memoryCount, lastSeen, state, policyVersion]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        owner: { type: string }
+        project: { type: string }
+        runtime: { type: string }
+        memoryCount: { type: integer, minimum: 0 }
+        lastSeen: { type: string }
+        state: { $ref: "#/components/schemas/RiskState" }
+        policyVersion: { type: string }
+    SecurityFinding:
+      type: object
+      required: [id, title, weakness, severity, presence, scanner, ruleId, sourceEntry, sink, evidenceId, affectedAgents]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        weakness: { type: string }
+        severity: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] }
+        presence: { type: string, enum: [PRESENT, EXPLOITABLE] }
+        scanner: { type: string }
+        ruleId: { type: string }
+        sourceEntry: { type: string }
+        sink: { type: string }
+        evidenceId: { type: string }
+        affectedAgents: { type: integer, minimum: 0 }
+    DeletionCertificate:
+      type: object
+      required: [id, createdAt, sourceId, purgedCount, classesPruned, retainedHash, policyVersion, approvedBy]
+      properties:
+        id: { type: string }
+        createdAt: { type: string, format: date-time }
+        sourceId: { type: string }
+        purgedCount: { type: integer, minimum: 0 }
+        classesPruned: { type: integer, minimum: 0 }
+        retainedHash: { type: string }
+        policyVersion: { type: string }
+        approvedBy: { type: string }
+    FleetSnapshot:
+      type: object
+      required: [tenantId, tenantName, environment, generatedAt, agents, memoriesGoverned, quarantined, exploitableFindings, certificates, graph]
+      properties:
+        tenantId: { type: string }
+        tenantName: { type: string }
+        environment: { type: string, enum: [SELF_HOSTED, BYOC] }
+        generatedAt: { type: string, format: date-time }
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/AgentSummary" }
+        memoriesGoverned: { type: integer, minimum: 0 }
+        quarantined: { type: integer, minimum: 0 }
+        exploitableFindings: { type: integer, minimum: 0 }
+        certificates:
+          type: array
+          items: { $ref: "#/components/schemas/DeletionCertificate" }
+        graph: { $ref: "#/components/schemas/GraphPayload" }
+    ForgetRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    ForgetPreview:
+      type: object
+      required: [id, sourceId, generatedAt, expectedGraphVersion, affectedMemoryCount, affectedClassCount, affectedRelationIds, warnings]
+      properties:
+        id: { type: string }
+        sourceId: { type: string }
+        generatedAt: { type: string, format: date-time }
+        expectedGraphVersion: { type: string }
+        affectedMemoryCount: { type: integer, minimum: 0 }
+        affectedClassCount: { type: integer, minimum: 0 }
+        affectedRelationIds:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+    ApiErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+            details: {}

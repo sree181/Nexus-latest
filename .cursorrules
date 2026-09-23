@@ -1,0 +1,51 @@
+# MeshAgent — Cursor project rules
+
+You are working in the MeshAgent monorepo: governed agent memory over a HyperMesh
+hypergraph. Frontend is React + TypeScript (Vite). Backend is FastAPI (Python)
+wrapping the MeshAgent engine through a single gateway.
+
+## Architecture you must respect
+- The UI never talks to the engine directly. It calls the FastAPI service.
+- The API never reaches into HyperMesh directly. It goes through `services/api/app/gateway.py`.
+  Two implementations: `SampleGateway` (curated data) and `EngineGateway` (real
+  HyperMesh, `MESHAGENT_ENGINE=1`). To add engine behavior, extend the `Gateway`
+  interface and BOTH implementations so sample mode never breaks.
+- The engine itself lives under `services/engine` (meshagent + hypermeshdb +
+  hypermesh_core). Reach it only through EngineGateway/engine_seed, never import
+  it from routes or the UI.
+- The wire contract lives in TWO mirrored places: `services/api/app/models.py` (Pydantic)
+  and `packages/graph/src/types.ts` (TypeScript). Change both together, or generate the
+  TS client from the API's /openapi.json.
+- Graph rendering is renderer-agnostic: everything flows through a `GraphPayload`
+  (`packages/graph`). Cytoscape is the current renderer in `apps/web/src/features/graph`.
+  Do not couple screens to Cytoscape; keep the payload as the boundary.
+
+## Conventions
+- Colors and type come from CSS variables in `packages/ui/src/tokens.css`. Never hardcode
+  a hex in a component when a token exists. Tailwind semantic names map to these tokens.
+- Status is never color alone. Every status chip renders a word (Badge component).
+- Accessibility: real <button>, <a>, <input>+<label>. Never onClick on a div.
+- TypeScript is strict, with noUnusedLocals/Parameters. Keep it clean.
+- Do not invent data. Sample data is labelled sample; reachability is only asserted
+  where a taint path exists. Preserve that honesty.
+
+## The hgviz structure layer
+- `services/api/app/hgviz/` implements the topological decomposition of Oliver,
+  Zhang & Zhang (TVCG 2024). It works on the bipartite representation of the
+  memory hypergraph and is pure graph theory (networkx). Do not couple it to the
+  API models; `app/analysis.py` is the only place that maps hgviz -> API models.
+- To add a structure signal: extend hgviz (with a unit test in tests/test_hgviz.py
+  on a hypergraph with known topology), then surface it through analysis.py.
+- Keep the honesty: forbidden bundles are detected exactly for the two combinatorial
+  cases; entanglement stands in for the strangled variants. Do not overclaim.
+- The Structure screen renders a HypergraphOut with the polygon metaphor. Any new
+  renderer consumes HypergraphOut, never hgviz internals.
+
+## When asked to add a screen
+1. Add the wire types to models.py AND types.ts.
+2. Add the gateway method (sample + real seam).
+3. Add the API route in main.py.
+4. Add the fetcher in apps/web/src/lib/api.ts.
+5. Build the route component; add it to router.tsx.
+
+Keep changes small and typed. Prefer editing existing files over adding new patterns.

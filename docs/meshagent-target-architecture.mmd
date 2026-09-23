@@ -1,0 +1,37 @@
+flowchart TB
+    subgraph Developer workstation
+      H1[Signed editor hooks]
+      H2[MeshAgent CLI]
+      H3[MCP server with delegated read scope]
+      Q[Encrypted, locked local delivery queue]
+      H1 --> Q
+      H3 --> Q
+      H2 --> Q
+    end
+
+    subgraph Customer trust boundary
+      IG[TLS ingress + OIDC]
+      API[MeshAgent API and policy enforcement]
+      W[Ingestion workers]
+      PG[(Postgres control state, idempotency, jobs)]
+      HM[(HyperMesh governed relationships)]
+      CS[(Encrypted content store)]
+      EV[(Immutable evidence and audit store)]
+      OBS[Logs, metrics, traces, alerts]
+      SCAN[Trusted scanner and CI attestations]
+      OSV[Advisory cache and OSV]
+
+      IG --> API
+      API --> W
+      W --> PG
+      W --> HM
+      W --> CS
+      API --> EV
+      API --> OBS
+      W --> OBS
+      SCAN --> API
+      OSV --> API
+    end
+
+    Q --> IG
+    UI[Developer and CISO web UI] --> IG

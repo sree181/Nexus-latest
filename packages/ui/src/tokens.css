@@ -1,0 +1,53 @@
+/* MeshAgent design tokens. The single source of truth for color and type.
+   Tailwind (apps/web/tailwind.config.ts) maps semantic names onto these vars,
+   so both `class="bg-surface"` and raw `var(--surface)` resolve here. */
+:root {
+  /* grounds */
+  --paper: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef1f4;
+  --rail: #10161d;
+  --rail-2: #16303a;
+
+  /* ink on the dark rail (contrast checked against --rail) */
+  --rail-ink: #eaf0f3;
+  --rail-ink-dim: #aeb8c2;
+  --rail-ink-faint: #8b95a1;
+  --rail-hover: #1a2129;
+  --rail-line: #1e2630;
+
+  /* ink */
+  --ink: #131a22;
+  --slate: #55606d;
+  --slate-2: #7e8a97;
+  --slate-3: #b4bdc6;
+  --line: #e3e7ec;
+  --line-2: #d7dde3;
+
+  /* accents */
+  --accent: #0e7c8b;
+  --accent-bright: #2fa7b8;
+  --accent-soft: #e3f0f1;
+
+  /* semantic status (never color alone -- always pair with a word) */
+  --ok: #1f7a4d;
+  --ok-soft: #e4f1e9;
+  --warn: #a9701a;
+  --warn-soft: #f5ebd8;
+  --risk: #b3413c;
+  --risk-soft: #f5e2e1;
+
+  /* plane hues */
+  --plane-provenance: #0e7c8b;
+  --plane-security: #b3413c;
+  --plane-supply: #3a7ca5;
+  --plane-belief: #6b74c9;
+
+  /* type */
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-serif: "IBM Plex Serif", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(19, 26, 34, 0.05), 0 10px 30px rgba(19, 26, 34, 0.05);
+}

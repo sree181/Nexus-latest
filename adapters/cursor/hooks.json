@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "type": "command",
+        "command": "python3 ./adapters/cursor/meshagent_hook.py",
+        "timeout": 5
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "type": "command",
+        "command": "python3 ./adapters/cursor/meshagent_hook.py",
+        "timeout": 5
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "type": "command",
+        "command": "python3 ./adapters/cursor/meshagent_hook.py",
+        "timeout": 6,
+        "failClosed": false
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "type": "command",
+        "command": "python3 ./adapters/cursor/meshagent_hook.py",
+        "timeout": 5
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "command": "python3 ./adapters/cursor/meshagent_hook.py",
+        "timeout": 10
+      }
+    ]
+  }
+}

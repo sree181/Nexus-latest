@@ -1,0 +1,101 @@
+# Makefile.edge — Cross-compilation for edge hardware (Raspberry Pi / NVIDIA Jetson)
+#
+# Targets:
+#   make -f Makefile.edge rpi4        — Raspberry Pi 4/5  (Linux ARM64)
+#   make -f Makefile.edge jetson      — NVIDIA Jetson Nano/Orin (Linux ARM64)
+#   make -f Makefile.edge native      — current host (for local testing)
+#   make -f Makefile.edge coordinator — build swarm_coordinator for host
+#   make -f Makefile.edge clean
+#
+# Prerequisites on build host (macOS or Linux x86-64):
+#   brew install aarch64-elf-gcc           (macOS, Homebrew)
+#   sudo apt install gcc-aarch64-linux-gnu (Ubuntu/Debian)
+#
+# Transfer to target:
+#   scp libhypermesh.so swarm_coordinator pi@raspberrypi.local:~/hmdb/
+#   ssh pi@raspberrypi.local "chmod +x ~/hmdb/swarm_coordinator && ./hmdb/swarm_coordinator"
+#
+# ArduPilot SITL integration (run on same machine as coordinator):
+#   sim_vehicle.py -v ArduCopter --out udp:127.0.0.1:14550
+#   ./swarm_coordinator   # reads MAVLink from UDP:14550 via mavlink_bridge.h
+
+# ── Compiler selection ────────────────────────────────────────────────────────
+
+UNAME := $(shell uname -s)
+
+# Native (host) build
+NATIVE_CC := cc
+
+# ARM64 Linux cross-compiler (Raspberry Pi 4/5 and Jetson run aarch64-linux-gnu)
+ARM64_CC := aarch64-linux-gnu-gcc
+
+# Apple Silicon (native ARM64 macOS — useful for local testing of ARM code)
+APPLE_CC  := cc   # on M-series Mac, cc already targets arm64
+
+CFLAGS  := -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Isrc -Idemo
+PTHREAD := -lpthread
+LDFLAGS := -lm
+
+SRC := src/tpi.c src/fmi.c src/wal.c src/psi.c src/hypermesh.c \
+       src/cypher_parser/lexer.c src/cypher_parser/parser.c
+
+COORD_SRC := demo/swarm_coordinator.c
+
+# ── Raspberry Pi 4/5 (Linux ARM64) ──────────────────────────────────────────
+
+.PHONY: rpi4
+rpi4: CC=$(ARM64_CC)
+rpi4:
+	$(ARM64_CC) $(CFLAGS) -fPIC -shared -o libhypermesh.so $(SRC) $(PTHREAD) $(LDFLAGS)
+	$(ARM64_CC) $(CFLAGS) -o swarm_coordinator_rpi4 $(COORD_SRC) \
+	    -L. -lhypermesh $(PTHREAD) $(LDFLAGS) -Wl,-rpath,.
+	@echo ""
+	@echo "Built for Raspberry Pi 4/5 (Linux ARM64):"
+	@echo "  libhypermesh.so           (shared library)"
+	@echo "  swarm_coordinator_rpi4    (coordinator binary)"
+	@echo ""
+	@echo "Deploy:"
+	@echo "  scp libhypermesh.so swarm_coordinator_rpi4 pi@<ip>:~/hmdb/"
+	@echo "  ssh pi@<ip> 'cd ~/hmdb && LD_LIBRARY_PATH=. ./swarm_coordinator_rpi4'"
+
+# ── NVIDIA Jetson (Linux ARM64, same ISA as RPi) ─────────────────────────────
+
+.PHONY: jetson
+jetson:
+	$(ARM64_CC) $(CFLAGS) -fPIC -shared -O3 -o libhypermesh.so $(SRC) $(PTHREAD) $(LDFLAGS)
+	$(ARM64_CC) $(CFLAGS) -O3 -o swarm_coordinator_jetson $(COORD_SRC) \
+	    -L. -lhypermesh $(PTHREAD) $(LDFLAGS) -Wl,-rpath,.
+	@echo "Built for NVIDIA Jetson (Linux ARM64) with -O3"
+
+# ── Native host (macOS or Linux x86-64, for local testing) ───────────────────
+
+.PHONY: native
+native:
+ifeq ($(UNAME), Darwin)
+	$(NATIVE_CC) $(CFLAGS) -dynamiclib -install_name @rpath/libhypermesh.dylib \
+	    -o libhypermesh.dylib $(SRC)
+	$(NATIVE_CC) $(CFLAGS) -o swarm_coordinator $(COORD_SRC) \
+	    -L. -lhypermesh $(LDFLAGS) -Wl,-rpath,.
+else
+	$(NATIVE_CC) $(CFLAGS) -fPIC -shared -o libhypermesh.so $(SRC) $(PTHREAD) $(LDFLAGS)
+	$(NATIVE_CC) $(CFLAGS) -o swarm_coordinator $(COORD_SRC) \
+	    -L. -lhypermesh $(PTHREAD) $(LDFLAGS) -Wl,-rpath,.
+endif
+
+# ── Quick coordinator build for current host (uses existing library) ──────────
+
+.PHONY: coordinator
+coordinator: libhypermesh.dylib demo/swarm_coordinator.c
+	$(NATIVE_CC) $(CFLAGS) -o demo/swarm_coordinator demo/swarm_coordinator.c \
+	    -L. -lhypermesh $(LDFLAGS) -Wl,-rpath,.
+	@echo "Built demo/swarm_coordinator — run with:"
+	@echo "  cd hypermesh_core && DYLD_LIBRARY_PATH=. ./demo/swarm_coordinator"
+
+# On Linux, the library is .so
+libhypermesh.dylib:
+	@echo "Building libhypermesh first..."
+	$(MAKE) -f Makefile
+
+.PHONY: clean
+clean:
+	rm -f libhypermesh.so swarm_coordinator swarm_coordinator_rpi4 swarm_coordinator_jetson

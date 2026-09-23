@@ -1,0 +1,45 @@
+# Semgrep runs, and its taint results become MeshAgent's reachability claims.
+#
+# This is the point of the whole exercise: MeshAgent should not be asserting
+# on its own authority that untrusted input reaches a dangerous call. Semgrep
+# traces the flow, and MeshAgent records that Semgrep said so.
+#
+# Note `--sarif`: only Semgrep's taint-mode rules emit codeFlows, and a
+# codeFlow is the evidence. A rule that merely spots a dangerous call yields
+# a result with no flow, and MeshAgent will correctly decline to call it
+# reachable.
+
+name: Semgrep to MeshAgent
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        # continue-on-error: findings are for the tracker to triage, not for
+        # this step to editorialise about. The upload should happen either way.
+        continue-on-error: true
+        run: semgrep scan --config=p/security-audit --config=p/python --sarif --output=semgrep.sarif
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Upload the scan to MeshAgent
+        env:
+          MESHAGENT_API: ${{ vars.MESHAGENT_API }}
+          MESHAGENT_TOKEN: ${{ secrets.MESHAGENT_TOKEN }}
+        run: |
+          python services/api/app/upload_scan.py \
+            --run "${{ vars.MESHAGENT_RUN_ID }}" \
+            --sarif semgrep.sarif
