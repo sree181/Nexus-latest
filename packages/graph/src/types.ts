@@ -15,6 +15,14 @@ export type NodeKind =
   | "entry"
   | "agent"
   | "capability"
+  | "module"
+  | "function"
+  | "api"
+  | "policy"
+  | "review"
+  | "review_event"
+  | "session"
+  | "repository"
   | "other";
 
 export type Plane = "provenance" | "security" | "supply" | "belief" | "time";

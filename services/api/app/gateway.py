@@ -140,6 +140,21 @@ class Gateway(ABC):
     def run_graph(self, run_id: str) -> GraphPayload: ...
 
     @abstractmethod
+    def project_policy_evaluation(
+        self, run_id: str, *, event_id: str, session_id: str,
+        repository_id: str, evaluation: dict,
+    ) -> list[str]:
+        """Project one durable policy observation without asserting install."""
+
+    @abstractmethod
+    def project_review_event(self, run_id: str, *, event: dict) -> str:
+        """Append one immutable review lifecycle episode to HyperMesh."""
+
+    @abstractmethod
+    def review_evidence_graph(self, run_id: str, request_id: str) -> GraphPayload:
+        """Return only the native evidence chain sealed under one review."""
+
+    @abstractmethod
     def fleet_query(self, query: str) -> QueryResult: ...
 
     @abstractmethod
@@ -318,6 +333,18 @@ class SampleGateway(Gateway):
 
     def run_graph(self, run_id: str) -> GraphPayload:
         return sample.run_graph(run_id)
+
+    def project_policy_evaluation(
+        self, run_id: str, *, event_id: str, session_id: str,
+        repository_id: str, evaluation: dict,
+    ) -> list[str]:
+        return []
+
+    def project_review_event(self, run_id: str, *, event: dict) -> str:
+        raise NotFound("native review evidence is unavailable in sample mode")
+
+    def review_evidence_graph(self, run_id: str, request_id: str) -> GraphPayload:
+        raise NotFound("native review evidence is unavailable in sample mode")
 
     def fleet_query(self, query: str) -> QueryResult:
         return sample.fleet_query(query)

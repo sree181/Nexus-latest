@@ -303,6 +303,16 @@ A Developer may create one durable review request per policy evaluation for a sa
 
 The review relationship map is role scoped rather than universally hidden. A Developer sees only their selected review, contributor identity, repository, session, linked code, package/version, advisories, and recorded reviewer decision. Analysts and CISOs see the submitted evidence and named participants necessary to decide the request. Organization-wide and cross-session graph exploration remains limited to Security-office capabilities.
 
+## 12. Native HyperMesh evidence foundation
+
+The review map is now a projection of **native HyperMesh records**, not a graph assembled from labels by the API. Python code projection creates explicit module-to-package `imports`, function-to-API `invokes`, and API-to-package `api_of` relationships. Existing class-to-package imports remain intact for compatibility. Unsupported languages remain recorded as modules without inferred relationships; the service does not scan arbitrary source text to invent an import edge.
+
+Every durable `policy.evaluated` activity is projected in sequence into a policy relation tied to the session, repository, package, exact checked version, OSV advisory records, advisory feed, and released fixes. A policy check is not installation proof. Installation remains a separate `package.installed` fact.
+
+Creating a review freezes an immutable canonical snapshot containing native code entity IDs, policy evaluation ID, package/version, ecosystem, and advisory IDs. Its SHA-256 digest is stored with the mutable workflow row. The same database transaction appends the workflow event and a projection-outbox record. The reconciler writes each request, Analyst/CISO decision, and automatic verification as an idempotent HyperMesh episode, then stores the resulting native ULID as the evidence root. Interrupted or transiently failed projections are retried with bounded backoff; an event is acknowledged only after the engine returns its ULID.
+
+Review graph endpoints require the existing owner or Security-office capability and start from the review's sealed native subject. They return only that review's HyperMesh episodes and recursive evidence ancestors. They do not perform free-form fleet traversal and no longer reconstruct relations from SQLite labels. The relational ledgers remain authoritative for ordered ingestion and mutable workflow state; HyperMesh is authoritative for governed evidence and provenance.
+
 For large deployments, move this SQLite ledger behind the same single-writer service boundary or migrate it to PostgreSQL before horizontal API scaling. Multi-tenant partitioning, event-bus fan-out, cross-region replication, and organization-wide retention policy are not claimed by this single-tenant v1 implementation.
 
 ## References
@@ -316,4 +326,6 @@ For large deployments, move this SQLite ledger behind the same single-writer ser
 [7]: ../services/api/tests/test_developer_sessions.py "Developer session integration tests"
 [8]: ../services/api/app/migrations/002_projection_retry.sql "Projection retry and correlation upgrade migration"
 [9]: ../services/api/app/migrations/003_policy_ecosystem.sql "Policy ecosystem upgrade migration"
-[10]: ../services/api/app/review_service.py "Attention derivation and role-scoped review graph service"
+[10]: ../services/api/app/review_service.py "Native Attention derivation and sealed review graph query service"
+[11]: ../services/engine/meshagent/codegraph.py "Native HyperMesh code, advisory, policy, and review relations"
+[12]: ../services/api/app/control_plane.py "Transactional review snapshot and projection outbox"

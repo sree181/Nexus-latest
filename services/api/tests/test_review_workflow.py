@@ -114,6 +114,16 @@ def test_developer_attention_to_analyst_review_to_verified_fix(clients, monkeypa
     assert item["suggested_version"] == "0.28.1"
     assert item["advisories"][0]["id"] == "CVE-2026-1234"
     assert "Client" in item["code_entities"]
+    assert "Client.get" in item["code_entities"]
+    assert "httpx.get" in item["code_entities"]
+    run_id = developer.get(
+        f"/api/v1/developer/sessions/{session_id}",
+    ).json()["run_id"]
+    run_graph = gateway.run_graph(run_id)
+    assert any(edge.rel == "imports" and edge.source == "module:src/client.py"
+               and edge.target == "pkg:httpx" for edge in run_graph.edges)
+    assert any(edge.rel == "invokes" and edge.source.endswith(":Client.get")
+               and edge.target == "api:httpx.get" for edge in run_graph.edges)
 
     created = developer.post("/api/v1/developer/review-requests", json={
         "session_id": session_id,
@@ -124,7 +134,9 @@ def test_developer_attention_to_analyst_review_to_verified_fix(clients, monkeypa
     assert created.status_code == 201, created.text
     request = created.json()
     assert request["state"] == "waiting"
-    assert request["events"] == []
+    assert request["events"][-1]["action"] == "review.requested"
+    assert len(request["evidence_digest"]) == 64
+    assert len(request["evidence_root_ulid"]) == 26
 
     # Duplicate submission returns the same immutable evidence snapshot.
     duplicate = developer.post("/api/v1/developer/review-requests", json={
@@ -161,9 +173,26 @@ def test_developer_attention_to_analyst_review_to_verified_fix(clients, monkeypa
         f"/api/v1/developer/review-requests/{request['id']}/graph",
     ).json()
     assert dev_graph["perspective"] == "developer"
+    assert dev_graph["evidence_root_ulid"] == request["evidence_root_ulid"]
+    assert dev_graph["evidence_digest"] == request["evidence_digest"]
     assert {node["kind"] for node in dev_graph["graph"]["nodes"]} >= {
-        "agent", "source", "package", "version", "cve", "decision",
+        "agent", "module", "package", "version", "cve", "policy",
+        "review", "review_event",
     }
+    assert all(not edge["id"].startswith("rev-e")
+               for edge in dev_graph["graph"]["edges"])
+    assert all(len(relation["id"]) == 26
+               for relation in dev_graph["graph"]["relations"])
+    assert {edge["rel"] for edge in dev_graph["graph"]["edges"]} >= {
+        "imports", "affects", "reported_by", "fixed_by", "attests",
+    }
+    stranger = TestClient(
+        main.app,
+        headers={auth.DEV_USER: "other@example.com", auth.DEV_ROLE: "developer"},
+    )
+    assert stranger.get(
+        f"/api/v1/developer/review-requests/{request['id']}/graph",
+    ).status_code == 404
     assert ciso.get(f"/api/reviews/{request['id']}/graph").json()["perspective"] == "ciso"
 
     monkeypatch.setattr(gateway, "check_package", lambda req: GateDecision(
@@ -183,6 +212,12 @@ def test_developer_attention_to_analyst_review_to_verified_fix(clients, monkeypa
     assert verified["state"] == "verified"
     assert verified["verification_evidence_id"].startswith("gate:")
     assert verified["events"][-1]["action"] == "review.verified"
+    verified_graph = developer.get(
+        f"/api/v1/developer/review-requests/{request['id']}/graph",
+    ).json()["graph"]
+    review_events = [relation for relation in verified_graph["relations"]
+                     if relation["kind"] == "review_event"]
+    assert len(review_events) == 3
 
 
 def test_developer_cannot_decide_own_request(clients):
@@ -216,3 +251,53 @@ def test_review_decisions_use_optimistic_concurrency(clients):
     }
     assert analyst.post(f"/api/reviews/{request['id']}/decision", json=body).status_code == 200
     assert analyst.post(f"/api/reviews/{request['id']}/decision", json=body).status_code == 412
+
+
+def test_review_projection_retries_without_duplicate_native_events(clients, monkeypatch):
+    developer, _, _, gateway = clients
+    session_id, evaluation_id = create_attention(developer)
+    real_project = gateway.project_review_event
+    calls = 0
+
+    def fail_once(run_id, *, event):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("temporary projection failure")
+        return real_project(run_id, event=event)
+
+    monkeypatch.setattr(gateway, "project_review_event", fail_once)
+    created = developer.post("/api/v1/developer/review-requests", json={
+        "session_id": session_id,
+        "policy_evaluation_id": evaluation_id,
+        "kind": "security_guidance",
+        "rationale": "Confirm the native evidence chain.",
+    })
+    assert created.status_code == 201
+    request_id = created.json()["id"]
+    assert created.json()["evidence_root_ulid"] is None
+
+    with main.workflow_store._write() as conn:
+        conn.execute(
+            "UPDATE review_projection_outbox SET next_attempt_at=0 WHERE request_id=?",
+            (request_id,),
+        )
+    main._reconcile_review_projections()
+    projected = developer.get(
+        f"/api/v1/developer/review-requests/{request_id}",
+    ).json()
+    assert len(projected["evidence_root_ulid"]) == 26
+    graph = developer.get(
+        f"/api/v1/developer/review-requests/{request_id}/graph",
+    ).json()["graph"]
+    before = [relation["id"] for relation in graph["relations"]
+              if relation["kind"] == "review_event"]
+    assert len(before) == 1
+
+    main._reconcile_review_projections()
+    graph = developer.get(
+        f"/api/v1/developer/review-requests/{request_id}/graph",
+    ).json()["graph"]
+    after = [relation["id"] for relation in graph["relations"]
+             if relation["kind"] == "review_event"]
+    assert after == before

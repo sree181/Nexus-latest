@@ -70,11 +70,11 @@ def fresh():
 
 def test_run_block_is_the_exploitable_knot(gw):
     d = gw.run_decomposition(RUN)
-    assert d.b1 == 1                       # one entangled block
-    assert len(d.blocks) == 1
+    assert d.b1 >= 1                       # native import/call relations add cycles
+    assert len(d.blocks) >= 1
     # the finding edge and the taint edge the scan derived from the same
     # source, both spanning pickle.load and CWE-502
-    assert d.blocks[0].eta == 0.25
+    assert any(block.eta == 0.25 for block in d.blocks)
     assert d.branches >= 1                 # provenance / supply trails are trees
 
 
@@ -195,8 +195,10 @@ def test_stream_replays_the_real_records_of_a_complete_run(gw):
     assert all(e.ulid for e in events)             # every frame is a real edge
     # the module lands before the classes parsed out of it, so the code the
     # rest of the screens talk about is itself a record in the stream
-    assert [e.step for e in events][:4] == [
-        "Read a source", "Made a decision", "Submitted a module", "Wrote code"]
+    assert [e.step for e in events][:3] == [
+        "Read a source", "Made a decision", "Submitted a module"]
+    assert "Mapped module imports" in [e.step for e in events]
+    assert "Wrote code" in [e.step for e in events]
     # the envelopes are the ones the write gate issued, not decoration
     source = events[0]
     assert (source.origin, source.status) == ("EXTERNAL", "UNVERIFIED")

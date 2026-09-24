@@ -329,6 +329,9 @@ class ReviewRequestOut(BaseModel):
     recommended_version: str | None = None
     exception_expires_at: int | None = None
     verification_evidence_id: str | None = None
+    evidence_digest: str | None = None
+    evidence_root_ulid: str | None = None
+    evidence_snapshot: dict[str, Any] = Field(default_factory=dict)
     version_counter: int
     created_at: int
     updated_at: int
@@ -345,5 +348,7 @@ class ReviewRequestListOut(BaseModel):
 class ReviewGraphOut(BaseModel):
     request_id: str
     perspective: Literal["developer", "analyst", "ciso"]
+    evidence_root_ulid: str | None = None
+    evidence_digest: str | None = None
     graph: GraphPayload
     note: str

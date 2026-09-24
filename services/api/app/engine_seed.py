@@ -34,10 +34,15 @@ RUN_ID = "7f3a"
 RUN_TASK = "Build a data loader for the training pipeline that reads model shards."
 
 _PREFIX_KIND = [
-    ("source:", "source"), ("decision:", "decision"), ("class:", "class"),
+    ("source:", "source"), ("decision:", "decision"),
+    ("module:", "module"), ("function:", "function"), ("api:", "api"),
+    ("class:", "class"),
     ("pkg:", "package"), ("sink:", "sink"), ("cwe:", "cwe"), ("cap:", "capability"),
     ("version:", "version"), ("license:", "license"), ("cve:", "cve"),
-    ("entry:", "entry"), ("agent:", "agent"),
+    ("entry:", "entry"), ("agent:", "agent"), ("actor:", "agent"),
+    ("policy:", "policy"),
+    ("review:", "review"), ("review-event:", "review_event"),
+    ("session:", "session"), ("repository:", "repository"),
 ]
 
 

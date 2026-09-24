@@ -82,6 +82,33 @@ def project_pending(
                 break
             for event in pending:
                 store.mark_projecting(event.event_id)
+                if event.type == "policy.evaluated":
+                    try:
+                        if not run_id:
+                            raise RuntimeError(
+                                "policy evidence cannot project before the session run exists"
+                            )
+                        evaluation = store.policy_evaluation_for_event(event.event_id)
+                        gateway.project_policy_evaluation(
+                            run_id, event_id=event.event_id,
+                            session_id=session.id,
+                            repository_id=session.repository.id,
+                            evaluation=evaluation.model_dump(mode="json"),
+                        )
+                        store.mark_projected(event.event_id, run_id=run_id)
+                    except Exception as exc:
+                        store.mark_projection_failed(event.event_id, str(exc))
+                        logger.warning(
+                            "developer policy evidence projection failed",
+                            exc_info=True,
+                            extra={
+                                "developer_session_id": session.id,
+                                "developer_event_id": event.event_id,
+                            },
+                        )
+                        return projected, refused, run_id
+                    projected += 1
+                    continue
                 legacy = _legacy_event(event, session)
                 if legacy is None:
                     store.mark_projected(event.event_id, run_id=run_id or "")

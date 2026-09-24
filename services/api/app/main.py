@@ -177,7 +177,9 @@ def validate_startup() -> None:
 async def _lifespan(_: FastAPI):
     validate_startup()
     developer_session_store.reset_interrupted_projections()
+    workflow_store.reset_interrupted_review_projections()
     await asyncio.to_thread(_reconcile_developer_session_projections)
+    await asyncio.to_thread(_reconcile_review_projections)
     projection_task = asyncio.create_task(
         _projection_reconciler(), name="developer-session-projection-reconciler"
     )
@@ -471,6 +473,29 @@ def _reconcile_developer_session_projections() -> None:
             )
 
 
+def _reconcile_review_projections() -> None:
+    """Project immutable review events from the transactional outbox."""
+    for work in workflow_store.recoverable_review_projections():
+        event_id = str(work["event_id"])
+        try:
+            workflow_store.mark_review_projection_started(event_id)
+            event = dict(work["payload"])
+            event["canonical_sha256"] = work["payload_sha256"]
+            native_ulid = gateway.project_review_event(
+                str(work["run_id"]), event=event,
+            )
+            workflow_store.mark_review_projection_complete(event_id, native_ulid)
+        except Exception as exc:
+            workflow_store.mark_review_projection_failed(event_id, str(exc))
+            logger.exception(
+                "review evidence projection failed",
+                extra={
+                    "review_request_id": work["request_id"],
+                    "review_event_id": event_id,
+                },
+            )
+
+
 async def _projection_reconciler() -> None:
     try:
         interval = float(os.environ.get(
@@ -483,8 +508,9 @@ async def _projection_reconciler() -> None:
         await asyncio.sleep(interval)
         try:
             await asyncio.to_thread(_reconcile_developer_session_projections)
+            await asyncio.to_thread(_reconcile_review_projections)
         except Exception:
-            logger.exception("developer session projection scan failed")
+            logger.exception("evidence projection scan failed")
 
 # OIDC transactions and browser sessions are server-owned. Only hashes of the
 # opaque cookie values are retained; access tokens never enter browser storage.
@@ -1310,8 +1336,15 @@ def create_developer_review_request(
     who: Principal = Depends(require_capability("review.own")),
 ) -> ReviewRequestOut:
     session = developer_session_store.get(req.session_id, who)
+    if not session.run_id:
+        raise developer_sessions.LifecycleConflict(
+            "the session evidence has not reached HyperMesh yet"
+        )
     evaluation = developer_session_store.policy_evaluation(
         req.session_id, req.policy_evaluation_id, who,
+    )
+    code_refs = review_service.code_entity_refs(
+        gateway, session.run_id, evaluation.package,
     )
     snapshot = {
         "session_id": session.id, "run_id": session.run_id,
@@ -1323,14 +1356,16 @@ def create_developer_review_request(
         "severity": evaluation.worst or "unknown",
         "advisories": [item.model_dump(mode="json") for item in evaluation.advisories],
         "reasons": evaluation.reasons,
-        "code_entities": review_service.linked_code_entities(
-            developer_session_store, gateway, session.id, who,
-            session.run_id, evaluation.package,
-        ),
+        "code_entities": [item["label"] for item in code_refs],
+        "code_entity_refs": code_refs,
     }
     created = workflow_store.create_review_request(
         snapshot=snapshot, kind=req.kind, rationale=req.rationale,
         actor=who.subject, actor_name=who.name,
+    )
+    _reconcile_review_projections()
+    created = workflow_store.review_request(
+        created["id"], owner_subject=who.subject,
     )
     note(who, "review.request", created["id"], f"{evaluation.package}@{evaluation.version}")
     return ReviewRequestOut.model_validate(created)
@@ -1358,7 +1393,7 @@ def developer_review_graph(
     who: Principal = Depends(require_capability("review.own")),
 ) -> ReviewGraphOut:
     review = workflow_store.review_request(request_id, owner_subject=who.subject)
-    return review_service.request_graph(review, "developer")
+    return review_service.request_graph(gateway, review, "developer")
 
 
 @app.get("/api/reviews", response_model=ReviewRequestListOut)
@@ -1391,6 +1426,8 @@ def decide_review_request(
         expires_at=req.expires_at, actor=who.subject,
         actor_name=who.name, actor_role=who.role,
     )
+    _reconcile_review_projections()
+    value = workflow_store.review_request(request_id)
     return ReviewRequestOut.model_validate(value)
 
 
@@ -1400,7 +1437,9 @@ def analyst_review_graph(
     who: Principal = Depends(require_capability("review.read")),
 ) -> ReviewGraphOut:
     review = workflow_store.review_request(request_id)
-    return review_service.request_graph(review, "ciso" if who.ciso else "analyst")
+    return review_service.request_graph(
+        gateway, review, "ciso" if who.ciso else "analyst",
+    )
 
 @app.get("/api/fleet/coverage", response_model=CoverageOut)
 def fleet_coverage(_: Principal = Depends(analyst)) -> CoverageOut:
@@ -1442,6 +1481,8 @@ def check_package(req: GateRequest,
             )
             for request_id in verified:
                 note(who, "review.verified", request_id, evidence_id)
+            if verified:
+                _reconcile_review_projections()
     return decision
 
 

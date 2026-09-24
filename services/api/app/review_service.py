@@ -1,17 +1,14 @@
-"""Derived Developer attention and role-scoped review evidence graphs."""
+"""Derived Developer attention and native HyperMesh review evidence queries."""
 
 from __future__ import annotations
 
 import hashlib
-import ast
-import re
 import re
 from typing import Any
 
 from .auth import Principal
 from .developer_sessions import Store as SessionStore
 from .gateway import Gateway, NotFound
-from .models import GraphEdge, GraphNode, GraphPayload, Relation
 from .workflow_models import AttentionItemOut, AttentionListOut, ReviewGraphOut
 
 
@@ -38,8 +35,10 @@ def _suggested_version(advisories: list[Any]) -> str | None:
     return max(candidates, default=((), None))[1]
 
 
-def code_entities(gateway: Gateway, run_id: str | None, package: str) -> list[str]:
-    """Code nodes the recorded graph directly says import this package."""
+def code_entity_refs(
+    gateway: Gateway, run_id: str | None, package: str,
+) -> list[dict[str, str]]:
+    """Native modules, functions, classes, and APIs linked to this package."""
     if not run_id:
         return []
     try:
@@ -50,59 +49,42 @@ def code_entities(gateway: Gateway, run_id: str | None, package: str) -> list[st
         node.id for node in graph.nodes
         if node.kind == "package" and (
             node.label.casefold() == package.casefold()
-            or node.id.casefold() == f"package:{package}".casefold()
+            or node.id.casefold() in {
+                f"package:{package}".casefold(), f"pkg:{package}".casefold(),
+            }
         )
     }
     linked = {
         edge.source for edge in graph.edges
         if edge.rel == "imports" and edge.target in package_ids
     }
-    labels = {node.id: node.label for node in graph.nodes}
-    return sorted({labels.get(node_id, node_id) for node_id in linked})[:100]
+    package_apis = {
+        edge.source for edge in graph.edges
+        if edge.rel == "api_of" and edge.target in package_ids
+    }
+    linked |= package_apis
+    linked |= {
+        edge.source for edge in graph.edges
+        if edge.rel == "invokes" and edge.target in package_apis
+    }
+    return [
+        {"id": node.id, "kind": node.kind, "label": node.label}
+        for node in sorted(graph.nodes, key=lambda item: item.id)
+        if node.id in linked and node.kind in ("class", "module", "function", "api")
+    ][:100]
 
 
-def activity_code_entities(
-    sessions: SessionStore, session_id: str, who: Principal, package: str,
-) -> list[str]:
-    """Recorded files whose source actually imports the package."""
-    wanted = package.casefold().replace("-", "_")
-    found: set[str] = set()
-    events = sessions.events(session_id, who, limit=500).events
-    for event in events:
-        if event.type != "file.changed":
-            continue
-        path = str(event.payload.get("path") or "")
-        code = event.payload.get("code")
-        if not path or not isinstance(code, str):
-            continue
-        imports: set[str] = set()
-        try:
-            tree = ast.parse(code)
-            for item in ast.walk(tree):
-                if isinstance(item, ast.Import):
-                    imports.update(alias.name.split(".", 1)[0].casefold() for alias in item.names)
-                elif isinstance(item, ast.ImportFrom) and item.module:
-                    imports.add(item.module.split(".", 1)[0].casefold())
-        except SyntaxError:
-            for match in re.finditer(
-                r"(?:from\s+|require\s*\(\s*|import\s*\(\s*)['\"]([^'\"]+)['\"]",
-                code,
-            ):
-                imports.add(match.group(1).split("/", 1)[0].casefold())
-        if wanted in {value.replace("-", "_") for value in imports}:
-            found.add(path)
-    return sorted(found)[:100]
+def code_entities(gateway: Gateway, run_id: str | None, package: str) -> list[str]:
+    return [item["label"] for item in code_entity_refs(gateway, run_id, package)]
 
 
 def linked_code_entities(
     sessions: SessionStore, gateway: Gateway, session_id: str,
     who: Principal, run_id: str | None, package: str,
 ) -> list[str]:
-    """Code proven by either projected graph edges or recorded source imports."""
-    return sorted(set(
-        code_entities(gateway, run_id, package)
-        + activity_code_entities(sessions, session_id, who, package)
-    ))[:100]
+    """Compatibility wrapper backed exclusively by native HyperMesh evidence."""
+    del sessions, session_id, who
+    return code_entities(gateway, run_id, package)
 
 
 def attention_items(
@@ -120,10 +102,7 @@ def attention_items(
             ):
                 continue
             related = reviews.review_for_evaluation(who.subject, evaluation.id)
-            code = linked_code_entities(
-                sessions, gateway, session.id, who,
-                session.run_id, evaluation.package,
-            )
+            code = code_entities(gateway, session.run_id, evaluation.package)
             severity = evaluation.worst or (
                 "unknown" if evaluation.unavailable or evaluation.verdict == "unknown"
                 else "low"
@@ -159,101 +138,24 @@ def attention_items(
     return AttentionListOut(items=ordered[:max(1, min(limit, 500))], total=len(ordered))
 
 
-def request_graph(request: dict[str, Any], perspective: str) -> ReviewGraphOut:
-    nodes: list[GraphNode] = []
-    edges: list[GraphEdge] = []
-    relations: list[Relation] = []
-
-    def node(node_id: str, kind: str, label: str, **extra: Any) -> str:
-        if not any(existing.id == node_id for existing in nodes):
-            nodes.append(GraphNode(id=node_id, kind=kind, label=label, **extra))
-        return node_id
-
-    def edge(source: str, target: str, rel: str) -> None:
-        edges.append(GraphEdge(
-            id=f"rev-e{len(edges) + 1}", source=source, target=target, rel=rel,
-        ))
-
-    developer = node(
-        f"agent:{request['owner_subject']}", "agent", request["owner_name"],
-        owners=[request["owner_subject"]],
-    )
-    repository = node(
-        f"source:{request['repository_id']}", "source", request["repository_name"],
-        owners=[request["owner_subject"]],
-    )
-    session = node(
-        f"session:{request['session_id']}", "other", "Coding session",
-        owners=[request["owner_subject"]],
-    )
-    package = node(
-        f"package:{request['ecosystem']}:{request['package']}", "package",
-        request["package"], owners=[request["owner_subject"]],
-    )
-    version_label = request["version"] or "unpinned"
-    version = node(
-        f"version:{request['ecosystem']}:{request['package']}@{version_label}",
-        "version", version_label, owners=[request["owner_subject"]],
-    )
-    review = node(
-        f"decision:{request['id']}", "decision",
-        request["state"].replace("_", " ").title(),
-        owners=[request["owner_subject"]],
-    )
-    edge(developer, repository, "contributed_to")
-    edge(session, repository, "observed_in")
-    edge(session, version, "checked")
-    edge(package, version, "has_version")
-    edge(review, version, "reviews")
-
-    advisory_ids: list[str] = []
-    for advisory in request["advisories"]:
-        advisory_id = node(
-            f"cve:{advisory['id']}", "cve", advisory["id"],
-            severity=advisory.get("severity") or "unknown",
-            exploitable=(advisory.get("severity") in ("critical", "high")),
-        )
-        advisory_ids.append(advisory_id)
-        edge(advisory_id, version, "affects")
-
-    code_ids: list[str] = []
-    for index, label in enumerate(request["code_entities"][:50]):
-        code_id = node(
-            f"class:review:{index}:{hashlib.sha256(label.encode()).hexdigest()[:10]}",
-            "class", label, owners=[request["owner_subject"]],
-        )
-        code_ids.append(code_id)
-        edge(code_id, package, "imports")
-
-    relation_members = [session, version, review, *advisory_ids, *code_ids]
-    relations.append(Relation(
-        id=f"review:{request['id']}", kind="review",
-        members=relation_members,
-        label=f"{request['package']} review evidence",
-    ))
-    relations.append(Relation(
-        id=f"contribution:{request['id']}", kind="contribution",
-        members=[developer, repository, session],
-        label="Contributor and repository context",
-    ))
-    if request.get("analyst_subject"):
-        analyst = node(
-            f"agent:{request['analyst_subject']}", "agent",
-            request.get("analyst_name") or "Reviewer",
-        )
-        edge(analyst, review, "decided")
-        relations.append(Relation(
-            id=f"decision:{request['id']}", kind="decision",
-            members=[analyst, review, version], label="Review decision",
-        ))
-
+def request_graph(
+    gateway: Gateway, request: dict[str, Any], perspective: str,
+) -> ReviewGraphOut:
+    """Return the sealed native review evidence chain, never a UI reconstruction."""
+    run_id = request.get("run_id")
+    if not run_id or not request.get("evidence_root_ulid"):
+        raise NotFound("native review evidence is not projected yet")
+    graph = gateway.review_evidence_graph(str(run_id), str(request["id"]))
     note = (
-        "Developer scope: this graph contains only your selected review, its "
-        "repository, directly linked code entities, package, advisories, and reviewer decision."
+        "Developer scope: this native HyperMesh subgraph contains only your selected "
+        "review and the evidence frozen with it."
         if perspective == "developer"
-        else "Security-office scope: this graph contains the submitted evidence snapshot and named participants required to decide this review; unrelated developer activity is excluded."
+        else "Security-office scope: this native HyperMesh subgraph contains the "
+        "submitted review evidence and its append-only decision chain."
     )
     return ReviewGraphOut(
         request_id=request["id"], perspective=perspective,
-        graph=GraphPayload(nodes=nodes, edges=edges, relations=relations), note=note,
+        evidence_root_ulid=request.get("evidence_root_ulid"),
+        evidence_digest=request.get("evidence_digest"),
+        graph=graph, note=note,
     )

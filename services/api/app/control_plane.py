@@ -275,6 +275,9 @@ class ControlPlane:
                   recommended_version TEXT,
                   exception_expires_at INTEGER,
                   verification_evidence_id TEXT,
+                  evidence_snapshot_json TEXT NOT NULL DEFAULT '{}',
+                  evidence_digest TEXT,
+                  evidence_root_ulid TEXT,
                   version_counter INTEGER NOT NULL,
                   created_at INTEGER NOT NULL,
                   updated_at INTEGER NOT NULL,
@@ -303,8 +306,90 @@ class ControlPlane:
                 );
                 CREATE INDEX IF NOT EXISTS review_events_request
                   ON review_events(request_id, at, id);
+                CREATE TABLE IF NOT EXISTS review_projection_outbox (
+                  event_id TEXT PRIMARY KEY REFERENCES review_events(id)
+                    ON DELETE CASCADE,
+                  request_id TEXT NOT NULL REFERENCES review_requests(id)
+                    ON DELETE CASCADE,
+                  run_id TEXT NOT NULL,
+                  payload_json TEXT NOT NULL,
+                  payload_sha256 TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'pending',
+                  attempts INTEGER NOT NULL DEFAULT 0,
+                  next_attempt_at INTEGER,
+                  native_ulid TEXT,
+                  error TEXT,
+                  created_at INTEGER NOT NULL,
+                  projected_at INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS review_projection_ready
+                  ON review_projection_outbox(status,next_attempt_at,created_at);
                 """
                 )
+                existing = {
+                    str(row[1]) for row in conn.execute(
+                        "PRAGMA table_info(review_requests)"
+                    ).fetchall()
+                }
+                for column, ddl in (
+                    ("evidence_snapshot_json",
+                     "ALTER TABLE review_requests ADD COLUMN evidence_snapshot_json TEXT NOT NULL DEFAULT '{}'"),
+                    ("evidence_digest",
+                     "ALTER TABLE review_requests ADD COLUMN evidence_digest TEXT"),
+                    ("evidence_root_ulid",
+                     "ALTER TABLE review_requests ADD COLUMN evidence_root_ulid TEXT"),
+                ):
+                    if column not in existing:
+                        conn.execute(ddl)
+                legacy_reviews = conn.execute(
+                    "SELECT * FROM review_requests WHERE evidence_digest IS NULL"
+                ).fetchall()
+                for review in legacy_reviews:
+                    frozen = {
+                        "session_id": review["session_id"],
+                        "repository_id": review["repository_id"],
+                        "policy_evaluation_id": review["policy_evaluation_id"],
+                        "package": review["package"],
+                        "version": review["package_version"],
+                        "ecosystem": review["ecosystem"],
+                        "advisory_ids": [
+                            item["id"] for item in _loads(
+                                review["advisories_json"], [],
+                            ) if item.get("id")
+                        ],
+                        # Historical labels cannot be promoted to native entity
+                        # IDs without inventing a relationship that was not stored.
+                        "code_entity_ids": [],
+                    }
+                    frozen_json = _json(frozen)
+                    digest = hashlib.sha256(frozen_json.encode()).hexdigest()
+                    conn.execute(
+                        "UPDATE review_requests SET evidence_snapshot_json=?, "
+                        "evidence_digest=? WHERE id=?",
+                        (frozen_json, digest, review["id"]),
+                    )
+                    if not review["run_id"]:
+                        continue
+                    events = conn.execute(
+                        "SELECT * FROM review_events WHERE request_id=? ORDER BY at,id",
+                        (review["id"],),
+                    ).fetchall()
+                    for event in events:
+                        payload = {
+                            "request_id": review["id"], "event_id": event["id"],
+                            "action": event["action"], "to_state": event["to_state"],
+                            "actor": event["actor"],
+                            "actor_role": event["actor_role"], "at": event["at"],
+                            "snapshot": frozen, "evidence_digest": digest,
+                        }
+                        canonical = _json(payload)
+                        conn.execute(
+                            """INSERT OR IGNORE INTO review_projection_outbox
+                            (event_id,request_id,run_id,payload_json,payload_sha256,created_at)
+                            VALUES (?,?,?,?,?,?)""",
+                            (event["id"], review["id"], review["run_id"], canonical,
+                             hashlib.sha256(canonical.encode()).hexdigest(), event["at"]),
+                        )
             finally:
                 conn.close()
 
@@ -631,6 +716,22 @@ class ControlPlane:
         return body
 
     @staticmethod
+    def _enqueue_review_projection(
+        conn: sqlite3.Connection, *, event_id: str, request_id: str,
+        run_id: str | None, payload: dict[str, Any], at: int,
+    ) -> str:
+        canonical = _json(payload)
+        digest = hashlib.sha256(canonical.encode()).hexdigest()
+        if run_id:
+            conn.execute(
+                """INSERT INTO review_projection_outbox
+                (event_id,request_id,run_id,payload_json,payload_sha256,created_at)
+                VALUES (?,?,?,?,?,?)""",
+                (event_id, request_id, run_id, canonical, digest, at),
+            )
+        return digest
+
+    @staticmethod
     def _review(row: sqlite3.Row, events: list[sqlite3.Row] | None = None) -> dict[str, Any]:
         body = dict(row)
         body["version"] = body.pop("package_version")
@@ -638,6 +739,9 @@ class ControlPlane:
         body["advisories"] = _loads(body.pop("advisories_json"), [])
         body["code_entities"] = _loads(body.pop("affected_files_json"), [])
         body["reasons"] = _loads(body.pop("reasons_json"), [])
+        body["evidence_snapshot"] = _loads(
+            body.pop("evidence_snapshot_json", None), {},
+        )
         severity_weight = {
             "critical": 50, "high": 38, "medium": 24, "low": 12,
             "unknown": 18,
@@ -674,6 +778,18 @@ class ControlPlane:
     ) -> dict[str, Any]:
         now = _now()
         request_id, event_id = _id("rev"), _id("rve")
+        frozen = {
+            "session_id": snapshot["session_id"],
+            "repository_id": snapshot["repository_id"],
+            "policy_evaluation_id": snapshot["policy_evaluation_id"],
+            "package": snapshot["package"],
+            "version": snapshot.get("version", ""),
+            "ecosystem": snapshot.get("ecosystem", "PyPI"),
+            "advisory_ids": [item["id"] for item in snapshot.get("advisories", [])],
+            "code_entity_ids": [item["id"] for item in snapshot.get("code_entity_refs", [])],
+        }
+        frozen_json = _json(frozen)
+        evidence_digest = hashlib.sha256(frozen_json.encode()).hexdigest()
         with self._write() as conn:
             existing = conn.execute(
                 "SELECT * FROM review_requests WHERE owner_subject=? "
@@ -687,8 +803,9 @@ class ControlPlane:
                   id,owner_subject,owner_name,session_id,run_id,repository_id,
                   repository_name,policy_evaluation_id,package,package_version,
                   ecosystem,verdict,severity,advisories_json,affected_files_json,
-                  reasons_json,kind,rationale,state,version_counter,created_at,updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'waiting',1,?,?)""",
+                  reasons_json,kind,rationale,evidence_snapshot_json,evidence_digest,
+                  state,version_counter,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'waiting',1,?,?)""",
                 (
                     request_id, actor, actor_name, snapshot["session_id"],
                     snapshot.get("run_id"), snapshot["repository_id"],
@@ -698,7 +815,8 @@ class ControlPlane:
                     snapshot.get("severity") or "unknown",
                     _json(snapshot.get("advisories", [])),
                     _json(snapshot.get("code_entities", [])),
-                    _json(snapshot.get("reasons", [])), kind, rationale, now, now,
+                    _json(snapshot.get("reasons", [])), kind, rationale,
+                    frozen_json, evidence_digest, now, now,
                 ),
             )
             conn.execute(
@@ -710,6 +828,16 @@ class ControlPlane:
                     event_id, request_id, actor, actor_name, "developer", rationale,
                     _json([snapshot["policy_evaluation_id"]]), now,
                 ),
+            )
+            self._enqueue_review_projection(
+                conn, event_id=event_id, request_id=request_id,
+                run_id=snapshot.get("run_id"), at=now,
+                payload={
+                    "request_id": request_id, "event_id": event_id,
+                    "action": "review.requested", "to_state": "waiting",
+                    "actor": actor, "actor_role": "developer", "at": now,
+                    "snapshot": frozen, "evidence_digest": evidence_digest,
+                },
             )
             row = conn.execute(
                 "SELECT * FROM review_requests WHERE id=?", (request_id,),
@@ -788,6 +916,7 @@ class ControlPlane:
             if current["state"] in ("verified", "false_positive", "not_approved"):
                 raise StoreError("review request is already terminal")
             target = states[decision]
+            event_id = _id("rve")
             conn.execute(
                 """UPDATE review_requests SET state=?,analyst_subject=?,
                 analyst_name=?,decision_rationale=?,recommended_version=?,
@@ -804,9 +933,21 @@ class ControlPlane:
                  to_state,rationale,evidence_ids,at)
                 VALUES (?,?,?,?,?,?,?,?,?,'[]',?)""",
                 (
-                    _id("rve"), request_id, actor, actor_name, actor_role,
+                    event_id, request_id, actor, actor_name, actor_role,
                     f"review.{decision}", current["state"], target, rationale, now,
                 ),
+            )
+            snapshot = _loads(current["evidence_snapshot_json"], {})
+            self._enqueue_review_projection(
+                conn, event_id=event_id, request_id=request_id,
+                run_id=current["run_id"], at=now,
+                payload={
+                    "request_id": request_id, "event_id": event_id,
+                    "action": f"review.{decision}", "to_state": target,
+                    "actor": actor, "actor_role": actor_role, "at": now,
+                    "snapshot": snapshot,
+                    "evidence_digest": current["evidence_digest"],
+                },
             )
         return self.review_request(request_id)
 
@@ -829,6 +970,7 @@ class ControlPlane:
                 recommended = row["recommended_version"]
                 if recommended and recommended != version:
                     continue
+                event_id = _id("rve")
                 conn.execute(
                     """UPDATE review_requests SET state='verified',
                     verification_evidence_id=?,version_counter=version_counter+1,
@@ -841,14 +983,107 @@ class ControlPlane:
                      to_state,rationale,evidence_ids,at)
                     VALUES (?,?,?,?,?,'review.verified',?,'verified',?,?,?)""",
                     (
-                        _id("rve"), row["id"], "meshagent", "MeshAgent",
+                        event_id, row["id"], "meshagent", "MeshAgent",
                         "system", row["state"],
                         f"A clean check confirmed {package}@{version}.",
                         _json([evidence_id]), now,
                     ),
                 )
+                snapshot = _loads(row["evidence_snapshot_json"], {})
+                snapshot["verified_package"] = package
+                snapshot["verified_version"] = version
+                snapshot["verification_evidence_id"] = evidence_id
+                self._enqueue_review_projection(
+                    conn, event_id=event_id, request_id=row["id"],
+                    run_id=row["run_id"], at=now,
+                    payload={
+                        "request_id": row["id"], "event_id": event_id,
+                        "action": "review.verified", "to_state": "verified",
+                        "actor": "meshagent", "actor_role": "system", "at": now,
+                        "snapshot": snapshot,
+                        "evidence_digest": row["evidence_digest"],
+                    },
+                )
                 verified.append(row["id"])
         return verified
+
+    def reset_interrupted_review_projections(self) -> int:
+        with self._write() as conn:
+            result = conn.execute(
+                "UPDATE review_projection_outbox SET status='pending', "
+                "error='projection interrupted before acknowledgement', "
+                "next_attempt_at=NULL WHERE status='projecting'"
+            )
+            return int(result.rowcount)
+
+    def recoverable_review_projections(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM review_projection_outbox WHERE "
+                "status IN ('pending','failed') AND "
+                "(next_attempt_at IS NULL OR next_attempt_at<=?) "
+                "ORDER BY created_at,event_id LIMIT ?",
+                (_now(), max(1, min(limit, 500))),
+            ).fetchall()
+        values: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["payload"] = _loads(item.pop("payload_json"), {})
+            values.append(item)
+        return values
+
+    def mark_review_projection_started(self, event_id: str) -> None:
+        with self._write() as conn:
+            conn.execute(
+                "UPDATE review_projection_outbox SET status='projecting', "
+                "attempts=attempts+1,error=NULL,next_attempt_at=NULL "
+                "WHERE event_id=? AND status IN ('pending','failed')",
+                (event_id,),
+            )
+
+    def mark_review_projection_complete(self, event_id: str, native_ulid: str) -> None:
+        now = _now()
+        with self._write() as conn:
+            row = conn.execute(
+                "SELECT request_id,payload_json FROM review_projection_outbox "
+                "WHERE event_id=?", (event_id,),
+            ).fetchone()
+            if row is None:
+                raise Missing("unknown review projection")
+            conn.execute(
+                "UPDATE review_projection_outbox SET status='projected', "
+                "native_ulid=?,projected_at=?,error=NULL,next_attempt_at=NULL "
+                "WHERE event_id=?", (native_ulid, now, event_id),
+            )
+            payload = _loads(row["payload_json"], {})
+            if payload.get("action") == "review.requested":
+                conn.execute(
+                    "UPDATE review_requests SET evidence_root_ulid=? WHERE id=?",
+                    (native_ulid, row["request_id"]),
+                )
+
+    def mark_review_projection_failed(self, event_id: str, error: str) -> None:
+        with self._write() as conn:
+            row = conn.execute(
+                "SELECT attempts FROM review_projection_outbox WHERE event_id=?",
+                (event_id,),
+            ).fetchone()
+            attempts = int(row["attempts"]) if row is not None else 1
+            delay = min(300, 2 ** min(max(attempts - 1, 0), 8))
+            conn.execute(
+                "UPDATE review_projection_outbox SET status='failed',error=?, "
+                "next_attempt_at=? WHERE event_id=?",
+                (error[:512], _now() + delay, event_id),
+            )
+
+    def review_projection_ulids(self, request_id: str) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT native_ulid FROM review_projection_outbox "
+                "WHERE request_id=? AND status='projected' AND native_ulid IS NOT NULL "
+                "ORDER BY created_at,event_id", (request_id,),
+            ).fetchall()
+        return [str(row["native_ulid"]) for row in rows]
 
     def create_report(self, *, title: str, period_start: int, period_end: int,
                       requested_by: str, manifest: dict[str, Any]) -> dict[str, Any]:

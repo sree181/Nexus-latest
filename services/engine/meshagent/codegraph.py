@@ -47,6 +47,16 @@ P_CVE = "cve:"
 P_ENTRY = "entry:"
 P_TOOL = "tool:"
 P_ACTIVITY = "activity:"
+P_FUNCTION = "function:"
+P_API = "api:"
+P_FEED = "feed:"
+P_FIX = "fix:"
+P_POLICY = "policy:"
+P_REVIEW = "review:"
+P_REVIEW_EVENT = "review-event:"
+P_SESSION = "session:"
+P_REPOSITORY = "repository:"
+P_ACTOR = "actor:"
 
 
 # Dangerous call sites, keyed by the resolved dotted call name. Each maps to
@@ -99,6 +109,23 @@ class ExtractedClass:
     bases: list[str]
     sinks: list[SinkFinding] = field(default_factory=list)
     taints: list["TaintPath"] = field(default_factory=list)
+
+
+@dataclass
+class ExtractedFunction:
+    """One function or method and the imported package APIs it invokes."""
+
+    name: str
+    invocations: list[tuple[str, str]]
+
+
+@dataclass
+class ExtractedCode:
+    """Deterministic native relationships extracted from one Python module."""
+
+    module_packages: list[str]
+    classes: list[ExtractedClass]
+    functions: list[ExtractedFunction]
 
 
 def _call_alias_map(tree: ast.AST) -> dict[str, str]:
@@ -391,32 +418,120 @@ def _root_names(node: ast.AST) -> set[str]:
     return names
 
 
+def _declared_packages(tree: ast.AST) -> list[str]:
+    packages: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            packages.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            packages.add(node.module.split(".", 1)[0])
+    return sorted(packages)
+
+
+def _root_names_in_class(node: ast.ClassDef) -> set[str]:
+    """Names used by this class while excluding nested class scopes."""
+    names: set[str] = set()
+
+    class Visitor(ast.NodeVisitor):
+        def visit_ClassDef(self, child: ast.ClassDef) -> None:  # noqa: N802
+            if child is node:
+                self.generic_visit(child)
+
+        def visit_Name(self, child: ast.Name) -> None:  # noqa: N802
+            names.add(child.id)
+
+        def visit_Attribute(self, child: ast.Attribute) -> None:  # noqa: N802
+            base: ast.AST = child
+            while isinstance(base, ast.Attribute):
+                base = base.value
+            if isinstance(base, ast.Name):
+                names.add(base.id)
+            self.generic_visit(child)
+
+    Visitor().visit(node)
+    return names
+
+
+def _call_root(node: ast.Call) -> str | None:
+    func = node.func
+    while isinstance(func, ast.Attribute):
+        func = func.value
+    return func.id if isinstance(func, ast.Name) else None
+
+
+def _function_invocations(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    call_aliases: dict[str, str], aliases: dict[str, str],
+) -> list[tuple[str, str]]:
+    found: set[tuple[str, str]] = set()
+
+    class Visitor(ast.NodeVisitor):
+        def visit_FunctionDef(self, child: ast.FunctionDef) -> None:  # noqa: N802
+            if child is node:
+                self.generic_visit(child)
+
+        def visit_AsyncFunctionDef(self, child: ast.AsyncFunctionDef) -> None:  # noqa: N802
+            if child is node:
+                self.generic_visit(child)
+
+        def visit_ClassDef(self, child: ast.ClassDef) -> None:  # noqa: N802
+            return
+
+        def visit_Call(self, child: ast.Call) -> None:  # noqa: N802
+            root = _call_root(child)
+            if root is not None and root in call_aliases:
+                api = _call_name(child, call_aliases)
+                package = aliases.get(root)
+                if api and package:
+                    found.add((package, api))
+            self.generic_visit(child)
+
+    Visitor().visit(node)
+    return sorted(found)
+
+
+def extract_code_relationships(source: str) -> ExtractedCode:
+    """Return exact Python module, class, and function package relations."""
+    tree = ast.parse(source)
+    aliases = _alias_map(tree)
+    call_aliases = _call_alias_map(tree)
+    classes: list[ExtractedClass] = []
+    functions: list[ExtractedFunction] = []
+
+    def walk(body: list[ast.stmt], prefix: str = "") -> None:
+        for node in body:
+            if isinstance(node, ast.ClassDef):
+                refs = _root_names_in_class(node)
+                classes.append(ExtractedClass(
+                    name=node.name,
+                    packages=sorted({aliases[name] for name in refs if name in aliases}),
+                    bases=[ast.unparse(base) if hasattr(ast, "unparse") else ""
+                           for base in node.bases],
+                    sinks=_detect_sinks(node, call_aliases),
+                    taints=_detect_taint(node, call_aliases),
+                ))
+                walk(node.body, f"{prefix}{node.name}.")
+            elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                functions.append(ExtractedFunction(
+                    name=f"{prefix}{node.name}",
+                    invocations=_function_invocations(node, call_aliases, aliases),
+                ))
+
+    walk(tree.body)
+    return ExtractedCode(
+        module_packages=_declared_packages(tree),
+        classes=classes,
+        functions=functions,
+    )
+
+
 def extract_code_entities(source: str) -> list[ExtractedClass]:
     """Parse *source* and return each class with the packages it uses.
 
     Deterministic: this is the mechanical half of code provenance, so it
     never guesses. A syntax error raises, by design — you cannot capture the
     provenance of code that does not parse."""
-    tree = ast.parse(source)
-    aliases = _alias_map(tree)
-    call_aliases = _call_alias_map(tree)
-    out: list[ExtractedClass] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        refs = _root_names(node)
-        packages = sorted({
-            aliases[r] for r in refs if r in aliases
-        })
-        bases = []
-        for b in node.bases:
-            bases.append(ast.unparse(b) if hasattr(ast, "unparse") else "")
-        out.append(ExtractedClass(
-            name=node.name, packages=packages, bases=bases,
-            sinks=_detect_sinks(node, call_aliases),
-            taints=_detect_taint(node, call_aliases),
-        ))
-    return out
+    return extract_code_relationships(source).classes
 
 
 @dataclass
@@ -586,14 +701,56 @@ class CodeGraphRecorder:
         hyperedge over the class and the packages it imports. The module is
         kept verbatim so the code can be read back; the classes derive from
         it and from *decision_id*. Returns the ULIDs of the class edges."""
-        self.record_module(
+        module_ulid = self.record_module(
             source_code, decision_id=decision_id, module=module,
             external_event_id=external_event_id,
         )
         decision_ulid = self._decisions[decision_id]
+        extracted = extract_code_relationships(source_code)
+
+        for import_index, package in enumerate(extracted.module_packages):
+            component = f"module-import:{import_index}"
+            if self._projected(external_event_id, component):
+                continue
+            members = [f"{P_MODULE}{module}", f"{P_PACKAGE}{package}"]
+            if marker := self._projection_subject(external_event_id, component):
+                members.append(marker)
+            self.memory.write(
+                Kind.FACT, members,
+                origin=Origin.AGENT, status=Status.VERIFIED,
+                source="agent:code-analysis",
+                payload={
+                    "type": "module_import", "module": module,
+                    "packages": [package],
+                    "external_event_id": external_event_id,
+                },
+                derived_from=[module_ulid],
+            )
+
+        for function_index, function in enumerate(extracted.functions):
+            for invocation_index, (package, api) in enumerate(function.invocations):
+                component = f"function:{function_index}:invoke:{invocation_index}"
+                if self._projected(external_event_id, component):
+                    continue
+                function_id = f"{P_FUNCTION}{module}:{function.name}"
+                members = [function_id, f"{P_API}{api}", f"{P_PACKAGE}{package}"]
+                if marker := self._projection_subject(external_event_id, component):
+                    members.append(marker)
+                self.memory.write(
+                    Kind.FACT, members,
+                    origin=Origin.AGENT, status=Status.VERIFIED,
+                    source="agent:code-analysis",
+                    payload={
+                        "type": "invocation", "module": module,
+                        "function": function.name, "api": api,
+                        "package": package,
+                        "external_event_id": external_event_id,
+                    },
+                    derived_from=[module_ulid],
+                )
 
         written: list[str] = []
-        for class_index, cls in enumerate(extract_code_entities(source_code)):
+        for class_index, cls in enumerate(extracted.classes):
             component = f"class:{class_index}"
             members = [f"{P_CLASS}{cls.name}"]
             members += [f"{P_PACKAGE}{p}" for p in cls.packages]
@@ -710,15 +867,26 @@ class CodeGraphRecorder:
     def record_cve(
         self, cve_id: str, *, affects: list[tuple[str, str]],
         severity: str, summary: str, cwe: str | None = None,
-        feed: str = "sample",
+        feed: str = "sample", ecosystem: str | None = None,
+        fixed_versions: list[str] | None = None,
+        references: list[str] | None = None,
+        external_event_id: str | None = None,
     ) -> str:
         """An advisory as an n-ary edge {cve, affected version(s), cwe?}.
         `feed` is recorded so the UI can label sample data honestly; a real
         deployment sets feed='osv' after the OSV join."""
-        members = [f"{P_CVE}{cve_id}"]
+        component = f"policy-cve:{cve_id}"
+        if existing := self._projected(external_event_id, component):
+            return existing
+        fixed = sorted(set(fixed_versions or []))
+        refs = sorted(set(references or []))
+        members = [f"{P_CVE}{cve_id}", f"{P_FEED}{feed}"]
         members += [f"{P_VERSION}{p}@{v}" for p, v in affects]
+        members += [f"{P_FIX}{p}@{v}" for p, _ in affects for v in fixed]
         if cwe:
             members.append(f"{P_CWE}{cwe}")
+        if marker := self._projection_subject(external_event_id, component):
+            members.append(marker)
         return self.memory.write(
             Kind.FACT, members,
             origin=Origin.EXTERNAL, status=Status.UNVERIFIED,
@@ -727,7 +895,108 @@ class CodeGraphRecorder:
                 "type": "cve", "id": cve_id, "severity": severity,
                 "summary": summary, "cwe": cwe, "feed": feed,
                 "affects": [f"{p}@{v}" for p, v in affects],
+                "ecosystem": ecosystem, "fixed_versions": fixed,
+                "references": refs, "external_event_id": external_event_id,
             },
+        )
+
+    def record_policy_evaluation(
+        self, *, evaluation_id: str, session_id: str, repository_id: str,
+        package: str, version: str, ecosystem: str, verdict: str,
+        reasons: list[str], policy: str, advisories: list[dict[str, Any]],
+        unavailable: str | None = None, external_event_id: str | None = None,
+    ) -> list[str]:
+        """Record a package policy observation without asserting installation."""
+        written: list[str] = []
+        advisory_ulids: list[str] = []
+        for advisory in advisories:
+            ulid = self.record_cve(
+                str(advisory["id"]), affects=[(package, version)],
+                severity=str(advisory.get("severity") or "unknown"),
+                summary=str(advisory.get("summary") or ""),
+                cwe=advisory.get("cwe"), feed="osv", ecosystem=ecosystem,
+                fixed_versions=list(advisory.get("fixed_versions") or []),
+                references=list(advisory.get("references") or []),
+                external_event_id=external_event_id,
+            )
+            advisory_ulids.append(ulid)
+            written.append(ulid)
+
+        component = "policy-evaluation"
+        if existing := self._projected(external_event_id, component):
+            written.append(existing)
+            return written
+        members = [
+            f"{P_POLICY}{evaluation_id}", f"{P_SESSION}{session_id}",
+            f"{P_REPOSITORY}{repository_id}", f"{P_PACKAGE}{package}",
+        ]
+        if version:
+            members.append(f"{P_VERSION}{package}@{version}")
+        members += [f"{P_CVE}{item['id']}" for item in advisories]
+        if marker := self._projection_subject(external_event_id, component):
+            members.append(marker)
+        policy_ulid = self.memory.write(
+            Kind.FACT, members,
+            origin=Origin.AGENT, status=Status.VERIFIED,
+            source="agent:package-policy",
+            payload={
+                "type": "policy_evaluation", "evaluation_id": evaluation_id,
+                "session_id": session_id, "repository_id": repository_id,
+                "package": package, "version": version,
+                "ecosystem": ecosystem, "verdict": verdict,
+                "reasons": reasons, "policy": policy,
+                "advisory_ids": [str(item["id"]) for item in advisories],
+                "unavailable": unavailable,
+                "external_event_id": external_event_id,
+            },
+            derived_from=advisory_ulids or None,
+        )
+        written.append(policy_ulid)
+        return written
+
+    def record_review_event(
+        self, *, request_id: str, event_id: str, action: str,
+        to_state: str, actor: str, actor_role: str, occurred_at: int,
+        canonical_sha256: str, snapshot: dict[str, Any],
+        parent_ulids: list[str] | None = None,
+    ) -> str:
+        """Append one immutable review episode under a stable projection key."""
+        component = "review-event"
+        if existing := self._projected(event_id, component):
+            return existing
+        members = [
+            f"{P_REVIEW}{request_id}", f"{P_REVIEW_EVENT}{event_id}",
+            f"{P_ACTOR}{actor}",
+        ]
+        for key, prefix in (
+            ("session_id", P_SESSION), ("repository_id", P_REPOSITORY),
+            ("policy_evaluation_id", P_POLICY),
+        ):
+            if snapshot.get(key):
+                members.append(f"{prefix}{snapshot[key]}")
+        package = str(snapshot.get("package") or "")
+        version = str(snapshot.get("version") or "")
+        if package:
+            members.append(f"{P_PACKAGE}{package}")
+        if package and version:
+            members.append(f"{P_VERSION}{package}@{version}")
+        members += [str(value) for value in (snapshot.get("code_entity_ids") or [])[:24]]
+        members += [
+            f"{P_CVE}{value}" for value in (snapshot.get("advisory_ids") or [])[:24]
+        ]
+        if marker := self._projection_subject(event_id, component):
+            members.append(marker)
+        return self.memory.write(
+            Kind.EPISODE, list(dict.fromkeys(members)),
+            origin=Origin.AGENT, status=Status.VERIFIED,
+            source="agent:review-workflow", event_ts=occurred_at,
+            payload={
+                "type": "review_event", "request_id": request_id,
+                "event_id": event_id, "action": action,
+                "to_state": to_state, "actor_role": actor_role,
+                "canonical_sha256": canonical_sha256,
+            },
+            derived_from=parent_ulids or None,
         )
 
     # ── reachability: taint findings from a SARIF scan ────────────────────
@@ -796,10 +1065,14 @@ class CodeGraphRecorder:
 def _node_kind(name: str) -> str:
     for pfx, kind in (
         (P_SOURCE, "source"), (P_DECISION, "decision"),
+        (P_MODULE, "module"), (P_FUNCTION, "function"), (P_API, "api"),
         (P_CLASS, "class"), (P_PACKAGE, "package"),
         (P_SINK, "sink"), (P_CWE, "cwe"), (P_CAP, "capability"),
         (P_VERSION, "version"), (P_LICENSE, "license"), (P_CVE, "cve"),
-        (P_ENTRY, "entry"),
+        (P_ENTRY, "entry"), (P_FEED, "source"), (P_FIX, "version"),
+        (P_POLICY, "policy"), (P_REVIEW, "review"),
+        (P_REVIEW_EVENT, "review_event"), (P_SESSION, "session"),
+        (P_REPOSITORY, "repository"), (P_ACTOR, "agent"),
     ):
         if name.startswith(pfx):
             return kind
@@ -813,6 +1086,9 @@ def export_graph(memory: MemoryStore) -> dict[str, Any]:
     verbs = Verbs(memory)
     nodes: dict[str, dict[str, Any]] = {}
     imports: list[dict[str, str]] = []
+    module_imports: list[dict[str, str]] = []
+    invokes: list[dict[str, str]] = []
+    api_of: list[dict[str, str]] = []
     derives: list[dict[str, str]] = []
     security: list[dict[str, str]] = []
     seen_edges: set[str] = set()
@@ -823,7 +1099,9 @@ def export_graph(memory: MemoryStore) -> dict[str, Any]:
 
     sbom: list[dict[str, str]] = []
     taint: list[dict[str, Any]] = []
-    ctx = {"imports": imports, "derives": derives, "security": security,
+    ctx = {"imports": imports, "module_imports": module_imports,
+           "invokes": invokes, "api_of": api_of,
+           "derives": derives, "security": security,
            "sbom": sbom, "taint": taint}
 
     # discover code entities via the store's registry (one id space)
@@ -838,8 +1116,9 @@ def export_graph(memory: MemoryStore) -> dict[str, Any]:
                 continue
             ctype = m.content.get("type")
             if ctype not in (
-                "source", "decision", "class", "finding", "version", "cve",
-                "taint",
+                "source", "decision", "module", "module_import", "class",
+                "invocation", "finding", "version", "cve", "taint",
+                "policy_evaluation", "review_event",
             ):
                 continue
             seen_edges.add(ulid)
@@ -848,6 +1127,9 @@ def export_graph(memory: MemoryStore) -> dict[str, Any]:
     return {
         "nodes": list(nodes.values()),
         "imports": imports,
+        "module_imports": module_imports,
+        "invokes": invokes,
+        "api_of": api_of,
         "derives": derives,
         "security": security,
         "sbom": ctx["sbom"],
@@ -905,6 +1187,38 @@ def _emit_edge(m, ulid, memory, verbs, ensure_node, ctx) -> None:
             vsub = f"{P_VERSION}{v}"
             ensure_node(vsub)
             ctx["sbom"].append({"source": cve, "target": vsub, "rel": "affects"})
+        feed = f"{P_FEED}{c.get('feed') or 'unknown'}"
+        ensure_node(feed, statement=(c.get("feed") or "unknown").upper())
+        ctx["sbom"].append({"source": cve, "target": feed, "rel": "reported_by"})
+        for affected in c.get("affects", []):
+            package = affected.split("@", 1)[0]
+            for version in c.get("fixed_versions") or []:
+                fix = f"{P_FIX}{package}@{version}"
+                ensure_node(fix, statement=f"{package}@{version}")
+                ctx["sbom"].append({"source": cve, "target": fix, "rel": "fixed_by"})
+        return
+
+    if ctype == "module_import":
+        module = f"{P_MODULE}{m.content['module']}"
+        ensure_node(module, statement=m.content["module"])
+        for package in m.content.get("packages") or []:
+            pkg = f"{P_PACKAGE}{package}"
+            ensure_node(pkg)
+            ctx["module_imports"].append(
+                {"source": module, "target": pkg, "rel": "imports"})
+        return
+
+    if ctype == "invocation":
+        function = f"{P_FUNCTION}{m.content['module']}:{m.content['function']}"
+        api = f"{P_API}{m.content['api']}"
+        package = f"{P_PACKAGE}{m.content['package']}"
+        ensure_node(function, statement=m.content["function"])
+        ensure_node(api, statement=m.content["api"])
+        ensure_node(package)
+        ctx["invokes"].append(
+            {"source": function, "target": api, "rel": "invokes"})
+        ctx["api_of"].append(
+            {"source": api, "target": package, "rel": "api_of"})
         return
 
     if ctype == "taint":

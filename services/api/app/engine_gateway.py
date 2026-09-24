@@ -74,6 +74,8 @@ logger = logging.getLogger(__name__)
 _ALLOWED_KINDS = {
     "source", "decision", "class", "package", "version", "license",
     "sink", "cwe", "cve", "entry", "agent", "capability", "other",
+    "module", "function", "api", "policy", "review", "review_event",
+    "session", "repository",
 }
 
 # The record type that DEFINES each kind of entity, so a why-chain starts from
@@ -165,6 +167,9 @@ def _export_to_payload(g: dict[str, Any]) -> GraphPayload:
 
     add(g.get("derives", []), "derived")
     add(g.get("imports", []), "imports")
+    add(g.get("module_imports", []), "imports")
+    add(g.get("invokes", []), "invokes")
+    add(g.get("api_of", []), "api_of")
     add(g.get("security", []), "calls")
     add(g.get("sbom", []), "affects")
     add(g.get("taint", []), "reaches")
@@ -355,6 +360,133 @@ class EngineGateway(Gateway):
         payload = _export_to_payload(self._export_graph(store))
         payload.relations = self._relations(store, {n.id for n in payload.nodes})
         return payload
+
+    @_serialized
+    def project_policy_evaluation(
+        self, run_id: str, *, event_id: str, session_id: str,
+        repository_id: str, evaluation: dict,
+    ) -> list[str]:
+        rec = self._recorder(self._run(run_id))
+        return rec.record_policy_evaluation(
+            evaluation_id=str(evaluation.get("id") or event_id),
+            session_id=session_id, repository_id=repository_id,
+            package=str(evaluation["package"]),
+            version=str(evaluation.get("version") or ""),
+            ecosystem=str(evaluation.get("ecosystem") or "PyPI"),
+            verdict=str(evaluation["verdict"]),
+            reasons=list(evaluation.get("reasons") or []),
+            policy=str(evaluation.get("policy") or ""),
+            advisories=list(evaluation.get("advisories") or []),
+            unavailable=evaluation.get("unavailable"),
+            external_event_id=event_id,
+        )
+
+    @_serialized
+    def project_review_event(self, run_id: str, *, event: dict) -> str:
+        run = self._run(run_id)
+        rec = self._recorder(run)
+        snapshot = dict(event.get("snapshot") or {})
+        parents: list[str] = []
+        request_id = str(event["request_id"])
+        review_subject = f"review:{request_id}"
+        parents.extend(
+            ulid for ulid in run.store.find_by_subject(review_subject)
+            if (record := run.store.get(ulid)) is not None
+            and _ctype(record) == "review_event" and not record.tombstoned
+        )
+        if not parents and snapshot.get("policy_evaluation_id"):
+            parents.extend(
+                ulid for ulid in run.store.find_by_subject(
+                    f"policy:{snapshot['policy_evaluation_id']}"
+                )
+                if (record := run.store.get(ulid)) is not None
+                and not record.tombstoned
+            )
+            for subject in [
+                *list(snapshot.get("code_entity_ids") or []),
+                *[f"cve:{item}" for item in snapshot.get("advisory_ids") or []],
+            ]:
+                parents.extend(
+                    ulid for ulid in run.store.find_by_subject(subject)
+                    if (record := run.store.get(ulid)) is not None
+                    and not record.tombstoned
+                )
+        return rec.record_review_event(
+            request_id=request_id, event_id=str(event["event_id"]),
+            action=str(event["action"]), to_state=str(event["to_state"]),
+            actor=str(event["actor"]), actor_role=str(event["actor_role"]),
+            occurred_at=int(event["at"]),
+            canonical_sha256=str(event["canonical_sha256"]),
+            snapshot=snapshot,
+            parent_ulids=list(dict.fromkeys(parents))[:50] or None,
+        )
+
+    @_serialized
+    def review_evidence_graph(self, run_id: str, request_id: str) -> GraphPayload:
+        store = self._run(run_id).store
+        roots = [
+            ulid for ulid in store.find_by_subject(f"review:{request_id}")
+            if (record := store.get(ulid)) is not None
+            and _ctype(record) == "review_event"
+        ]
+        if not roots:
+            raise NotFound(f"native review evidence unavailable for {request_id}")
+
+        selected: set[str] = set(roots)
+
+        def collect(node: dict[str, Any]) -> None:
+            selected.add(str(node["ulid"]))
+            for parent in node.get("parents") or []:
+                collect(parent)
+
+        for root in roots:
+            collect(store.why(root, max_depth=8))
+        records = [store.get(ulid) for ulid in selected]
+        records = [record for record in records if record is not None]
+        members = {
+            member for record in records for member in record.member_names
+            if not member.startswith(("edge:", "activity:"))
+        }
+
+        full = _export_to_payload(self._export_graph(store))
+        nodes = {node.id: node for node in full.nodes if node.id in members}
+        for member in sorted(members):
+            if member not in nodes:
+                nodes[member] = GraphNode(
+                    id=member, kind=(kind if (kind := engine_seed.entity_kind(member))
+                                     in _ALLOWED_KINDS else "other"),
+                    label=_label(member),
+                )
+        edges = [edge for edge in full.edges
+                 if edge.source in members and edge.target in members]
+        for record in records:
+            if _ctype(record) != "review_event":
+                continue
+            content = record.content or {}
+            event_node = f"review-event:{content.get('event_id')}"
+            review_node = f"review:{request_id}"
+            actor_nodes = [m for m in record.member_names if m.startswith("actor:")]
+            edges.append(GraphEdge(
+                id=f"{record.ulid}:review", source=event_node,
+                target=review_node, rel=str(content.get("action") or "reviews"),
+            ))
+            for actor in actor_nodes:
+                edges.append(GraphEdge(
+                    id=f"{record.ulid}:actor", source=actor,
+                    target=event_node, rel="attests",
+                ))
+        relations = [
+            Relation(
+                id=record.ulid, kind=_ctype(record) or "memory",
+                members=[m for m in record.member_names
+                         if not m.startswith(("edge:", "activity:"))],
+                label=_detail(record), tombstoned=record.tombstoned,
+            )
+            for record in records
+        ]
+        return GraphPayload(
+            nodes=list(nodes.values()), edges=edges, relations=relations,
+        )
 
     @staticmethod
     def _relations(store: Any, drawn: set[str]) -> list[Relation]:
@@ -1621,7 +1753,7 @@ def _ctype(rec: Any) -> str | None:
 def _members(store: Any, ulid: str) -> list[str] | None:
     rec = store.get(ulid)
     return None if rec is None else [m for m in rec.member_names
-                                     if not m.startswith("edge:")]
+                                     if not m.startswith(("edge:", "activity:"))]
 
 
 def _entity_of(rec: Any) -> str | None:
@@ -1650,10 +1782,14 @@ _STEP_LABEL = {
     "source": "Read a source",
     "decision": "Made a decision",
     "module": "Submitted a module",
+    "module_import": "Mapped module imports",
+    "invocation": "Mapped a package call",
     "class": "Wrote code",
     "finding": "Found a dangerous call",
     "version": "Recorded a dependency",
     "cve": "Joined the advisory feed",
+    "policy_evaluation": "Recorded a package check",
+    "review_event": "Recorded a review event",
     "taint": "Scanned for reachability",
 }
 

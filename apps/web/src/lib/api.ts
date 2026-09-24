@@ -253,6 +253,9 @@ export interface ReviewRequest {
   recommended_version: string | null;
   exception_expires_at: number | null;
   verification_evidence_id: string | null;
+  evidence_digest: string | null;
+  evidence_root_ulid: string | null;
+  evidence_snapshot: Record<string, unknown>;
   version_counter: number;
   created_at: number;
   updated_at: number;
@@ -269,6 +272,8 @@ export interface ReviewRequestList {
 export interface ReviewGraph {
   request_id: string;
   perspective: "developer" | "analyst" | "ciso";
+  evidence_root_ulid: string | null;
+  evidence_digest: string | null;
   graph: GraphPayload;
   note: string;
 }

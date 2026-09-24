@@ -12,7 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 NodeKind = Literal[
     "source", "decision", "class", "package", "version",
     "license", "sink", "cwe", "cve", "entry", "agent",
-    "capability", "other",
+    "capability", "module", "function", "api", "policy", "review",
+    "review_event", "session", "repository", "other",
 ]
 Plane = Literal["provenance", "security", "supply", "belief", "time"]
 Severity = Literal["critical", "high", "medium", "low", "unknown"]
