@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { Approval } from "../lib/api";
 import { ApprovalDecisionPanel } from "./CisoApprovals";
 
 const { decideApproval } = vi.hoisted(() => ({ decideApproval: vi.fn() }));
@@ -25,7 +26,7 @@ vi.mock("../lib/useIdentity", () => ({
   }),
 }));
 
-const approval = {
+const approval: Approval = {
   id: "apr_1",
   kind: "policy_exception",
   resource_id: "exc_1",
@@ -44,6 +45,7 @@ const approval = {
   expires_at: 1_800_000_000,
   created_at: 1_700_000_000,
   decided_at: null,
+  expired_at: null,
 };
 
 describe("CISO approval decision", () => {

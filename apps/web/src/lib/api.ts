@@ -566,7 +566,7 @@ export interface WorkNotification {
   kind: string;
   title: string;
   message: string;
-  resource_kind: WorkKind;
+  resource_kind: WorkKind | "policy" | "exception" | "approval";
   resource_id: string;
   route: string;
   created_at: number;
@@ -641,13 +641,22 @@ export interface PolicyVersion {
   created_at: number;
   created_by: string;
   created_by_name: string;
+  submitted_by: string | null;
+  submitted_by_name: string | null;
+  submitted_at: number | null;
+  activated_by: string | null;
+  activated_by_name: string | null;
+  activated_at: number | null;
+  withdrawn_by: string | null;
+  withdrawn_by_name: string | null;
+  withdrawn_at: number | null;
 }
 
 export interface Policy {
   id: string;
   name: string;
   scope: string;
-  status: "active" | "retired";
+  status: "pending" | "active" | "retired";
   active_version: number;
   version: number;
   created_at: number;
@@ -693,7 +702,13 @@ export interface PolicyException {
   evidence_ids: string[];
   request_digest: string;
   expires_at: number;
-  status: "pending" | "approved" | "rejected" | "expired" | "revoked";
+  status:
+    | "pending"
+    | "approved"
+    | "rejected"
+    | "expired"
+    | "revoked"
+    | "superseded";
   expired: boolean;
   version: number;
   requested_by: string;
@@ -703,7 +718,13 @@ export interface PolicyException {
   decision_rationale: string | null;
   decided_at: number | null;
   revoked_by: string | null;
+  revoked_by_name: string | null;
   revoked_at: number | null;
+  revocation_rationale: string | null;
+  predecessor_exception_id: string | null;
+  renewal_number: number;
+  superseded_by_exception_id: string | null;
+  superseded_at: number | null;
   created_at: number;
   updated_at: number;
   events: GovernanceEvent[];
@@ -721,6 +742,22 @@ export interface CreateExceptionInput {
   expires_at: number;
 }
 
+export interface RenewExceptionInput {
+  expected_version: number;
+  rationale: string;
+  compensating_controls: string;
+  owner: string;
+  owner_name?: string;
+  evidence_ids?: string[];
+  expires_at: number;
+}
+
+export interface RevokeExceptionInput {
+  expected_version: number;
+  rationale: string;
+  evidence_ids?: string[];
+}
+
 export type ApprovalDecision = "approve" | "reject";
 
 export interface Approval {
@@ -732,7 +769,7 @@ export interface Approval {
   evidence_ids: string[];
   requester: string;
   requester_name: string;
-  status: string;
+  status: "pending" | "approved" | "rejected" | "expired";
   expired: boolean;
   rationale: string;
   approver: string | null;
@@ -742,6 +779,14 @@ export interface Approval {
   expires_at: number;
   created_at: number;
   decided_at: number | null;
+  expired_at: number | null;
+}
+
+export interface GovernanceLifecycleStatus {
+  last_started_at: number | null;
+  last_completed_at: number | null;
+  last_error: string | null;
+  last_counts: Record<string, number>;
 }
 
 export interface ApprovalDecisionInput {
@@ -1468,6 +1513,13 @@ export const api = {
     get<PolicyException>(`/exceptions/${encodeURIComponent(exceptionId)}`),
   requestException: (input: CreateExceptionInput) =>
     post<Approval>("/exceptions", input),
+  renewException: (exceptionId: string, input: RenewExceptionInput) =>
+    post<Approval>(`/exceptions/${encodeURIComponent(exceptionId)}/renew`, input),
+  revokeException: (exceptionId: string, input: RevokeExceptionInput) =>
+    post<PolicyException>(
+      `/exceptions/${encodeURIComponent(exceptionId)}/revoke`,
+      input,
+    ),
   approvals: (status?: string) =>
     get<Approval[]>(
       `/approvals${status ? `?status=${encodeURIComponent(status)}` : ""}`,
@@ -1479,6 +1531,10 @@ export const api = {
       `/approvals/${encodeURIComponent(approvalId)}/decision`,
       input,
     ),
+  governanceLifecycleStatus: () =>
+    get<GovernanceLifecycleStatus>("/governance/lifecycle/status"),
+  reconcileGovernanceLifecycle: () =>
+    post<GovernanceLifecycleStatus>("/governance/lifecycle/reconcile", {}),
   remediations: () => get<Remediation[]>("/remediations"),
   createRemediation: (input: CreateRemediationInput) =>
     post<Remediation>("/remediations", input),

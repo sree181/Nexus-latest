@@ -4,6 +4,8 @@
 **Planning horizon:** 12 working days
 **Author:** Manus AI
 
+**Progress:** Stages 5A and 5B completed on 24 September 2026; Stages 5C–5E remain ordered future work.
+
 ## 1. Delivery objective
 
 Priority 5 turns the existing CISO screens into a governed decision system. It will add durable policy versioning, controlled exceptions, evidence-linked approvals, verified remediation, and executive reporting without weakening the Developer and Analyst boundaries completed in earlier stages.
@@ -14,13 +16,13 @@ The stages are sequential because each one creates the contract required by the 
 
 The following is an engineering forecast, not a production deployment commitment. It assumes one implementation stream, prompt review of stage outcomes, and no new scope. Calendar dates use the current start date of 24 September 2026 and exclude weekends.
 
-| Stage | Working days | Forecast window | Completion checkpoint |
-| --- | ---: | --- | --- |
-| **5A — Durable contracts** | 2 | 24–25 September | Versioned policy and exception aggregates, immutable events, migrations, APIs, tests, documentation, release commit |
-| **5B — Governance enforcement** | 3 | 28–30 September | Maker-checker separation, renewal/revocation, materialized expiry, deterministic reconciliation, notification rules |
-| **5C — HyperMesh evidence integration** | 2 | 1–2 October | Transactional projection outbox, native policy/exception relations, review/case linkage, scoped retrieval |
-| **5D — CISO operating experience** | 3 | 5–7 October | Policy studio, approval workspace, exception register, remediation portfolio, executive drill-down |
-| **5E — Release qualification** | 2 | 8–9 October | Full regression, migration/recovery and role tests, container build, live walkthrough, commit and package |
+| Stage | Working days | Forecast window | Status | Completion checkpoint |
+| --- | ---: | --- | --- | --- |
+| **5A — Durable contracts** | 2 | 24–25 September | **Completed 24 September** | Versioned policy and exception aggregates, immutable events, migrations, APIs, tests, documentation, release commit |
+| **5B — Governance enforcement** | 3 | 28–30 September | **Completed 24 September** | Maker-checker separation, renewal/revocation, materialized expiry, deterministic reconciliation, notification rules |
+| **5C — HyperMesh evidence integration** | 2 | 1–2 October | Planned | Transactional projection outbox, native policy/exception relations, review/case linkage, scoped retrieval |
+| **5D — CISO operating experience** | 3 | 5–7 October | Planned | Policy studio, approval workspace, exception register, remediation portfolio, executive drill-down |
+| **5E — Release qualification** | 2 | 8–9 October | Planned | Full regression, migration/recovery and role tests, container build, live walkthrough, commit and package |
 
 The nominal total is **12 working days**. A two-day contingency should be reserved for identity-provider testing, container capacity, migration rehearsal, or user-requested CISO workflow changes. With contingency, the planning range is **12–14 working days**.
 
@@ -34,11 +36,11 @@ The stage includes additive migration and deterministic backfill for existing ro
 
 ### 3.2 Stage 5B — Governance enforcement
 
-Stage 5B adds the controls that decide who may move each lifecycle and when. Policy authors cannot activate their own submitted version when maker-checker mode is enabled. Exception requesters cannot approve, renew, or revoke their own request. Renewal creates a new approval-bound exception version rather than rewriting the original decision.
+Stage 5B added the controls that decide who may move each lifecycle and when. Policy authors cannot activate their own submitted version in production. Exception requesters cannot approve, renew, or revoke their own request. Renewal creates a new approval-bound exception record rather than rewriting the original decision.
 
-A deterministic service-owned reconciler will materialize expired approval and exception states, append events, and create in-product notifications. This is product logic and does not require an AI task or an external scheduler. In the current single-writer deployment it will use the API service lifecycle and the existing durable store. Horizontal deployments will require one elected worker or a database-backed work claim before this process is enabled on multiple replicas.
+A deterministic service-owned reconciler now materializes expired approval and exception states, appends events, and creates in-product notifications. This is product logic and does not require an AI task or an external scheduler. In the current single-writer deployment it uses the API service lifecycle and the existing durable store. Horizontal deployments will require one elected worker or a database-backed work claim before this process is enabled on multiple replicas.
 
-Acceptance tests will cover every permitted and forbidden transition, clock boundaries, retry idempotency, restart recovery, notification de-duplication, and role capability mapping.
+Acceptance tests cover every permitted and forbidden transition, exact clock boundaries, retry idempotency, restart recovery, notification de-duplication, and role capability mapping. The detailed shipped contract is documented separately.[2]
 
 ### 3.3 Stage 5C — Native HyperMesh evidence integration
 
@@ -64,7 +66,7 @@ The release rehearsal will begin from a Stage 4 database backup, migrate forward
 
 ## 4. Dependencies and decision points
 
-Stage 5B needs one product decision: whether all policy activation must require a second CISO or whether maker-checker is configurable by deployment. The safe default is a second identity in production and same-user activation only in local development.
+The Stage 5B maker-checker decision is resolved: production requires a second CISO identity, while local development permits same-user activation for one-person evaluation. This is server-enforced and not a client preference.
 
 Stage 5C depends on a stable native relation vocabulary. The recommended relation kinds are `policy_version`, `policy_activation`, `policy_supersession`, `exception_request`, `exception_decision`, `exception_expiry`, and `exception_revocation`. These names should be finalized before persistence because native relation kinds become long-lived evidence contracts.
 
@@ -94,6 +96,7 @@ A change that alters role authority, evidence visibility, lifecycle states, or p
 ## References
 
 [1]: ./PRIORITY5A_GOVERNANCE_CONTRACTS.md "Priority 5A durable policy and exception technical design"
-[2]: ./ANALYST_OPERATIONS.md "Priority 4 Analyst Operations contract"
-[3]: ./PRODUCTION_OPERATIONS.md "MeshAgent production operations and recovery guide"
-[4]: ../RELEASE_VALIDATION_REPORT.md "MeshAgent release validation report"
+[2]: ./PRIORITY5B_GOVERNANCE_ENFORCEMENT.md "Priority 5B governance enforcement and lifecycle operations"
+[3]: ./ANALYST_OPERATIONS.md "Priority 4 Analyst Operations contract"
+[4]: ./PRODUCTION_OPERATIONS.md "MeshAgent production operations and recovery guide"
+[5]: ../RELEASE_VALIDATION_REPORT.md "MeshAgent release validation report"

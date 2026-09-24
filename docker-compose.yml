@@ -14,6 +14,7 @@ services:
       # for the developer to go and approve their pairing at. Unset, it prints
       # the dev server's port and the pairing is abandoned half-done.
       MESHAGENT_WEB_URL: "http://localhost:8080"
+      MESHAGENT_GOVERNANCE_RECONCILE_SECONDS: "${MESHAGENT_GOVERNANCE_RECONCILE_SECONDS:-60}"
       # Optional live model execution. When OPENAI_API_KEY is empty, new runs
       # use the clearly labelled reference build instead of pretending a model
       # executed the task.

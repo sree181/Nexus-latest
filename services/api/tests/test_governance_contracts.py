@@ -314,6 +314,9 @@ def test_legacy_governance_rows_are_upgraded_without_data_loss(tmp_path):
     assert policy["current"]["state"] == "active"
     assert policy["current"]["version"] == 2
     assert policy["versions"][1]["state"] == "superseded"
+    assert policy["current"]["submitted_by"] == "alex@example.com"
+    assert policy["current"]["activated_by"] == "alex@example.com"
+    assert policy["versions"][1]["activated_by"] == "alex@example.com"
     assert len(policy["current"]["content_digest"]) == 64
     assert policy["events"][0]["action"] == "policy.created"
 
@@ -322,12 +325,19 @@ def test_legacy_governance_rows_are_upgraded_without_data_loss(tmp_path):
     assert exception["policy_version"] == 2
     assert exception["policy_digest"] == policy["current"]["content_digest"]
     assert exception["request_digest"] == approval["request_digest"]
+    assert approval["expired_at"] is None
     assert [event["action"] for event in exception["events"]] == [
         "exception.requested",
         "exception.approved",
     ]
 
     with sqlite3.connect(database) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM governance_reconciler_state"
+        ).fetchone()[0] == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM governance_notifications"
+        ).fetchone()[0] == 0
         conn.execute(
             "DELETE FROM exception_events WHERE exception_id=? AND action=?",
             ("exc_legacy", "exception.approved"),

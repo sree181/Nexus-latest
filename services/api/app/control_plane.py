@@ -199,6 +199,15 @@ class ControlPlane:
                   created_at INTEGER NOT NULL,
                   created_by TEXT NOT NULL,
                   created_by_name TEXT,
+                  submitted_by TEXT,
+                  submitted_by_name TEXT,
+                  submitted_at INTEGER,
+                  activated_by TEXT,
+                  activated_by_name TEXT,
+                  activated_at INTEGER,
+                  withdrawn_by TEXT,
+                  withdrawn_by_name TEXT,
+                  withdrawn_at INTEGER,
                   PRIMARY KEY(policy_id, version)
                 );
                 CREATE TABLE IF NOT EXISTS policy_events (
@@ -239,7 +248,13 @@ class ControlPlane:
                   decision_rationale TEXT,
                   decided_at INTEGER,
                   revoked_by TEXT,
+                  revoked_by_name TEXT,
                   revoked_at INTEGER,
+                  revocation_rationale TEXT,
+                  predecessor_exception_id TEXT,
+                  renewal_number INTEGER NOT NULL DEFAULT 0,
+                  superseded_by_exception_id TEXT,
+                  superseded_at INTEGER,
                   created_at INTEGER NOT NULL,
                   updated_at INTEGER NOT NULL,
                   FOREIGN KEY(policy_id,policy_version)
@@ -278,7 +293,8 @@ class ControlPlane:
                   version INTEGER NOT NULL,
                   expires_at INTEGER NOT NULL,
                   created_at INTEGER NOT NULL,
-                  decided_at INTEGER
+                  decided_at INTEGER,
+                  expired_at INTEGER
                 );
                 CREATE INDEX IF NOT EXISTS approvals_status
                   ON approvals(status, expires_at, created_at);
@@ -436,6 +452,35 @@ class ControlPlane:
                   read_at INTEGER NOT NULL,
                   PRIMARY KEY(notification_id,subject)
                 );
+                CREATE TABLE IF NOT EXISTS governance_notifications (
+                  id TEXT PRIMARY KEY,
+                  kind TEXT NOT NULL,
+                  title TEXT NOT NULL,
+                  message TEXT NOT NULL,
+                  resource_kind TEXT NOT NULL CHECK(resource_kind IN ('policy','exception','approval')),
+                  resource_id TEXT NOT NULL,
+                  recipient_subject TEXT,
+                  recipient_role TEXT,
+                  not_before INTEGER NOT NULL,
+                  created_at INTEGER NOT NULL,
+                  dedupe_key TEXT NOT NULL UNIQUE
+                );
+                CREATE INDEX IF NOT EXISTS governance_notifications_ready
+                  ON governance_notifications(not_before,recipient_subject,recipient_role);
+                CREATE TABLE IF NOT EXISTS governance_notification_reads (
+                  notification_id TEXT NOT NULL REFERENCES governance_notifications(id)
+                    ON DELETE CASCADE,
+                  subject TEXT NOT NULL,
+                  read_at INTEGER NOT NULL,
+                  PRIMARY KEY(notification_id,subject)
+                );
+                CREATE TABLE IF NOT EXISTS governance_reconciler_state (
+                  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+                  last_started_at INTEGER,
+                  last_completed_at INTEGER,
+                  last_error TEXT,
+                  last_counts TEXT NOT NULL DEFAULT '{}'
+                );
                 """
                 )
                 # All additive upgrades and deterministic backfills below commit
@@ -488,6 +533,15 @@ class ControlPlane:
                         ("effective_from", "ALTER TABLE policy_versions ADD COLUMN effective_from INTEGER"),
                         ("effective_until", "ALTER TABLE policy_versions ADD COLUMN effective_until INTEGER"),
                         ("created_by_name", "ALTER TABLE policy_versions ADD COLUMN created_by_name TEXT"),
+                        ("submitted_by", "ALTER TABLE policy_versions ADD COLUMN submitted_by TEXT"),
+                        ("submitted_by_name", "ALTER TABLE policy_versions ADD COLUMN submitted_by_name TEXT"),
+                        ("submitted_at", "ALTER TABLE policy_versions ADD COLUMN submitted_at INTEGER"),
+                        ("activated_by", "ALTER TABLE policy_versions ADD COLUMN activated_by TEXT"),
+                        ("activated_by_name", "ALTER TABLE policy_versions ADD COLUMN activated_by_name TEXT"),
+                        ("activated_at", "ALTER TABLE policy_versions ADD COLUMN activated_at INTEGER"),
+                        ("withdrawn_by", "ALTER TABLE policy_versions ADD COLUMN withdrawn_by TEXT"),
+                        ("withdrawn_by_name", "ALTER TABLE policy_versions ADD COLUMN withdrawn_by_name TEXT"),
+                        ("withdrawn_at", "ALTER TABLE policy_versions ADD COLUMN withdrawn_at INTEGER"),
                     ),
                     "exceptions": (
                         ("policy_version", "ALTER TABLE exceptions ADD COLUMN policy_version INTEGER NOT NULL DEFAULT 1"),
@@ -500,13 +554,20 @@ class ControlPlane:
                         ("decision_rationale", "ALTER TABLE exceptions ADD COLUMN decision_rationale TEXT"),
                         ("decided_at", "ALTER TABLE exceptions ADD COLUMN decided_at INTEGER"),
                         ("revoked_by", "ALTER TABLE exceptions ADD COLUMN revoked_by TEXT"),
+                        ("revoked_by_name", "ALTER TABLE exceptions ADD COLUMN revoked_by_name TEXT"),
                         ("revoked_at", "ALTER TABLE exceptions ADD COLUMN revoked_at INTEGER"),
+                        ("revocation_rationale", "ALTER TABLE exceptions ADD COLUMN revocation_rationale TEXT"),
+                        ("predecessor_exception_id", "ALTER TABLE exceptions ADD COLUMN predecessor_exception_id TEXT"),
+                        ("renewal_number", "ALTER TABLE exceptions ADD COLUMN renewal_number INTEGER NOT NULL DEFAULT 0"),
+                        ("superseded_by_exception_id", "ALTER TABLE exceptions ADD COLUMN superseded_by_exception_id TEXT"),
+                        ("superseded_at", "ALTER TABLE exceptions ADD COLUMN superseded_at INTEGER"),
                     ),
                     "approvals": (
                         ("resource_version", "ALTER TABLE approvals ADD COLUMN resource_version INTEGER NOT NULL DEFAULT 1"),
                         ("request_digest", "ALTER TABLE approvals ADD COLUMN request_digest TEXT"),
                         ("evidence_ids", "ALTER TABLE approvals ADD COLUMN evidence_ids TEXT NOT NULL DEFAULT '[]'"),
                         ("approver_name", "ALTER TABLE approvals ADD COLUMN approver_name TEXT"),
+                        ("expired_at", "ALTER TABLE approvals ADD COLUMN expired_at INTEGER"),
                     ),
                 }
                 for table, upgrades in governance_upgrades.items():
@@ -522,6 +583,21 @@ class ControlPlane:
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS exceptions_policy_status "
                     "ON exceptions(policy_id,status,expires_at,updated_at DESC)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS exceptions_expiry "
+                    "ON exceptions(status,expires_at,id)"
+                )
+                conn.execute("DROP INDEX IF EXISTS exception_one_successor")
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS exception_one_active_successor "
+                    "ON exceptions(predecessor_exception_id) "
+                    "WHERE predecessor_exception_id IS NOT NULL "
+                    "AND status IN ('pending','approved')"
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO governance_reconciler_state "
+                    "(singleton,last_counts) VALUES (1,'{}')"
                 )
 
                 legacy_policies = conn.execute("SELECT * FROM policies").fetchall()
@@ -559,6 +635,35 @@ class ControlPlane:
                         elif not version["created_by_name"]:
                             conn.execute(
                                 """UPDATE policy_versions SET created_by_name=created_by
+                                WHERE policy_id=? AND version=?""",
+                                (policy["id"], version["version"]),
+                            )
+                        effective_state = state if not version["content_digest"] else version["state"]
+                        if effective_state in (
+                            "in_review", "active", "superseded", "retired",
+                        ) and not version["submitted_by"]:
+                            conn.execute(
+                                """UPDATE policy_versions SET submitted_by=created_by,
+                                submitted_by_name=COALESCE(created_by_name,created_by),
+                                submitted_at=COALESCE(submitted_at,created_at)
+                                WHERE policy_id=? AND version=?""",
+                                (policy["id"], version["version"]),
+                            )
+                        if effective_state in (
+                            "active", "superseded", "retired",
+                        ) and not version["activated_by"]:
+                            conn.execute(
+                                """UPDATE policy_versions SET activated_by=created_by,
+                                activated_by_name=COALESCE(created_by_name,created_by),
+                                activated_at=COALESCE(activated_at,effective_from,created_at)
+                                WHERE policy_id=? AND version=?""",
+                                (policy["id"], version["version"]),
+                            )
+                        if effective_state == "withdrawn" and not version["withdrawn_by"]:
+                            conn.execute(
+                                """UPDATE policy_versions SET withdrawn_by=created_by,
+                                withdrawn_by_name=COALESCE(created_by_name,created_by),
+                                withdrawn_at=COALESCE(withdrawn_at,created_at)
                                 WHERE policy_id=? AND version=?""",
                                 (policy["id"], version["version"]),
                             )
@@ -615,7 +720,14 @@ class ControlPlane:
                         "expires_at": exception["expires_at"],
                         "evidence_ids": evidence_ids,
                     }
-                    request_digest = _digest(canonical)
+                    if exception["predecessor_exception_id"]:
+                        canonical["predecessor_exception_id"] = exception[
+                            "predecessor_exception_id"
+                        ]
+                        canonical["renewal_number"] = int(
+                            exception["renewal_number"] or 0
+                        )
+                    request_digest = exception["request_digest"] or _digest(canonical)
                     approval = conn.execute(
                         "SELECT * FROM approvals WHERE kind='exception' AND resource_id=? "
                         "ORDER BY created_at,id LIMIT 1", (exception["id"],),
@@ -630,10 +742,15 @@ class ControlPlane:
                         approval["decision_rationale"] if approval is not None else None
                     )
                     conn.execute(
-                        """UPDATE exceptions SET policy_version=?,policy_digest=?,
-                        owner_name=COALESCE(owner_name,owner),request_digest=?,
+                        """UPDATE exceptions SET
+                        policy_version=CASE WHEN policy_digest IS NULL OR policy_digest=''
+                          THEN ? ELSE policy_version END,
+                        policy_digest=COALESCE(NULLIF(policy_digest,''),?),
+                        owner_name=COALESCE(owner_name,owner),
+                        request_digest=COALESCE(NULLIF(request_digest,''),?),
                         requested_by_name=COALESCE(requested_by_name,requested_by),
                         approved_by_name=COALESCE(approved_by_name,?),
+                        revoked_by_name=COALESCE(revoked_by_name,revoked_by),
                         decision_rationale=COALESCE(decision_rationale,?),
                         decided_at=COALESCE(decided_at,?) WHERE id=?""",
                         (
@@ -643,7 +760,8 @@ class ControlPlane:
                     )
                     requested_event = conn.execute(
                         """SELECT 1 FROM exception_events
-                        WHERE exception_id=? AND action='exception.requested' LIMIT 1""",
+                        WHERE exception_id=? AND action IN
+                          ('exception.requested','exception.renewal_requested') LIMIT 1""",
                         (exception["id"],),
                     ).fetchone()
                     if requested_event is None:
@@ -662,10 +780,16 @@ class ControlPlane:
                         )
                     if exception["status"] != "pending":
                         terminal_action = f"exception.{exception['status']}"
+                        terminal_actions = [terminal_action]
+                        if exception["status"] == "expired":
+                            terminal_actions.append("exception.approval_expired")
+                        if exception["status"] == "revoked":
+                            terminal_actions.append("exception.renewal_cancelled")
+                        placeholders = ",".join("?" for _ in terminal_actions)
                         terminal_event = conn.execute(
-                            """SELECT 1 FROM exception_events
-                            WHERE exception_id=? AND action=? LIMIT 1""",
-                            (exception["id"], terminal_action),
+                            f"""SELECT 1 FROM exception_events
+                            WHERE exception_id=? AND action IN ({placeholders}) LIMIT 1""",
+                            (exception["id"], *terminal_actions),
                         ).fetchone()
                         if terminal_event is None:
                             conn.execute(
@@ -685,8 +809,11 @@ class ControlPlane:
                             )
                     if approval is not None:
                         conn.execute(
-                            """UPDATE approvals SET resource_version=1,request_digest=?,
-                            evidence_ids=?,approver_name=COALESCE(approver_name,approver)
+                            """UPDATE approvals SET
+                            request_digest=COALESCE(NULLIF(request_digest,''),?),
+                            evidence_ids=CASE WHEN evidence_ids IS NULL OR evidence_ids=''
+                              THEN ? ELSE evidence_ids END,
+                            approver_name=COALESCE(approver_name,approver)
                             WHERE id=?""",
                             (request_digest, _json(evidence_ids), approval["id"]),
                         )
@@ -936,7 +1063,8 @@ class ControlPlane:
     def create_policy(self, *, name: str, scope: str, severity_threshold: str,
                       denied_licenses: list[str], block_on_unknown: bool,
                       rationale: str, actor: str, actor_name: str,
-                      actor_role: str, correlation_id: str) -> dict[str, Any]:
+                      actor_role: str, correlation_id: str,
+                      require_independent_approver: bool = False) -> dict[str, Any]:
         policy_id, event_id, now = _id("pol"), _id("pev"), _now()
         licenses = list(dict.fromkeys(value.strip() for value in denied_licenses if value.strip()))
         canonical = {
@@ -947,35 +1075,60 @@ class ControlPlane:
             "rationale": rationale,
         }
         digest = _digest(canonical)
+        initial_status = "pending" if require_independent_approver else "active"
+        initial_state = "in_review" if require_independent_approver else "active"
+        effective_from = None if require_independent_approver else now
         with self._write() as conn:
             conn.execute(
                 """INSERT INTO policies
                 (id,name,scope,status,active_version,version,created_at,updated_at,created_by)
-                VALUES (?,?,?,'active',1,1,?,?,?)""",
-                (policy_id, name, scope, now, now, actor),
+                VALUES (?,?,?,?,1,1,?,?,?)""",
+                (policy_id, name, scope, initial_status, now, now, actor),
             )
             conn.execute(
                 """INSERT INTO policy_versions
                 (policy_id,version,state,severity_threshold,denied_licenses,
                  block_on_unknown,rationale,content_digest,effective_from,
                  effective_until,created_at,created_by,created_by_name)
-                VALUES (?,1,'active',?,?,?,?,?, ?,NULL,?,?,?)""",
+                VALUES (?,1,?,?,?,?,?,?,?,NULL,?,?,?)""",
                 (
-                    policy_id, severity_threshold, _json(licenses),
-                    int(block_on_unknown), rationale, digest, now, now, actor,
-                    actor_name,
+                    policy_id, initial_state, severity_threshold, _json(licenses),
+                    int(block_on_unknown), rationale, digest, effective_from, now,
+                    actor, actor_name,
                 ),
             )
+            if require_independent_approver:
+                conn.execute(
+                    """UPDATE policy_versions SET submitted_by=?,submitted_by_name=?,
+                    submitted_at=? WHERE policy_id=? AND version=1""",
+                    (actor, actor_name, now, policy_id),
+                )
+            else:
+                conn.execute(
+                    """UPDATE policy_versions SET submitted_by=?,submitted_by_name=?,
+                    submitted_at=?,activated_by=?,activated_by_name=?,activated_at=?
+                    WHERE policy_id=? AND version=1""",
+                    (actor, actor_name, now, actor, actor_name, now, policy_id),
+                )
             conn.execute(
                 """INSERT INTO policy_events
                 (id,policy_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
-                VALUES (?,?,?,?,?,'policy.created',NULL,'active',?,'[]',?,?)""",
+                VALUES (?,?,?,?,?,'policy.created',NULL,?,?,'[]',?,?)""",
                 (
                     event_id, policy_id, actor, actor_name, actor_role,
-                    rationale, now, correlation_id,
+                    initial_state, rationale, now, correlation_id,
                 ),
             )
+            if require_independent_approver:
+                self._governance_notify(
+                    conn, kind="policy.review_requested",
+                    title="New policy ready for review",
+                    message=f"{name} version 1 awaits independent activation.",
+                    resource_kind="policy", resource_id=policy_id,
+                    recipient_role="ciso",
+                    dedupe_key=f"policy-review:{policy_id}:1",
+                )
         return self.policy(policy_id)
 
     def create_policy_version(
@@ -1079,9 +1232,10 @@ class ControlPlane:
                 raise StoreError("only a draft or in-review policy version can be withdrawn")
             prior_state = str(candidate["state"])
             conn.execute(
-                "UPDATE policy_versions SET state='withdrawn' "
-                "WHERE policy_id=? AND version=?",
-                (policy_id, version),
+                """UPDATE policy_versions SET state='withdrawn',withdrawn_by=?,
+                withdrawn_by_name=?,withdrawn_at=?
+                WHERE policy_id=? AND version=?""",
+                (actor, actor_name, now, policy_id, version),
             )
             conn.execute(
                 "UPDATE policies SET version=version+1,updated_at=? WHERE id=?",
@@ -1103,7 +1257,7 @@ class ControlPlane:
     def activate_policy_version(
         self, policy_id: str, version: int, *, expected_version: int,
         rationale: str, actor: str, actor_name: str, actor_role: str,
-        correlation_id: str,
+        correlation_id: str, require_independent_approver: bool = False,
     ) -> dict[str, Any]:
         now = _now()
         with self._write() as conn:
@@ -1114,7 +1268,7 @@ class ControlPlane:
                 raise Missing("unknown policy")
             if current["version"] != expected_version:
                 raise VersionConflict("policy changed; reload before activating a version")
-            if current["status"] != "active":
+            if current["status"] not in ("active", "pending"):
                 raise StoreError("retired policies cannot activate versions")
             candidate = conn.execute(
                 "SELECT * FROM policy_versions WHERE policy_id=? AND version=?",
@@ -1124,19 +1278,27 @@ class ControlPlane:
                 raise Missing("unknown policy version")
             if candidate["state"] != "in_review":
                 raise StoreError("only a policy version in review can be activated")
-            previous = current["active_version"]
-            conn.execute(
-                """UPDATE policy_versions SET state='superseded',effective_until=?
-                WHERE policy_id=? AND version=? AND state='active'""",
-                (now, policy_id, previous),
-            )
+            if require_independent_approver and actor in {
+                candidate["created_by"], candidate["submitted_by"],
+            }:
+                raise SeparationConflict(
+                    "the policy author or submitter cannot activate this version"
+                )
+            previous = None if current["status"] == "pending" else current["active_version"]
+            if previous is not None:
+                conn.execute(
+                    """UPDATE policy_versions SET state='superseded',effective_until=?
+                    WHERE policy_id=? AND version=? AND state='active'""",
+                    (now, policy_id, previous),
+                )
             conn.execute(
                 """UPDATE policy_versions SET state='active',effective_from=?,
-                effective_until=NULL WHERE policy_id=? AND version=?""",
-                (now, policy_id, version),
+                effective_until=NULL,activated_by=?,activated_by_name=?,activated_at=?
+                WHERE policy_id=? AND version=?""",
+                (now, actor, actor_name, now, policy_id, version),
             )
             conn.execute(
-                """UPDATE policies SET active_version=?,version=version+1,
+                """UPDATE policies SET status='active',active_version=?,version=version+1,
                 updated_at=? WHERE id=?""", (version, now, policy_id),
             )
             conn.execute(
@@ -1146,10 +1308,24 @@ class ControlPlane:
                 VALUES (?,?,?,?,?,'policy.version_activated',?,?,?,'[]',?,?)""",
                 (
                     _id("pev"), policy_id, actor, actor_name, actor_role,
-                    f"v{previous}:active", f"v{version}:active", rationale,
+                    (
+                        f"v{previous}:active"
+                        if previous is not None
+                        else f"v{version}:in_review"
+                    ),
+                    f"v{version}:active", rationale,
                     now, correlation_id,
                 ),
             )
+            if candidate["created_by"] != actor:
+                self._governance_notify(
+                    conn, kind="policy.version_activated",
+                    title="Policy version activated",
+                    message=f"{current['name']} version {version} is now active.",
+                    resource_kind="policy", resource_id=policy_id,
+                    recipient_subject=candidate["created_by"],
+                    dedupe_key=f"policy-activated:{policy_id}:{version}",
+                )
         return self.policy(policy_id)
 
     def _transition_policy_version(
@@ -1180,6 +1356,12 @@ class ControlPlane:
                 "UPDATE policy_versions SET state=? WHERE policy_id=? AND version=?",
                 (target_state, policy_id, version),
             )
+            if action == "policy.version_submitted":
+                conn.execute(
+                    """UPDATE policy_versions SET submitted_by=?,submitted_by_name=?,
+                    submitted_at=? WHERE policy_id=? AND version=?""",
+                    (actor, actor_name, now, policy_id, version),
+                )
             conn.execute(
                 "UPDATE policies SET version=version+1,updated_at=? WHERE id=?",
                 (now, policy_id),
@@ -1195,6 +1377,15 @@ class ControlPlane:
                     correlation_id,
                 ),
             )
+            if action == "policy.version_submitted":
+                self._governance_notify(
+                    conn, kind="policy.review_requested",
+                    title="Policy version ready for review",
+                    message=f"{current['name']} version {version} awaits activation.",
+                    resource_kind="policy", resource_id=policy_id,
+                    recipient_role="ciso",
+                    dedupe_key=f"policy-review:{policy_id}:{version}",
+                )
         return self.policy(policy_id)
 
     def retire_policy(
@@ -1275,12 +1466,7 @@ class ControlPlane:
     def _exception(row: sqlite3.Row, events: list[sqlite3.Row] | None = None) -> dict[str, Any]:
         body = dict(row)
         body["evidence_ids"] = _loads(body["evidence_ids"], [])
-        body["expired"] = bool(
-            body["expires_at"] <= _now()
-            and body["status"] in ("pending", "approved")
-        )
-        if body["expired"]:
-            body["status"] = "expired"
+        body["expired"] = body["status"] == "expired"
         body["events"] = [
             ControlPlane._governance_event(value, "exception")
             for value in (events or [])
@@ -1291,11 +1477,7 @@ class ControlPlane:
     def _approval(row: sqlite3.Row) -> dict[str, Any]:
         body = dict(row)
         body["evidence_ids"] = _loads(body["evidence_ids"], [])
-        body["expired"] = bool(
-            body["expires_at"] <= _now() and body["status"] == "pending"
-        )
-        if body["expired"]:
-            body["status"] = "expired"
+        body["expired"] = body["status"] == "expired"
         return body
 
     def create_exception(
@@ -1379,7 +1561,233 @@ class ControlPlane:
                     rationale, _json(evidence), now, correlation_id,
                 ),
             )
+            self._governance_notify(
+                conn, kind="exception.approval_requested",
+                title="Exception approval ready",
+                message=f"{actor_name} requested an exception for {scope}.",
+                resource_kind="approval", resource_id=approval_id,
+                recipient_role="ciso",
+                dedupe_key=f"exception-approval:{exception_id}:1",
+            )
         return self.exception(exception_id), self.approval(approval_id)
+
+    def renew_exception(
+        self, exception_id: str, *, expected_version: int, rationale: str,
+        controls: str, owner: str, owner_name: str | None,
+        evidence_ids: list[str], expires_at: int, actor: str, actor_name: str,
+        actor_role: str, correlation_id: str,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Create a new approval-bound exception without extending the old row."""
+        now = _now()
+        if expires_at <= now:
+            raise StoreError("renewal expiry must be in the future")
+        evidence = list(dict.fromkeys(
+            value.strip() for value in evidence_ids if value.strip()
+        ))
+        successor_id, approval_id = _id("exc"), _id("apr")
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM exceptions WHERE id=?", (exception_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown exception")
+            if current["version"] != expected_version:
+                raise VersionConflict("exception changed; reload before renewing it")
+            if current["requested_by"] == actor:
+                raise SeparationConflict(
+                    "the exception requester cannot renew the same request"
+                )
+            if current["status"] != "approved" or current["expires_at"] <= now:
+                raise StoreError("only a currently approved exception can be renewed")
+            existing = conn.execute(
+                """SELECT 1 FROM exceptions WHERE predecessor_exception_id=?
+                AND status IN ('pending','approved')""",
+                (exception_id,),
+            ).fetchone()
+            if existing is not None:
+                raise StoreError("this exception already has an active renewal request")
+            policy = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (current["policy_id"],),
+            ).fetchone()
+            if policy is None or policy["status"] != "active":
+                raise StoreError("renewals require an active policy")
+            policy_version = int(policy["active_version"])
+            version = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND version=?",
+                (current["policy_id"], policy_version),
+            ).fetchone()
+            if version is None or version["state"] != "active":
+                raise StoreError("renewals require an active policy version")
+            renewal_number = int(conn.execute(
+                """SELECT COALESCE(MAX(renewal_number),0)+1 FROM exceptions
+                WHERE predecessor_exception_id=?""",
+                (exception_id,),
+            ).fetchone()[0])
+            policy_digest = str(version["content_digest"])
+            canonical = {
+                "policy_id": current["policy_id"],
+                "policy_version": policy_version,
+                "policy_digest": policy_digest,
+                "scope": current["scope"],
+                "rationale": rationale,
+                "compensating_controls": controls,
+                "owner": owner,
+                "expires_at": expires_at,
+                "evidence_ids": evidence,
+                "predecessor_exception_id": exception_id,
+                "renewal_number": renewal_number,
+            }
+            request_digest = _digest(canonical)
+            resolved_owner_name = owner_name or owner
+            conn.execute(
+                """INSERT INTO exceptions
+                (id,policy_id,policy_version,policy_digest,scope,rationale,
+                 compensating_controls,owner,owner_name,evidence_ids,request_digest,
+                 expires_at,status,version,requested_by,requested_by_name,
+                 approved_by,approved_by_name,decision_rationale,decided_at,
+                 revoked_by,revoked_by_name,revoked_at,revocation_rationale,
+                 predecessor_exception_id,renewal_number,superseded_by_exception_id,
+                 superseded_at,created_at,updated_at)
+                VALUES (:id,:policy_id,:policy_version,:policy_digest,:scope,:rationale,
+                        :controls,:owner,:owner_name,:evidence,:digest,:expires_at,
+                        'pending',1,:actor,:actor_name,NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+                        NULL,:predecessor,:renewal_number,NULL,NULL,:now,:now)""",
+                {
+                    "id": successor_id, "policy_id": current["policy_id"],
+                    "policy_version": policy_version, "policy_digest": policy_digest,
+                    "scope": current["scope"], "rationale": rationale,
+                    "controls": controls, "owner": owner,
+                    "owner_name": resolved_owner_name, "evidence": _json(evidence),
+                    "digest": request_digest, "expires_at": expires_at,
+                    "actor": actor, "actor_name": actor_name,
+                    "predecessor": exception_id,
+                    "renewal_number": renewal_number, "now": now,
+                },
+            )
+            approval_expires = min(expires_at, current["expires_at"], now + 604800)
+            conn.execute(
+                """INSERT INTO approvals
+                (id,kind,resource_id,resource_version,request_digest,evidence_ids,
+                 requester,requester_name,status,rationale,approver,approver_name,
+                 decision_rationale,version,expires_at,created_at,decided_at,expired_at)
+                VALUES (?,'exception',?,?,?, ?,?,?,'pending',?,NULL,NULL,NULL,1,?,?,NULL,NULL)""",
+                (
+                    approval_id, successor_id, 1, request_digest, _json(evidence),
+                    actor, actor_name, rationale, approval_expires, now,
+                ),
+            )
+            conn.execute(
+                """UPDATE exceptions SET version=version+1,updated_at=? WHERE id=?""",
+                (now, exception_id),
+            )
+            conn.execute(
+                """INSERT INTO exception_events
+                (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'exception.renewal_started','approved','approved',?,?,?,?)""",
+                (
+                    _id("eev"), exception_id, actor, actor_name, actor_role,
+                    rationale, _json([successor_id, *evidence]), now, correlation_id,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO exception_events
+                (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'exception.renewal_requested',NULL,'pending',?,?,?,?)""",
+                (
+                    _id("eev"), successor_id, actor, actor_name, actor_role,
+                    rationale, _json([exception_id, *evidence]), now, correlation_id,
+                ),
+            )
+            self._governance_notify(
+                conn, kind="exception.renewal_requested",
+                title="Exception renewal ready",
+                message=f"{actor_name} requested renewal for {current['scope']}.",
+                resource_kind="approval", resource_id=approval_id,
+                recipient_role="ciso",
+                dedupe_key=f"exception-renewal:{successor_id}:1",
+            )
+        return self.exception(successor_id), self.approval(approval_id)
+
+    def revoke_exception(
+        self, exception_id: str, *, expected_version: int, rationale: str,
+        evidence_ids: list[str], actor: str, actor_name: str, actor_role: str,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        """End an approved exception and cancel any pending renewal atomically."""
+        now = _now()
+        evidence = list(dict.fromkeys(
+            value.strip() for value in evidence_ids if value.strip()
+        ))
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM exceptions WHERE id=?", (exception_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown exception")
+            if current["version"] != expected_version:
+                raise VersionConflict("exception changed; reload before revoking it")
+            if current["requested_by"] == actor:
+                raise SeparationConflict(
+                    "the exception requester cannot revoke the same request"
+                )
+            if current["status"] != "approved" or current["expires_at"] <= now:
+                raise StoreError("only a currently approved exception can be revoked")
+            conn.execute(
+                """UPDATE exceptions SET status='revoked',revoked_by=?,
+                revoked_by_name=?,revoked_at=?,revocation_rationale=?,
+                version=version+1,updated_at=? WHERE id=?""",
+                (actor, actor_name, now, rationale, now, exception_id),
+            )
+            conn.execute(
+                """INSERT INTO exception_events
+                (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'exception.revoked','approved','revoked',?,?,?,?)""",
+                (
+                    _id("eev"), exception_id, actor, actor_name, actor_role,
+                    rationale, _json(evidence), now, correlation_id,
+                ),
+            )
+            successors = conn.execute(
+                """SELECT * FROM exceptions WHERE predecessor_exception_id=?
+                AND status='pending'""", (exception_id,),
+            ).fetchall()
+            for successor in successors:
+                cancellation = "Renewal cancelled because the prior exception was revoked."
+                conn.execute(
+                    """UPDATE exceptions SET status='revoked',revoked_by=?,
+                    revoked_by_name=?,revoked_at=?,revocation_rationale=?,
+                    version=version+1,updated_at=? WHERE id=?""",
+                    (actor, actor_name, now, cancellation, now, successor["id"]),
+                )
+                conn.execute(
+                    """UPDATE approvals SET status='rejected',approver=?,approver_name=?,
+                    decision_rationale=?,version=version+1,decided_at=?
+                    WHERE kind='exception' AND resource_id=? AND status='pending'""",
+                    (actor, actor_name, cancellation, now, successor["id"]),
+                )
+                conn.execute(
+                    """INSERT INTO exception_events
+                    (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                     to_state,rationale,evidence_ids,at,correlation_id)
+                    VALUES (?,?,?,?,?,'exception.renewal_cancelled','pending','revoked',?,?,?,?)""",
+                    (
+                        _id("eev"), successor["id"], actor, actor_name, actor_role,
+                        cancellation, _json([exception_id]), now, correlation_id,
+                    ),
+                )
+            recipients = {current["requested_by"]} - {actor}
+            for recipient in recipients:
+                self._governance_notify(
+                    conn, kind="exception.revoked", title="Exception revoked",
+                    message=f"The exception for {current['scope']} is no longer active.",
+                    resource_kind="exception", resource_id=exception_id,
+                    recipient_subject=recipient,
+                    dedupe_key=f"exception-revoked:{exception_id}:{recipient}",
+                )
+        return self.exception(exception_id)
 
     def exceptions(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
@@ -1445,6 +1853,20 @@ class ControlPlane:
                 raise StoreError("exception is no longer pending")
             if exception["request_digest"] != current["request_digest"]:
                 raise StoreError("approval no longer matches the exception request")
+            predecessor = None
+            if status == "approved" and exception["predecessor_exception_id"]:
+                predecessor = conn.execute(
+                    "SELECT * FROM exceptions WHERE id=?",
+                    (exception["predecessor_exception_id"],),
+                ).fetchone()
+                if (
+                    predecessor is None
+                    or predecessor["status"] != "approved"
+                    or predecessor["expires_at"] <= now
+                ):
+                    raise StoreError(
+                        "the prior exception is no longer active; submit a new request"
+                    )
             conn.execute(
                 """UPDATE approvals SET status=?,approver=?,approver_name=?,
                 decision_rationale=?,version=?,decided_at=? WHERE id=?""",
@@ -1474,6 +1896,61 @@ class ControlPlane:
                     rationale, current["evidence_ids"], now, correlation_id,
                 ),
             )
+            if predecessor is not None:
+                conn.execute(
+                    """UPDATE exceptions SET status='superseded',
+                    superseded_by_exception_id=?,superseded_at=?,version=version+1,
+                    updated_at=? WHERE id=?""",
+                    (exception["id"], now, now, predecessor["id"]),
+                )
+                conn.execute(
+                    """INSERT INTO exception_events
+                    (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                     to_state,rationale,evidence_ids,at,correlation_id)
+                    VALUES (?,?,?,?,?,'exception.superseded','approved','superseded',?,?,?,?)""",
+                    (
+                        _id("eev"), predecessor["id"], actor, actor_name,
+                        actor_role, rationale, _json([exception["id"]]), now,
+                        correlation_id,
+                    ),
+                )
+            recipients = {exception["requested_by"]} - {actor}
+            for recipient in recipients:
+                self._governance_notify(
+                    conn, kind=f"exception.{status}",
+                    title=f"Exception {status}",
+                    message=f"The request for {exception['scope']} was {status}.",
+                    resource_kind="exception", resource_id=exception["id"],
+                    recipient_subject=recipient,
+                    dedupe_key=f"exception-{status}:{exception['id']}:{recipient}",
+                )
+            if status == "approved":
+                for lead, label in ((604800, "7 days"), (86400, "24 hours")):
+                    for recipient in {exception["requested_by"]}:
+                        self._governance_notify(
+                            conn, kind="exception.expiry_due",
+                            title="Exception expiry approaching",
+                            message=(
+                                f"The exception for {exception['scope']} expires in {label}."
+                            ),
+                            resource_kind="exception", resource_id=exception["id"],
+                            recipient_subject=recipient,
+                            not_before=max(now, int(exception["expires_at"]) - lead),
+                            dedupe_key=(
+                                f"exception-expiry:{exception['id']}:{lead}:{recipient}"
+                            ),
+                        )
+                    self._governance_notify(
+                        conn, kind="exception.expiry_due",
+                        title="Exception expiry approaching",
+                        message=(
+                            f"The exception for {exception['scope']} expires in {label}."
+                        ),
+                        resource_kind="exception", resource_id=exception["id"],
+                        recipient_role="ciso",
+                        not_before=max(now, int(exception["expires_at"]) - lead),
+                        dedupe_key=f"exception-expiry:{exception['id']}:{lead}:ciso",
+                    )
         return self.approval(approval_id)
 
     def create_remediation(self, *, case_id: str, title: str, owner: str,
@@ -1536,6 +2013,175 @@ class ControlPlane:
                 dedupe_key,
             ),
         )
+
+    @staticmethod
+    def _governance_notify(
+        conn: sqlite3.Connection, *, kind: str, title: str, message: str,
+        resource_kind: str, resource_id: str, dedupe_key: str,
+        recipient_subject: str | None = None,
+        recipient_role: str | None = None, not_before: int | None = None,
+    ) -> None:
+        now = _now()
+        conn.execute(
+            """INSERT OR IGNORE INTO governance_notifications
+            (id,kind,title,message,resource_kind,resource_id,recipient_subject,
+             recipient_role,not_before,created_at,dedupe_key)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                _id("gnt"), kind, title, message, resource_kind, resource_id,
+                recipient_subject, recipient_role, not_before or now, now,
+                dedupe_key,
+            ),
+        )
+
+    def reconcile_governance_expiry(
+        self, *, now: int | None = None,
+    ) -> dict[str, int]:
+        """Materialize due approval and exception transitions exactly once."""
+        at = int(now if now is not None else _now())
+        counts = {"approvals_expired": 0, "exceptions_expired": 0}
+        try:
+            with self._write() as conn:
+                conn.execute(
+                    """UPDATE governance_reconciler_state
+                    SET last_started_at=?,last_error=NULL WHERE singleton=1""",
+                    (at,),
+                )
+                approvals = conn.execute(
+                    """SELECT * FROM approvals
+                    WHERE status='pending' AND expires_at<=? ORDER BY expires_at,id""",
+                    (at,),
+                ).fetchall()
+                for approval in approvals:
+                    conn.execute(
+                        """UPDATE approvals SET status='expired',version=version+1,
+                        expired_at=? WHERE id=? AND status='pending'""",
+                        (at, approval["id"]),
+                    )
+                    counts["approvals_expired"] += 1
+                    if approval["kind"] != "exception":
+                        continue
+                    exception = conn.execute(
+                        "SELECT * FROM exceptions WHERE id=?",
+                        (approval["resource_id"],),
+                    ).fetchone()
+                    if exception is not None and exception["status"] == "pending":
+                        conn.execute(
+                            """UPDATE exceptions SET status='expired',
+                            version=version+1,updated_at=? WHERE id=?""",
+                            (at, exception["id"]),
+                        )
+                        conn.execute(
+                            """INSERT INTO exception_events
+                            (id,exception_id,actor,actor_name,actor_role,action,
+                             from_state,to_state,rationale,evidence_ids,at,correlation_id)
+                            VALUES (?,?,?,?,?,'exception.approval_expired','pending',
+                                    'expired',?,?,?,'system:governance-expiry')""",
+                            (
+                                _id("eev"), exception["id"], "meshagent-system",
+                                "MeshAgent", "system",
+                                "The approval window expired without a decision.",
+                                approval["evidence_ids"], at,
+                            ),
+                        )
+                        counts["exceptions_expired"] += 1
+                        for recipient in {exception["requested_by"]}:
+                            self._governance_notify(
+                                conn, kind="exception.expired",
+                                title="Exception request expired",
+                                message=(
+                                    f"The approval window for {exception['scope']} expired."
+                                ),
+                                resource_kind="exception",
+                                resource_id=exception["id"],
+                                recipient_subject=recipient,
+                                dedupe_key=(
+                                    f"exception-expired:{exception['id']}:{recipient}"
+                                ),
+                            )
+                        self._governance_notify(
+                            conn, kind="exception.expired",
+                            title="Exception request expired",
+                            message=(
+                                f"The approval window for {exception['scope']} expired."
+                            ),
+                            resource_kind="exception",
+                            resource_id=exception["id"], recipient_role="ciso",
+                            dedupe_key=f"exception-expired:{exception['id']}:ciso",
+                        )
+
+                active_exceptions = conn.execute(
+                    """SELECT * FROM exceptions
+                    WHERE status='approved' AND expires_at<=?
+                    ORDER BY expires_at,id""", (at,),
+                ).fetchall()
+                for exception in active_exceptions:
+                    conn.execute(
+                        """UPDATE exceptions SET status='expired',version=version+1,
+                        updated_at=? WHERE id=? AND status='approved'""",
+                        (at, exception["id"]),
+                    )
+                    conn.execute(
+                        """INSERT INTO exception_events
+                        (id,exception_id,actor,actor_name,actor_role,action,
+                         from_state,to_state,rationale,evidence_ids,at,correlation_id)
+                        VALUES (?,?,?,?,?,'exception.expired','approved','expired',
+                                ?,?,?, 'system:governance-expiry')""",
+                        (
+                            _id("eev"), exception["id"], "meshagent-system",
+                            "MeshAgent", "system",
+                            "The governed exception reached its expiry time.",
+                            exception["evidence_ids"], at,
+                        ),
+                    )
+                    counts["exceptions_expired"] += 1
+                    for recipient in {exception["requested_by"]}:
+                        self._governance_notify(
+                            conn, kind="exception.expired",
+                            title="Exception expired",
+                            message=(
+                                f"The exception for {exception['scope']} is no longer active."
+                            ),
+                            resource_kind="exception",
+                            resource_id=exception["id"],
+                            recipient_subject=recipient,
+                            dedupe_key=f"exception-expired:{exception['id']}:{recipient}",
+                        )
+                    self._governance_notify(
+                        conn, kind="exception.expired", title="Exception expired",
+                        message=(
+                            f"The exception for {exception['scope']} is no longer active."
+                        ),
+                        resource_kind="exception", resource_id=exception["id"],
+                        recipient_role="ciso",
+                        dedupe_key=f"exception-expired:{exception['id']}:ciso",
+                    )
+                conn.execute(
+                    """UPDATE governance_reconciler_state
+                    SET last_completed_at=?,last_error=NULL,last_counts=?
+                    WHERE singleton=1""", (at, _json(counts)),
+                )
+        except Exception as exc:
+            try:
+                with self._write() as conn:
+                    conn.execute(
+                        """UPDATE governance_reconciler_state SET last_error=?
+                        WHERE singleton=1""", (str(exc)[:1000],),
+                    )
+            finally:
+                raise
+        return counts
+
+    def governance_lifecycle_status(self) -> dict[str, Any]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM governance_reconciler_state WHERE singleton=1"
+            ).fetchone()
+        assert row is not None
+        body = dict(row)
+        body.pop("singleton", None)
+        body["last_counts"] = _loads(body["last_counts"], {})
+        return body
 
     @staticmethod
     def _enqueue_review_projection(
@@ -2074,8 +2720,10 @@ class ControlPlane:
     def notifications(
         self, *, subject: str, role: str, limit: int = 100,
     ) -> list[dict[str, Any]]:
+        bounded = max(1, min(limit, 200))
+        now = _now()
         with self._connect() as conn:
-            rows = conn.execute(
+            work_rows = conn.execute(
                 """SELECT n.*,CASE WHEN r.notification_id IS NULL THEN 0 ELSE 1 END AS read
                 FROM work_notifications n
                 LEFT JOIN work_notification_reads r
@@ -2083,33 +2731,61 @@ class ControlPlane:
                 WHERE n.not_before<=? AND
                   (n.recipient_subject=? OR n.recipient_role=?)
                 ORDER BY n.created_at DESC,n.id DESC LIMIT ?""",
-                (subject, _now(), subject, role, max(1, min(limit, 200))),
+                (subject, now, subject, role, bounded),
+            ).fetchall()
+            governance_rows = conn.execute(
+                """SELECT n.*,CASE WHEN r.notification_id IS NULL THEN 0 ELSE 1 END AS read
+                FROM governance_notifications n
+                LEFT JOIN governance_notification_reads r
+                  ON r.notification_id=n.id AND r.subject=?
+                WHERE n.not_before<=? AND
+                  (n.recipient_subject=? OR n.recipient_role=?)
+                ORDER BY n.created_at DESC,n.id DESC LIMIT ?""",
+                (subject, now, subject, role, bounded),
             ).fetchall()
         values = []
-        for row in rows:
+        for row in [*work_rows, *governance_rows]:
             item = dict(row)
             item["read"] = bool(item["read"])
-            item["route"] = (
-                f"/analyst/reviews/{item['resource_id']}"
-                if item["resource_kind"] == "review"
-                else f"/analyst/cases/{item['resource_id']}"
-            )
+            item["route"] = {
+                "review": f"/analyst/reviews/{item['resource_id']}",
+                "case": f"/analyst/cases/{item['resource_id']}",
+                "policy": "/ciso/policies",
+                "exception": (
+                    "/ciso/policies" if role == "ciso" else "/analyst/queue"
+                ),
+                "approval": (
+                    "/ciso/approvals" if role == "ciso" else "/analyst/queue"
+                ),
+            }[item["resource_kind"]]
             for key in ("recipient_subject", "recipient_role", "dedupe_key"):
                 item.pop(key, None)
             values.append(item)
-        return values
+        values.sort(key=lambda item: (item["created_at"], item["id"]), reverse=True)
+        return values[:bounded]
 
     def read_notification(self, notification_id: str, *, subject: str, role: str) -> None:
         with self._write() as conn:
             visible = conn.execute(
-                "SELECT 1 FROM work_notifications WHERE id=? AND "
+                "SELECT 'work' AS source FROM work_notifications WHERE id=? AND "
+                "not_before<=? AND (recipient_subject=? OR recipient_role=?) "
+                "UNION ALL SELECT 'governance' AS source FROM governance_notifications "
+                "WHERE id=? AND not_before<=? AND "
                 "(recipient_subject=? OR recipient_role=?)",
-                (notification_id, subject, role),
+                (
+                    notification_id, _now(), subject, role,
+                    notification_id, _now(), subject, role,
+                ),
             ).fetchone()
             if visible is None:
                 raise Missing("unknown notification")
+            table = (
+                "work_notification_reads"
+                if visible["source"] == "work"
+                else "governance_notification_reads"
+            )
             conn.execute(
-                "INSERT OR IGNORE INTO work_notification_reads VALUES (?,?,?)",
+                f"INSERT OR IGNORE INTO {table} VALUES (?,?,?)",
                 (notification_id, subject, _now()),
             )
 

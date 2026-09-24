@@ -16,8 +16,11 @@ CaseState = Literal[
 PolicyVersionState = Literal[
     "draft", "in_review", "active", "superseded", "withdrawn", "retired",
 ]
-PolicyState = Literal["active", "retired"]
-ExceptionState = Literal["pending", "approved", "rejected", "expired", "revoked"]
+PolicyState = Literal["pending", "active", "retired"]
+ExceptionState = Literal[
+    "pending", "approved", "rejected", "expired", "revoked", "superseded",
+]
+ApprovalState = Literal["pending", "approved", "rejected", "expired"]
 
 
 class OriginOut(BaseModel):
@@ -146,6 +149,15 @@ class PolicyVersionOut(BaseModel):
     created_at: int
     created_by: str
     created_by_name: str
+    submitted_by: str | None = None
+    submitted_by_name: str | None = None
+    submitted_at: int | None = None
+    activated_by: str | None = None
+    activated_by_name: str | None = None
+    activated_at: int | None = None
+    withdrawn_by: str | None = None
+    withdrawn_by_name: str | None = None
+    withdrawn_at: int | None = None
 
 
 class PolicyOut(BaseModel):
@@ -175,6 +187,22 @@ class CreateExceptionRequest(BaseModel):
     expires_at: int
 
 
+class RenewExceptionRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    rationale: str = Field(min_length=1, max_length=4_096)
+    compensating_controls: str = Field(min_length=1, max_length=4_096)
+    owner: str = Field(min_length=1, max_length=256)
+    owner_name: str | None = Field(default=None, min_length=1, max_length=256)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=100)
+    expires_at: int
+
+
+class RevokeExceptionRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    rationale: str = Field(min_length=1, max_length=4_096)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
 class ExceptionOut(BaseModel):
     id: str
     policy_id: str
@@ -198,7 +226,13 @@ class ExceptionOut(BaseModel):
     decision_rationale: str | None = None
     decided_at: int | None = None
     revoked_by: str | None = None
+    revoked_by_name: str | None = None
     revoked_at: int | None = None
+    revocation_rationale: str | None = None
+    predecessor_exception_id: str | None = None
+    renewal_number: int = Field(default=0, ge=0)
+    superseded_by_exception_id: str | None = None
+    superseded_at: int | None = None
     created_at: int
     updated_at: int
     events: list[GovernanceEventOut] = Field(default_factory=list)
@@ -213,7 +247,7 @@ class ApprovalOut(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     requester: str
     requester_name: str
-    status: str
+    status: ApprovalState
     expired: bool = False
     rationale: str
     approver: str | None = None
@@ -223,12 +257,20 @@ class ApprovalOut(BaseModel):
     expires_at: int
     created_at: int
     decided_at: int | None = None
+    expired_at: int | None = None
 
 
 class ApprovalDecisionRequest(BaseModel):
     expected_version: int = Field(ge=1)
     decision: Literal["approve", "reject"]
     rationale: str = Field(min_length=1, max_length=4_096)
+
+
+class GovernanceLifecycleStatusOut(BaseModel):
+    last_started_at: int | None = None
+    last_completed_at: int | None = None
+    last_error: str | None = None
+    last_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class CreateRemediationRequest(BaseModel):
@@ -549,7 +591,7 @@ class NotificationOut(BaseModel):
     kind: str
     title: str
     message: str
-    resource_kind: WorkKind
+    resource_kind: Literal["review", "case", "policy", "exception", "approval"]
     resource_id: str
     route: str
     created_at: int

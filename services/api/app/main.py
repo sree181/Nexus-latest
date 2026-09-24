@@ -103,12 +103,15 @@ from .workflow_models import (
     CreateReviewRequest,
     EscalateReviewRequest,
     ExceptionOut,
+    GovernanceLifecycleStatusOut,
     OriginOut,
     PolicyLifecycleRequest,
     PolicyOut,
     RemediationOut,
     ReportOut,
     ReportRequest,
+    RenewExceptionRequest,
+    RevokeExceptionRequest,
     ReviewDecisionRequest,
     ReviewGraphOut,
     ReviewRequestListOut,
@@ -194,15 +197,21 @@ async def _lifespan(_: FastAPI):
     workflow_store.reset_interrupted_review_projections()
     await asyncio.to_thread(_reconcile_developer_session_projections)
     await asyncio.to_thread(_reconcile_review_projections)
+    await asyncio.to_thread(_reconcile_governance_lifecycle)
     projection_task = asyncio.create_task(
         _projection_reconciler(), name="developer-session-projection-reconciler"
+    )
+    governance_task = asyncio.create_task(
+        _governance_reconciler(), name="governance-lifecycle-reconciler"
     )
     try:
         yield
     finally:
-        projection_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await projection_task
+        for task in (projection_task, governance_task):
+            task.cancel()
+        for task in (projection_task, governance_task):
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(title="MeshAgent API", version=__version__, lifespan=_lifespan)
@@ -510,6 +519,15 @@ def _reconcile_review_projections() -> None:
             )
 
 
+def _reconcile_governance_lifecycle() -> dict[str, int]:
+    """Materialize due approvals and exceptions without read-time side effects."""
+    try:
+        return workflow_store.reconcile_governance_expiry()
+    except Exception:
+        logger.exception("governance lifecycle reconciliation failed")
+        raise
+
+
 async def _projection_reconciler() -> None:
     try:
         interval = float(os.environ.get(
@@ -525,6 +543,24 @@ async def _projection_reconciler() -> None:
             await asyncio.to_thread(_reconcile_review_projections)
         except Exception:
             logger.exception("evidence projection scan failed")
+
+
+async def _governance_reconciler() -> None:
+    try:
+        interval = float(os.environ.get(
+            "MESHAGENT_GOVERNANCE_RECONCILE_SECONDS", "60.0"
+        ))
+    except ValueError:
+        interval = 60.0
+    interval = min(max(interval, 0.1), 3600.0)
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await asyncio.to_thread(_reconcile_governance_lifecycle)
+        except Exception:
+            # The sync wrapper records the failure. The resident loop remains
+            # available to recover on the next deterministic scan.
+            pass
 
 # OIDC transactions and browser sessions are server-owned. Only hashes of the
 # opaque cookie values are retained; access tokens never enter browser storage.
@@ -1009,6 +1045,7 @@ def create_policy(
         actor_name=who.name,
         actor_role=who.role,
         correlation_id=_correlation(request),
+        require_independent_approver=auth.is_production(),
     )
     return PolicyOut(**policy)
 
@@ -1070,7 +1107,7 @@ def activate_policy_version(
     version: int,
     req: PolicyLifecycleRequest,
     request: Request,
-    who: Principal = Depends(require_capability("policy.write")),
+    who: Principal = Depends(require_capability("policy.activate")),
 ) -> PolicyOut:
     note(who, "policy.version.activate.request", policy_id, req.rationale, require_commit=True)
     return PolicyOut(**workflow_store.activate_policy_version(
@@ -1082,6 +1119,7 @@ def activate_policy_version(
         actor_name=who.name,
         actor_role=who.role,
         correlation_id=_correlation(request),
+        require_independent_approver=auth.is_production(),
     ))
 
 
@@ -1168,6 +1206,63 @@ def get_exception(
     return ExceptionOut(**workflow_store.exception(exception_id))
 
 
+@app.post(
+    "/api/exceptions/{exception_id}/renew",
+    response_model=ApprovalOut,
+    status_code=201,
+)
+def renew_exception(
+    exception_id: str,
+    req: RenewExceptionRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("exception.renew")),
+) -> ApprovalOut:
+    _reconcile_governance_lifecycle()
+    note(
+        who, "exception.renew.request", exception_id, req.rationale,
+        require_commit=True,
+    )
+    _, approval = workflow_store.renew_exception(
+        exception_id,
+        expected_version=req.expected_version,
+        rationale=req.rationale,
+        controls=req.compensating_controls,
+        owner=req.owner,
+        owner_name=req.owner_name,
+        evidence_ids=req.evidence_ids,
+        expires_at=req.expires_at,
+        actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
+    )
+    return ApprovalOut(**approval)
+
+
+@app.post("/api/exceptions/{exception_id}/revoke", response_model=ExceptionOut)
+def revoke_exception(
+    exception_id: str,
+    req: RevokeExceptionRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("exception.revoke")),
+) -> ExceptionOut:
+    _reconcile_governance_lifecycle()
+    note(
+        who, "exception.revoke.request", exception_id, req.rationale,
+        require_commit=True,
+    )
+    return ExceptionOut(**workflow_store.revoke_exception(
+        exception_id,
+        expected_version=req.expected_version,
+        rationale=req.rationale,
+        evidence_ids=req.evidence_ids,
+        actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
+    ))
+
+
 @app.get("/api/approvals", response_model=list[ApprovalOut])
 def approvals(
     status: str | None = None,
@@ -1191,6 +1286,7 @@ def decide_approval(
     request: Request,
     who: Principal = Depends(require_capability("exception.approve")),
 ) -> ApprovalOut:
+    _reconcile_governance_lifecycle()
     note(
         who, f"approval.{req.decision}.request", approval_id,
         req.rationale, require_commit=True,
@@ -1206,6 +1302,35 @@ def decide_approval(
         correlation_id=_correlation(request),
     )
     return ApprovalOut(**approval)
+
+
+@app.get(
+    "/api/governance/lifecycle/status",
+    response_model=GovernanceLifecycleStatusOut,
+)
+def governance_lifecycle_status(
+    _: Principal = Depends(require_capability("exception.approve")),
+) -> GovernanceLifecycleStatusOut:
+    return GovernanceLifecycleStatusOut(
+        **workflow_store.governance_lifecycle_status()
+    )
+
+
+@app.post(
+    "/api/governance/lifecycle/reconcile",
+    response_model=GovernanceLifecycleStatusOut,
+)
+def reconcile_governance_lifecycle(
+    who: Principal = Depends(require_capability("exception.approve")),
+) -> GovernanceLifecycleStatusOut:
+    note(
+        who, "governance.lifecycle.reconcile", "governance:lifecycle",
+        require_commit=True,
+    )
+    _reconcile_governance_lifecycle()
+    return GovernanceLifecycleStatusOut(
+        **workflow_store.governance_lifecycle_status()
+    )
 
 
 @app.get("/api/remediations", response_model=list[RemediationOut])

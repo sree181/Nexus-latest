@@ -10,7 +10,7 @@ Priority 5A establishes the durable backend contract for CISO policy governance 
 
 The relational control plane remains authoritative for mutable workflow state. A policy version is immutable after creation; lifecycle commands only change its state and effective interval. An exception is bound to one policy version and its SHA-256 content digest. This prevents a later policy edit from silently changing what the CISO approved.
 
-Priority 5A does not yet implement maker-checker separation for policy activation, automatic expiry materialization, renewal or revocation commands, native HyperMesh projection, or the redesigned CISO workspace. Those controls belong to Stages 5B, 5C, and 5D respectively.
+Priority 5A did not implement maker-checker separation for policy activation, automatic expiry materialization, renewal, or revocation. Priority 5B has now added those controls.[6] Native HyperMesh projection and the redesigned CISO workspace remain Stages 5C and 5D respectively.
 
 ## 2. Aggregate contracts
 
@@ -20,7 +20,7 @@ A policy has a stable identifier, business name, scope, lifecycle status, active
 
 Each policy version contains the enforcement threshold, denied licenses, unknown-evidence behavior, rationale, creator identity, lifecycle state, effective interval, and canonical content digest. The digest is calculated over the policy identifier, version number, enforcement values, and rationale. It is not a signature and does not prove an external attestation; it detects substitution within the governed workflow.
 
-New policies are created with version 1 active to preserve the current product contract. Every later version follows this state machine:
+Priority 5A created version 1 as active to preserve the earlier product contract. Priority 5B now creates version 1 as `in_review` in production and requires independent activation; local development retains immediate active creation. Every later version follows this state machine:
 
 ```text
 draft --submit--> in_review --activate--> active --replace--> superseded
@@ -38,7 +38,7 @@ An exception records the exact `policy_id`, `policy_version`, and policy content
 
 The exception request digest is SHA-256 over the complete decision payload: policy binding, scope, rationale, compensating controls, owner, expiry, and evidence identifiers. The linked approval stores the same digest, evidence identifiers, and exception version. Before a decision commits, the service verifies that the approval still matches the exception. A stale or substituted request is rejected.
 
-An exception begins as `pending`. A CISO decision moves it to `approved` or `rejected`. Read models report a pending or approved record as `expired` once its expiry is in the past, even before Stage 5B materializes that transition. Existing separation of duties remains enforced: the requester cannot decide their own request.
+An exception begins as `pending`. A CISO decision moves it to `approved` or `rejected`. Stage 5B now persists due approval and exception transitions as `expired`; read models no longer simulate this state. Existing separation of duties remains enforced: the requester cannot decide their own request.
 
 ### 2.3 Immutable lifecycle events
 
@@ -78,7 +78,7 @@ Approval decisions validate the approval version, pending state, decision deadli
 | `GET` | `/api/policies/{policy_id}` | One complete policy aggregate | `policy.read` |
 | `POST` | `/api/policies/{policy_id}/versions` | New immutable draft | `policy.write` |
 | `POST` | `/api/policies/{policy_id}/versions/{version}/submit` | Draft moved to review | `policy.write` |
-| `POST` | `/api/policies/{policy_id}/versions/{version}/activate` | Candidate activated and predecessor superseded | `policy.write` |
+| `POST` | `/api/policies/{policy_id}/versions/{version}/activate` | Candidate activated and predecessor superseded | `policy.activate` |
 | `POST` | `/api/policies/{policy_id}/versions/{version}/withdraw` | Unfinished candidate withdrawn without deletion | `policy.write` |
 | `POST` | `/api/policies/{policy_id}/retire` | Active policy retired | `policy.write` |
 | `GET` | `/api/exceptions` | Exception register | `exception.read` |
@@ -106,7 +106,7 @@ Priority 5A is release-ready only after the complete API suite, frontend typeche
 
 ## 8. Deferred controls
 
-Stage 5B will add policy maker-checker separation, exception renewal and revocation, materialized expiry transitions, deterministic expiry reconciliation, and notification rules. Stage 5C will project policy and exception events through a transactional outbox into native HyperMesh and connect Analyst review/case evidence. Stage 5D will expose the lifecycle in the professional CISO workspace. Stage 5E will perform full release, recovery, role, and container validation.
+Stage 5B has added policy maker-checker separation, exception renewal and revocation, materialized expiry transitions, deterministic expiry reconciliation, and notification rules.[6] Stage 5C will project policy and exception events through a transactional outbox into native HyperMesh and connect Analyst review/case evidence. Stage 5D will expose the lifecycle in the professional CISO workspace. Stage 5E will perform full release, recovery, role, and container validation.
 
 ## References
 
@@ -115,3 +115,4 @@ Stage 5B will add policy maker-checker separation, exception renewal and revocat
 [3]: ../services/api/app/workflow_models.py "MeshAgent governance wire models"
 [4]: ./PRODUCTION_OPERATIONS.md "MeshAgent production backup and recovery runbook"
 [5]: ../services/api/tests/test_governance_contracts.py "Priority 5A governance contract regression suite"
+[6]: ./PRIORITY5B_GOVERNANCE_ENFORCEMENT.md "Priority 5B governance enforcement and lifecycle operations"
