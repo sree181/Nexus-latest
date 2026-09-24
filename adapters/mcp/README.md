@@ -43,7 +43,7 @@ applies to the hook commands under `adapters/cursor` and
 MeshAgent's **Connect your editor** screen generates this block with the path
 already filled in, as the API process sees it.
 
-Run `meshagent config set-endpoint https://meshagent.internal` and
+Run `meshagent config set https://meshagent.internal` and
 `meshagent login` first. The resulting `mesh_...` device credential is used
 only by `record_decision` and `check_package`. Read tools never inherit that
 credential. They require an explicitly delegated human/OIDC bearer in

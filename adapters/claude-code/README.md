@@ -35,7 +35,7 @@ Point the hook at your deployment and register the machine:
 
 ```bash
 python3 -m pip install /abs/path/to/meshagent-production-v1
-meshagent config set-endpoint https://meshagent.internal
+meshagent config set https://meshagent.internal
 meshagent login --label "work laptop"
 meshagent doctor
 ```
