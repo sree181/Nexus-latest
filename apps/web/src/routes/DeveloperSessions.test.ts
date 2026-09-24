@@ -4,7 +4,10 @@ import {
   activityCopy,
   summarizeProjection,
 } from "../components/DeveloperSessionUI";
+import { projectsFromSessions, sessionsForProject } from "../components/DeveloperProject";
 import type { ActivityEvent, DeveloperSession, PolicyEvaluation } from "../lib/api";
+import { filterActivity } from "./DeveloperSessionActivity";
+import { editorHook, repositoryConfig } from "./DeveloperConnectionsEditors";
 import { filterDeveloperSessions } from "./DeveloperSessions";
 import { summarizeSecurity } from "./DeveloperSessionSecurity";
 
@@ -137,5 +140,30 @@ describe("Developer Sessions workspace", () => {
         policy("unknown", "OSV unavailable"),
       ]),
     ).toEqual({ allowed: 1, warnings: 1, blocked: 1, unknown: 1, unavailable: 1 });
+  });
+
+  it("derives Project scope from stable repository identity rather than branches", () => {
+    const first = session("first", "completed", "run-1");
+    first.repository = { id: "repo-alpha", name: "Alpha", remote: "git://alpha", branch: "main", commit: "a" };
+    const second = session("second", "active", "run-2");
+    second.repository = { id: "repo-alpha", name: "Alpha", remote: "git://alpha", branch: "feature", commit: "b" };
+    const third = session("third", "completed", "run-3");
+    third.repository = { id: "repo-beta", name: "Beta", remote: null, branch: "main", commit: "c" };
+    expect(projectsFromSessions([third, second, first]).map((item) => item.id)).toEqual(["repo-alpha", "repo-beta"]);
+    expect(sessionsForProject([first, second, third], "repo-alpha").map((item) => item.id)).toEqual(["first", "second"]);
+  });
+
+  it("filters dense activity by semantics and attention without changing order", () => {
+    const file = event("file.changed", "projected", { path: "src/app.py", operation: "update", code: "x" });
+    const failed = event("tool.failed", "failed", { tool_name: "pytest", detail: "failed" });
+    failed.sequence = 3;
+    expect(filterActivity([file, failed], "code", "app.py")).toEqual([file]);
+    expect(filterActivity([file, failed], "attention", "")).toEqual([failed]);
+  });
+
+  it("generates explicit opt-in and editor hook configuration", () => {
+    expect(JSON.parse(repositoryConfig(true, ["*.env"]))).toEqual({ record: true, gate: true, exclude: ["*.env"] });
+    expect(editorHook("cursor", "/opt/meshagent")).toContain("/opt/meshagent/adapters/cursor/meshagent_hook.py");
+    expect(editorHook("claude", "/opt/meshagent")).toContain("/opt/meshagent/adapters/claude-code/meshagent_hook.py");
   });
 });

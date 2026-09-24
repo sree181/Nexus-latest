@@ -22,6 +22,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Versioned Cursor and Claude Code session adapters with collision-safe event identities, acknowledgement-based `.inflight` queues, bounded offline replay, and synchronous policy-result capture.
 - Lifespan-managed Developer activity projection reconciliation with durable retry timestamps and capped exponential backoff.
 - Developer-first Sessions, Activity, and Security screens backed by the owner-scoped connected-agent APIs, including live status refresh, ordered event evidence, package-policy history, projection-health diagnostics, deep links to governed runs, responsive states, and capability guards.
+- Visual-first Developer shell with icon navigation, repository-derived Project scope, compact session lists, session Overview and Evidence views, dense event inspection, package lifecycle visualization, contextual technical drawers, and a unified Connections workspace for Editors, Repositories, Devices, privacy settings, and verification. The interface uses scoped implementation tokens, plain-language status, responsive infographics, keyboard-accessible disclosure, and no editor-like chrome.
 
 ### Changed
 

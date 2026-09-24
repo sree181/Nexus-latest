@@ -1,19 +1,30 @@
+import { createContext, useContext } from "react";
 import { Link, Outlet, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@meshagent/ui";
 
+import { DevIcon } from "../components/DeveloperIcons";
+import { DeveloperTopbar } from "../components/DeveloperProject";
+import { IconTabs, Status } from "../components/DeveloperVisual";
+import { sessionVisual } from "../components/DeveloperSessionUI";
 import { ErrorState, Loading } from "../components/Async";
-import { AdapterBadge, SessionStatusBadge, compactId } from "../components/DeveloperSessionUI";
-import { PageHeader } from "../components/PageHeader";
-import { TabBar, type Tab } from "../components/TabBar";
-import { api } from "../lib/api";
-import { relativeTimeMs, timestampMs } from "../lib/format";
+import { api, type DeveloperSession } from "../lib/api";
+import { relativeTimeMs } from "../lib/format";
 
-export function developerSessionTabs(sessionId: string): Tab[] {
+const SessionContext = createContext<DeveloperSession | null>(null);
+
+export function useOpenDeveloperSession(): DeveloperSession {
+  const value = useContext(SessionContext);
+  if (!value) throw new Error("useOpenDeveloperSession must be used inside DeveloperSessionLayout");
+  return value;
+}
+
+export function developerSessionTabs(sessionId: string) {
   const params = { sessionId };
   return [
-    { label: "Activity", to: "/developer/sessions/$sessionId", params },
-    { label: "Security", to: "/developer/sessions/$sessionId/security", params },
+    { label: "Overview", icon: "session" as const, to: "/developer/sessions/$sessionId" as const, params, exact: true },
+    { label: "Activity", icon: "activity" as const, to: "/developer/sessions/$sessionId/activity" as const, params },
+    { label: "Security", icon: "security" as const, to: "/developer/sessions/$sessionId/security" as const, params },
+    { label: "Evidence", icon: "evidence" as const, to: "/developer/sessions/$sessionId/evidence" as const, params },
   ];
 }
 
@@ -22,71 +33,40 @@ export function DeveloperSessionLayout() {
   const session = useQuery({
     queryKey: ["developer-session", sessionId],
     queryFn: () => api.developerSession(sessionId),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "starting" || status === "active" || status === "ending"
-        ? 3_000
-        : false;
-    },
+    refetchInterval: (query) => ["starting", "active", "ending"].includes(query.state.data?.status ?? "") ? 3_000 : false,
   });
 
+  if (session.isPending) return <main className="dev-page"><DeveloperTopbar title="Session" showProject={false} /><Loading label="Loading" /></main>;
+  if (session.isError) return <main className="dev-page"><DeveloperTopbar title="Session" showProject={false} /><ErrorState error={session.error} retry={() => void session.refetch()} /></main>;
+
+  const state = sessionVisual(session.data.status);
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      <PageHeader
-        section="Developer sessions"
-        title={compactId(sessionId, 12, 6)}
-        meta={
-          session.data ? (
-            <>
-              <AdapterBadge adapter={session.data.adapter} />
-              <SessionStatusBadge status={session.data.status} />
-              <span>{relativeTimeMs(session.data.last_seen_at_ms)}</span>
-            </>
+    <SessionContext.Provider value={session.data}>
+      <main className="dev-page">
+        <DeveloperTopbar title="Session" showProject={false} actions={
+          session.data.run_id ? (
+            <Link to="/runs/$runId/memory" params={{ runId: session.data.run_id }} className="dev-icon-button" aria-label="Open provenance">
+              <DevIcon name="external" />
+            </Link>
           ) : undefined
-        }
-      />
-      {session.isPending ? <Loading label="Opening session record…" /> : null}
-      {session.isError ? (
-        <ErrorState error={session.error} retry={() => void session.refetch()} />
-      ) : null}
-      {session.data ? (
-        <>
-          <section className="shrink-0 border-b border-line bg-surface px-4 py-4 sm:px-6">
-            <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-              <div className="min-w-0">
-                <p className="font-mono text-[10px] tracking-widest text-slate">
-                  {session.data.repository.name.toUpperCase()}
-                  {session.data.repository.branch ? ` / ${session.data.repository.branch}` : ""}
-                </p>
-                <h2 className="mt-1 max-w-4xl font-serif text-[21px] font-semibold leading-tight text-ink">
-                  {session.data.task}
-                </h2>
-                <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-slate">
-                  <span title={session.data.id}>Session {compactId(session.data.id)}</span>
-                  <span>Started {timestampMs(session.data.started_at_ms)}</span>
-                  <span>Sequence {session.data.last_acked_sequence}</span>
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {!session.data.verified ? <Badge tone="warn">unverified local identity</Badge> : null}
-                {session.data.run_id ? (
-                  <Link
-                    to="/runs/$runId"
-                    params={{ runId: session.data.run_id }}
-                    className="rounded-lg border border-line-2 bg-surface px-3 py-2 text-[12px] font-medium text-accent transition hover:bg-accent-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  >
-                    Open governed evidence →
-                  </Link>
-                ) : (
-                  <Badge tone="warn">evidence run pending</Badge>
-                )}
-              </div>
-            </div>
-          </section>
-          <TabBar label="Developer session views" tabs={developerSessionTabs(sessionId)} />
-          <Outlet />
-        </>
-      ) : null}
-    </main>
+        } />
+        <section className="dev-context">
+          <div className="dev-context-main">
+            <span className="dev-context-icon"><DevIcon name="repository" size={18} /></span>
+            <span className="dev-context-title">
+              <strong>{session.data.repository.name}</strong>
+              <small>{session.data.repository.branch ?? "default branch"} · {session.data.task}</small>
+            </span>
+          </div>
+          <div className="dev-context-actions">
+            {!session.data.verified ? <Status label="Local" tone="warning" icon="user" title="This identity was not verified by company sign-in." /> : null}
+            <Status label={state.label} tone={state.tone} icon={state.label === "Live" ? "live" : state.label === "Failed" ? "warning" : "check"} />
+            <span className="dev-relative-time">{relativeTimeMs(session.data.last_seen_at_ms)}</span>
+          </div>
+        </section>
+        <IconTabs label="Session" tabs={developerSessionTabs(sessionId)} />
+        <Outlet />
+      </main>
+    </SessionContext.Provider>
   );
 }

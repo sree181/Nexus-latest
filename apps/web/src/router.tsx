@@ -2,8 +2,11 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  Navigate,
   Outlet,
 } from "@tanstack/react-router";
+import { DeveloperProjectProvider } from "./components/DeveloperProject";
+import { DeveloperRail } from "./components/DeveloperRail";
 import { ModeBanner } from "./components/ModeBanner";
 import { RequiresAnalyst } from "./components/RequiresAnalyst";
 import { RequiresCapability } from "./components/RequiresCapability";
@@ -31,12 +34,19 @@ import { RunWorking } from "./routes/RunWorking";
 import { Structure } from "./routes/Structure";
 import { Audit } from "./routes/Audit";
 import { Devices } from "./routes/Devices";
-import { Setup } from "./routes/Setup";
 import { StartTask } from "./routes/StartTask";
 import { DeveloperSessions } from "./routes/DeveloperSessions";
 import { DeveloperSessionLayout } from "./routes/DeveloperSessionLayout";
+import { DeveloperSessionOverview } from "./routes/DeveloperSessionOverview";
 import { DeveloperSessionActivity } from "./routes/DeveloperSessionActivity";
 import { DeveloperSessionSecurity } from "./routes/DeveloperSessionSecurity";
+import { DeveloperSessionEvidence } from "./routes/DeveloperSessionEvidence";
+import { DeveloperConnectionsLayout } from "./routes/DeveloperConnectionsLayout";
+import { DeveloperConnectionsOverview } from "./routes/DeveloperConnectionsOverview";
+import { DeveloperConnectionsEditors } from "./routes/DeveloperConnectionsEditors";
+import { DeveloperConnectionsRepositories } from "./routes/DeveloperConnectionsRepositories";
+import { DeveloperConnectionsDevices } from "./routes/DeveloperConnectionsDevices";
+import { useIdentity } from "./lib/useIdentity";
 
 /** The banner sits above the rail rather than inside a screen: what it reports
  *  is true of the whole deployment, and a developer who never opens the screen
@@ -44,6 +54,20 @@ import { DeveloperSessionSecurity } from "./routes/DeveloperSessionSecurity";
  *  against the row rather than the viewport, so the banner appearing shortens
  *  the app instead of pushing its footer off the bottom. */
 function Layout() {
+  const { developer } = useIdentity();
+  if (developer) {
+    return (
+      <div className="flex h-screen flex-col bg-paper">
+        <ModeBanner />
+        <DeveloperProjectProvider>
+          <div className="dev-app min-h-0 flex-1">
+            <DeveloperRail />
+            <Outlet />
+          </div>
+        </DeveloperProjectProvider>
+      </div>
+    );
+  }
   return (
     <div className="flex h-screen flex-col bg-paper">
       <ModeBanner />
@@ -99,14 +123,60 @@ const developerSessionRoute = createRoute({
 
 const developerSessionActivityRoute = createRoute({
   getParentRoute: () => developerSessionRoute,
-  path: "/",
+  path: "activity",
   component: DeveloperSessionActivity,
+});
+
+const developerSessionOverviewRoute = createRoute({
+  getParentRoute: () => developerSessionRoute,
+  path: "/",
+  component: DeveloperSessionOverview,
 });
 
 const developerSessionSecurityRoute = createRoute({
   getParentRoute: () => developerSessionRoute,
   path: "security",
   component: DeveloperSessionSecurity,
+});
+
+const developerSessionEvidenceRoute = createRoute({
+  getParentRoute: () => developerSessionRoute,
+  path: "evidence",
+  component: DeveloperSessionEvidence,
+});
+
+const developerConnectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/developer/connections",
+  component: () => (
+    <RequiresCapability capability="run.own">
+      <DeveloperConnectionsLayout />
+    </RequiresCapability>
+  ),
+});
+
+const developerConnectionsOverviewRoute = createRoute({
+  getParentRoute: () => developerConnectionsRoute,
+  path: "/",
+  component: DeveloperConnectionsOverview,
+});
+
+const developerConnectionsEditorsRoute = createRoute({
+  getParentRoute: () => developerConnectionsRoute,
+  path: "editors",
+  component: DeveloperConnectionsEditors,
+});
+
+const developerConnectionsRepositoriesRoute = createRoute({
+  getParentRoute: () => developerConnectionsRoute,
+  path: "repositories",
+  component: DeveloperConnectionsRepositories,
+});
+
+const developerConnectionsDevicesRoute = createRoute({
+  getParentRoute: () => developerConnectionsRoute,
+  path: "devices",
+  component: DeveloperConnectionsDevices,
 });
 
 const analystQueueRoute = createRoute({
@@ -180,7 +250,7 @@ const devicesRoute = createRoute({
 const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/setup",
-  component: Setup,
+  component: () => <Navigate to="/developer/connections/editors" replace />,
 });
 
 const structureRoute = createRoute({
@@ -279,8 +349,16 @@ const routeTree = rootRoute.addChildren([
   developerSessionsRoute,
   developerStartRoute,
   developerSessionRoute.addChildren([
+    developerSessionOverviewRoute,
     developerSessionActivityRoute,
     developerSessionSecurityRoute,
+    developerSessionEvidenceRoute,
+  ]),
+  developerConnectionsRoute.addChildren([
+    developerConnectionsOverviewRoute,
+    developerConnectionsEditorsRoute,
+    developerConnectionsRepositoriesRoute,
+    developerConnectionsDevicesRoute,
   ]),
   analystQueueRoute,
   analystCaseRoute,

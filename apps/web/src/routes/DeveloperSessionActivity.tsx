@@ -1,150 +1,130 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@meshagent/ui";
 
-import { ErrorState, Loading } from "../components/Async";
+import { DevIcon } from "../components/DeveloperIcons";
 import {
-  Metric,
-  ProjectionBadge,
+  CopyButton,
+  Disclosure,
+  EmptyVisual,
+  IconButton,
+  SidePanel,
+  Status,
+  VisualFlow,
+} from "../components/DeveloperVisual";
+import {
   activityCopy,
-  activityDot,
-  compactId,
-  summarizeProjection,
+  activityIcon,
+  activityNeedsAttention,
+  projectionVisual,
 } from "../components/DeveloperSessionUI";
 import { api, type ActivityEvent } from "../lib/api";
-import { timestampMs } from "../lib/format";
+import { relativeTimeMs, timestampMs } from "../lib/format";
+import { useOpenDeveloperSession } from "./DeveloperSessionLayout";
 
-function displayPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  if (typeof payload.code !== "string") return payload;
-  return {
-    ...payload,
-    code:
-      payload.code.length > 1_200
-        ? `${payload.code.slice(0, 1_200)}\n… ${payload.code.length - 1_200} more characters`
-        : payload.code,
-  };
+type ActivityFilter = "all" | "code" | "tools" | "packages" | "attention";
+
+export function filterActivity(events: ActivityEvent[], filter: ActivityFilter, query: string): ActivityEvent[] {
+  return events.filter((event) => {
+    const filterMatch = filter === "all"
+      || (filter === "code" && event.type === "file.changed")
+      || (filter === "tools" && event.type.startsWith("tool."))
+      || (filter === "packages" && (event.type.startsWith("package.") || event.type === "policy.evaluated"))
+      || (filter === "attention" && activityNeedsAttention(event));
+    if (!filterMatch) return false;
+    const value = query.trim().toLowerCase();
+    if (!value) return true;
+    const copy = activityCopy(event);
+    return [event.type, copy.title, copy.detail, JSON.stringify(event.payload)].some((item) => item.toLowerCase().includes(value));
+  });
 }
 
-export function EventRow({ event, last }: { event: ActivityEvent; last: boolean }) {
+function EventDetail({ event, close }: { event: ActivityEvent; close: () => void }) {
+  const [revealed, setRevealed] = useState(false);
   const copy = activityCopy(event);
+  const projection = projectionVisual(event.projection_status);
   const lag = Math.max(0, event.received_at_ms - event.occurred_at_ms);
   return (
-    <li className="relative grid grid-cols-[42px_minmax(0,1fr)] gap-3 sm:grid-cols-[56px_minmax(0,1fr)]">
-      {!last ? <span className="absolute bottom-[-20px] left-[20px] top-8 w-px bg-line sm:left-[27px]" aria-hidden="true" /> : null}
-      <div className={`relative z-10 mt-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-paper ${activityDot[copy.group]} font-mono text-[10px] font-semibold text-white sm:ml-2`}>
-        {event.sequence}
-      </div>
-      <article className="min-w-0 rounded-xl border border-line bg-surface px-4 py-4 shadow-[var(--shadow)]">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-[10px] tracking-widest text-slate">{copy.label}</span>
-              <ProjectionBadge status={event.projection_status} />
-              {event.projection_attempts > 1 ? <Badge tone="warn">attempt {event.projection_attempts}</Badge> : null}
-            </div>
-            <h3 className="mt-2 break-words font-serif text-[17px] font-semibold text-ink">{copy.title}</h3>
-            <p className="mt-1 break-words text-[13px] leading-relaxed text-slate">{copy.detail}</p>
-          </div>
-          <div className="shrink-0 text-left sm:text-right">
-            <p className="font-mono text-[10.5px] text-slate">{timestampMs(event.occurred_at_ms)}</p>
-            <p className="mt-1 font-mono text-[10px] text-slate-2">received +{lag} ms</p>
-          </div>
+    <SidePanel title={copy.title} icon={activityIcon(event.type)} onClose={close}>
+      <div className="dev-stack">
+        <VisualFlow label="Evidence flow" nodes={[
+          { id: "editor", label: "Editor", icon: activityIcon(event.type), tone: "success", detail: `Editor event ${event.sequence} was observed.` },
+          { id: "stored", label: "Stored", icon: "check", tone: "success", detail: "MeshAgent received this event." },
+          { id: "evidence", label: projection.label, icon: "evidence", tone: projection.tone, detail: projection.detail },
+        ]} />
+        <dl className="dev-kv">
+          <dt>Action</dt><dd>{copy.detail}</dd>
+          <dt>Occurred</dt><dd>{timestampMs(event.occurred_at_ms)}</dd>
+          <dt>Received</dt><dd>{timestampMs(event.received_at_ms)} · +{lag} ms</dd>
+          <dt>Sequence</dt><dd>{event.sequence}</dd>
+          <dt>Evidence</dt><dd><Status label={projection.label} tone={projection.tone} /></dd>
+          <dt>Attempts</dt><dd>{event.projection_attempts}</dd>
+          {event.projection_error ? <><dt>Error</dt><dd className="dev-tone-danger">{event.projection_error}</dd></> : null}
+          {event.projection_next_attempt_at_ms ? <><dt>Trying again</dt><dd>{timestampMs(event.projection_next_attempt_at_ms)}</dd></> : null}
+        </dl>
+        <div className="dev-sensitive">
+          {revealed ? (
+            <pre className="dev-code-block w-full">{JSON.stringify(event.payload, null, 2)}</pre>
+          ) : (
+            <button type="button" className="dev-action" onClick={() => setRevealed(true)}><DevIcon name="eye" size={16} />Reveal payload</button>
+          )}
         </div>
+        <Disclosure label="Technical details" icon="code">
+          <dl className="dev-kv">
+            <dt>Event</dt><dd className="dev-mono">{event.event_id} <CopyButton value={event.event_id} label="Copy event ID" /></dd>
+            <dt>Editor event</dt><dd className="dev-mono">{event.source_event_id}</dd>
+            <dt>Digest</dt><dd className="dev-mono">{event.payload_sha256}</dd>
+            <dt>Run</dt><dd>{event.run_id ?? "Not recorded"}</dd>
+          </dl>
+        </Disclosure>
+      </div>
+    </SidePanel>
+  );
+}
 
-        {event.projection_error ? (
-          <div role="alert" className="mt-3 rounded-lg border border-risk bg-risk-soft px-3 py-2 text-[12px] leading-relaxed text-risk">
-            {event.projection_error}
-            {event.projection_next_attempt_at_ms ? ` · retry after ${timestampMs(event.projection_next_attempt_at_ms)}` : ""}
-          </div>
-        ) : null}
-
-        <details className="mt-3 border-t border-line pt-3">
-          <summary className="cursor-pointer select-none font-mono text-[10.5px] text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
-            Inspect recorded payload and evidence IDs
-          </summary>
-          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
-            <pre className="max-h-72 overflow-auto rounded-lg bg-rail p-3 font-mono text-[11px] leading-relaxed text-rail-ink-dim">
-              {JSON.stringify(displayPayload(event.payload), null, 2)}
-            </pre>
-            <dl className="space-y-2 text-[11px]">
-              <div><dt className="font-mono text-slate">EVENT ID</dt><dd className="mt-0.5 break-all text-ink">{event.event_id}</dd></div>
-              <div><dt className="font-mono text-slate">SOURCE EVENT</dt><dd className="mt-0.5 break-all text-ink">{event.source_event_id}</dd></div>
-              <div><dt className="font-mono text-slate">PAYLOAD SHA-256</dt><dd className="mt-0.5 break-all text-ink">{event.payload_sha256}</dd></div>
-              <div><dt className="font-mono text-slate">RUN</dt><dd className="mt-0.5 text-ink">{event.run_id ?? "not projected"}</dd></div>
-            </dl>
-          </div>
-        </details>
-      </article>
-    </li>
+export function EventRow({ event, select }: { event: ActivityEvent; select: () => void }) {
+  const copy = activityCopy(event);
+  const projection = projectionVisual(event.projection_status);
+  const attention = activityNeedsAttention(event);
+  return (
+    <button type="button" className={`dev-activity-row ${attention ? "dev-activity-row-attention" : ""}`} onClick={select}>
+      <span className="dev-activity-icon"><DevIcon name={activityIcon(event.type)} size={16} /></span>
+      <span className="dev-activity-copy"><strong>{copy.title}</strong><small>{copy.detail}</small></span>
+      <span className="dev-sequence">#{event.sequence}</span>
+      <Status label={projection.label} tone={projection.tone} icon="evidence" title={projection.detail} />
+      <span className="dev-relative-time">{relativeTimeMs(event.occurred_at_ms)}</span>
+    </button>
   );
 }
 
 export function DeveloperSessionActivity() {
-  const { sessionId } = useParams({ from: "/developer/sessions/$sessionId" });
-  const session = useQuery({
-    queryKey: ["developer-session", sessionId],
-    queryFn: () => api.developerSession(sessionId),
-  });
+  const session = useOpenDeveloperSession();
+  const [filter, setFilter] = useState<ActivityFilter>("all");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<ActivityEvent | null>(null);
+  const [following, setFollowing] = useState(false);
   const activity = useQuery({
-    queryKey: ["developer-session", sessionId, "activity"],
-    queryFn: () => api.developerActivity(sessionId, { limit: 500 }),
-    refetchInterval: () =>
-      session.data && ["starting", "active", "ending"].includes(session.data.status)
-        ? 2_500
-        : false,
+    queryKey: ["developer-session", session.id, "activity"],
+    queryFn: () => api.developerActivity(session.id, { limit: 500 }),
+    refetchInterval: ["starting", "active", "ending"].includes(session.status) ? 2_500 : false,
   });
+  const visible = useMemo(() => filterActivity(activity.data?.events ?? [], filter, query), [activity.data?.events, filter, query]);
 
-  if (activity.isPending) return <Loading label="Reading ordered session activity…" />;
-  if (activity.isError) return <ErrorState error={activity.error} retry={() => void activity.refetch()} />;
-
-  const summary = summarizeProjection(activity.data.events);
-  const latest = activity.data.events[activity.data.events.length - 1];
   return (
-    <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
-      <section className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="Events" value={activity.data.events.length} note={`through sequence ${latest?.sequence ?? 0}`} />
-        <Metric label="Governed" value={summary.projected} note="projected to HyperMesh" />
-        <Metric label="In progress" value={summary.pending} note="pending or projecting" />
-        <Metric label="Attention" value={summary.attention} note={summary.allProjected ? "all evidence current" : "failed or refused"} />
-      </section>
-
-      <section className="shrink-0 rounded-2xl border border-line bg-surface-2 px-4 py-3 sm:px-5">
-        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-          <div>
-            <p className="font-mono text-[10px] tracking-widest text-slate">ORDERED ACTIVITY LEDGER</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink">
-              Observed editor activity is shown in server-accepted sequence. Projection badges state whether each record became governed HyperMesh evidence.
-            </p>
+    <div className="dev-scroll">
+      <section className="dev-surface">
+        <div className="dev-list-toolbar">
+          <label className="dev-search"><DevIcon name="search" size={17} /><span className="sr-only">Search activity</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" /></label>
+          <div className="dev-filter-chips">
+            {(["all", "code", "tools", "packages", "attention"] as ActivityFilter[]).map((value) => <button key={value} type="button" className="dev-filter-chip" aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === "all" ? `All ${activity.data?.events.length ?? 0}` : value[0].toUpperCase() + value.slice(1)}</button>)}
+            <IconButton label={following ? "Stop following" : "Follow live"} icon="live" selected={following} onClick={() => setFollowing((value) => !value)} />
           </div>
-          {session.data?.run_id ? (
-            <Link to="/runs/$runId/memory" params={{ runId: session.data.run_id }} className="shrink-0 text-[12px] font-medium text-accent underline-offset-2 hover:underline">
-              Inspect provenance →
-            </Link>
-          ) : null}
         </div>
+        {activity.isPending ? <EmptyVisual icon="live" title="Loading" /> : activity.isError ? <EmptyVisual icon="warning" title="Try again" action={<button type="button" className="dev-action" onClick={() => void activity.refetch()}>Retry</button>} /> : visible.length ? (
+          <div aria-label="Ordered activity">{visible.map((event) => <EventRow key={event.event_id} event={event} select={() => setSelected(event)} />)}</div>
+        ) : <EmptyVisual icon={activity.data.events.length ? "filter" : "activity"} title={activity.data.events.length ? "No matches" : "Waiting"} />}
+        {activity.data?.next_after_sequence ? <div className="dev-compact-row dev-tone-warning"><DevIcon name="warning" /><span className="dev-compact-row-main"><strong>More events</strong><small>Showing the first 500.</small></span></div> : null}
       </section>
-
-      {activity.data.events.length === 0 ? (
-        <section className="grid flex-1 place-items-center rounded-2xl border border-dashed border-line-2 bg-surface p-8 text-center">
-          <div className="max-w-lg">
-            <h2 className="font-serif text-xl font-semibold text-ink">No activity recorded yet</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate">The session exists, but no ordered editor activity is available. Continue working in the connected editor.</p>
-          </div>
-        </section>
-      ) : (
-        <ol className="shrink-0 space-y-5" aria-label="Ordered developer activity">
-          {activity.data.events.map((event, index) => (
-            <EventRow key={event.event_id} event={event} last={index === activity.data.events.length - 1} />
-          ))}
-        </ol>
-      )}
-
-      {activity.data.next_after_sequence ? (
-        <p role="status" className="rounded-xl border border-warn bg-warn-soft px-4 py-3 text-sm text-ink">
-          This session contains more than 500 events. Showing the first page through sequence {activity.data.next_after_sequence}.
-        </p>
-      ) : null}
-      <p className="pb-2 font-mono text-[10.5px] text-slate">Session {compactId(sessionId, 14, 8)} · timestamps shown in UTC</p>
+      {selected ? <EventDetail event={selected} close={() => setSelected(null)} /> : null}
     </div>
   );
 }

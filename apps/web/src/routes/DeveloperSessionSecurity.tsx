@@ -1,20 +1,20 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@meshagent/ui";
 
-import { ErrorState, Loading } from "../components/Async";
+import { DevIcon } from "../components/DeveloperIcons";
 import {
-  Metric,
-  ProjectionBadge,
-  verdictTone,
-} from "../components/DeveloperSessionUI";
-import {
-  api,
-  type ActivityEvent,
-  type PolicyEvaluation,
-  type PolicyEvaluationList,
-} from "../lib/api";
-import { timestampMs } from "../lib/format";
+  Disclosure,
+  EmptyVisual,
+  SidePanel,
+  Status,
+  VisualFlow,
+  type VisualTone,
+} from "../components/DeveloperVisual";
+import { projectionVisual } from "../components/DeveloperSessionUI";
+import { api, type ActivityEvent, type PolicyEvaluation } from "../lib/api";
+import { relativeTimeMs, timestampMs } from "../lib/format";
+import { useOpenDeveloperSession } from "./DeveloperSessionLayout";
 
 export interface SecuritySummary {
   allowed: number;
@@ -34,201 +34,113 @@ export function summarizeSecurity(evaluations: PolicyEvaluation[]): SecuritySumm
   };
 }
 
+function verdictVisual(evaluation: PolicyEvaluation): { label: string; tone: VisualTone; detail: string } {
+  if (evaluation.unavailable || evaluation.verdict === "unknown") return { label: "Unknown", tone: "warning", detail: "Security data unavailable." };
+  if (evaluation.verdict === "block") return { label: "Blocked", tone: "danger", detail: "Blocked by policy." };
+  if (evaluation.verdict === "warn") return { label: "Warning", tone: "warning", detail: "Review the policy reason." };
+  return { label: "Allowed", tone: "success", detail: "The package request passed the check." };
+}
+
 function value(payload: Record<string, unknown>, key: string): string {
   const result = payload[key];
   return typeof result === "string" ? result : "";
 }
 
-interface ObservedPackage {
-  key: string;
-  package: string;
-  version: string;
-  event: ActivityEvent;
-  decision: PolicyEvaluation | undefined;
+function matchingPackageEvents(events: ActivityEvent[], evaluation: PolicyEvaluation): ActivityEvent[] {
+  return events.filter((event) =>
+    (event.type === "package.requested" || event.type === "package.installed")
+    && value(event.payload, "package") === evaluation.package
+    && value(event.payload, "version") === evaluation.version,
+  );
 }
 
-function observedPackages(
-  events: ActivityEvent[],
-  evaluations: PolicyEvaluation[],
-): ObservedPackage[] {
-  return events
-    .filter((event) => event.type === "package.requested" || event.type === "package.installed")
-    .map((event) => {
-      const packageName = value(event.payload, "package");
-      const version = value(event.payload, "version");
-      const decision = evaluations.find(
-        (item) => item.package === packageName && item.version === version,
-      );
-      return {
-        key: event.event_id,
-        package: packageName || "unknown package",
-        version,
-        event,
-        decision,
-      };
-    });
-}
-
-function PolicyCard({ evaluation }: { evaluation: PolicyEvaluation }) {
+function PolicyDetail({ evaluation, events, close }: { evaluation: PolicyEvaluation; events: ActivityEvent[]; close: () => void }) {
+  const verdict = verdictVisual(evaluation);
+  const packageEvents = matchingPackageEvents(events, evaluation);
+  const requested = packageEvents.some((event) => event.type === "package.requested");
+  const installed = packageEvents.some((event) => event.type === "package.installed");
   return (
-    <article className="rounded-xl border border-line bg-surface p-4 shadow-[var(--shadow)]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={verdictTone(evaluation.verdict)}>{evaluation.verdict}</Badge>
-            {evaluation.worst ? <Badge tone={evaluation.worst === "critical" || evaluation.worst === "high" ? "risk" : "warn"}>{evaluation.worst} advisory</Badge> : null}
-            {evaluation.unavailable ? <Badge tone="warn">feed unavailable</Badge> : null}
-          </div>
-          <h3 className="mt-2 font-serif text-lg font-semibold text-ink">
-            {evaluation.package}{evaluation.version ? `@${evaluation.version}` : ""}
-          </h3>
-          <p className="mt-1 text-[13px] leading-relaxed text-slate">{evaluation.policy || "No policy text was recorded."}</p>
-        </div>
-        <p className="shrink-0 font-mono text-[10.5px] text-slate">{timestampMs(evaluation.evaluated_at_ms)}</p>
+    <SidePanel title={`${evaluation.package}${evaluation.version ? `@${evaluation.version}` : ""}`} icon="package" onClose={close}>
+      <div className="dev-stack">
+        <VisualFlow label="Package lifecycle" nodes={[
+          { id: "request", label: "Requested", icon: "package", tone: requested ? "success" : "neutral", detail: requested ? "A package request was observed." : "No request event was recorded." },
+          { id: "check", label: verdict.label, icon: "security", tone: verdict.tone, detail: verdict.detail },
+          { id: "install", label: "Installed", icon: "check", tone: installed ? "success" : "neutral", detail: installed ? "An installation event was observed." : "No installation event." },
+        ]} />
+        <dl className="dev-kv">
+          <dt>Package</dt><dd className="dev-mono">{evaluation.package}{evaluation.version ? `@${evaluation.version}` : ""}</dd>
+          <dt>Decision</dt><dd><Status label={verdict.label} tone={verdict.tone} /></dd>
+          <dt>Policy</dt><dd>{evaluation.policy || "Not recorded"}</dd>
+          <dt>Checked</dt><dd>{timestampMs(evaluation.evaluated_at_ms)}</dd>
+          <dt>Installed</dt><dd>{installed ? "Observed" : "Not observed"}</dd>
+          <dt>Evidence</dt><dd>{packageEvents.every((event) => event.projection_status === "projected") ? "Recorded" : "Check Activity"}</dd>
+        </dl>
+        {evaluation.reasons.length ? (
+          <section className="dev-surface">
+            <header className="dev-panel-heading"><h2>Reasons</h2></header>
+            <ul className="dev-compact-list">{evaluation.reasons.map((reason, index) => <li className="dev-compact-row" key={`${evaluation.id}-${index}`}><DevIcon name="info" size={16} /><span className="dev-compact-row-main"><strong>{reason}</strong></span></li>)}</ul>
+          </section>
+        ) : null}
+        {evaluation.unavailable ? <div className="dev-compact-row dev-tone-warning"><DevIcon name="warning" /><span className="dev-compact-row-main"><strong>Security data unavailable</strong><small>{evaluation.unavailable}</small></span></div> : null}
+        {evaluation.advisories.length ? <Disclosure label={`${evaluation.advisories.length} advisories`} icon="security"><pre className="dev-code-block">{JSON.stringify(evaluation.advisories, null, 2)}</pre></Disclosure> : null}
       </div>
-      {evaluation.reasons.length ? (
-        <ul className="mt-4 space-y-2 border-t border-line pt-3">
-          {evaluation.reasons.map((reason, index) => (
-            <li key={`${evaluation.id}-reason-${index}`} className="flex gap-2 text-[12.5px] leading-relaxed text-ink">
-              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
-              {reason}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {evaluation.unavailable ? (
-        <p className="mt-3 rounded-lg border border-warn bg-warn-soft px-3 py-2 text-[12px] leading-relaxed text-ink">
-          {evaluation.unavailable}
-        </p>
-      ) : null}
-      {evaluation.advisories.length ? (
-        <details className="mt-3">
-          <summary className="cursor-pointer font-mono text-[10.5px] text-accent">{evaluation.advisories.length} advisory record(s)</summary>
-          <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-rail p-3 font-mono text-[11px] leading-relaxed text-rail-ink-dim">
-            {JSON.stringify(evaluation.advisories, null, 2)}
-          </pre>
-        </details>
-      ) : null}
-    </article>
-  );
-}
-
-function SecurityContent({ policies, events, runId }: { policies: PolicyEvaluationList; events: ActivityEvent[]; runId: string | null }) {
-  const summary = summarizeSecurity(policies.evaluations);
-  const packages = observedPackages(events, policies.evaluations);
-  const projectionAttention = events.filter(
-    (event) => event.projection_status === "failed" || event.projection_status === "refused",
-  );
-
-  return (
-    <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
-      <section className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="Evaluations" value={policies.total} note={`${summary.allowed} allowed`} />
-        <Metric label="Blocked" value={summary.blocked} note="policy refused" />
-        <Metric label="Warnings" value={summary.warnings + summary.unknown} note={`${summary.unknown} unknown`} />
-        <Metric label="Projection issues" value={projectionAttention.length} note={projectionAttention.length ? "needs review" : "evidence current"} />
-      </section>
-
-      {summary.unavailable ? (
-        <section role="alert" className="shrink-0 rounded-xl border border-warn bg-warn-soft px-4 py-3">
-          <p className="font-medium text-ink">Advisory coverage was unavailable for {summary.unavailable} evaluation(s)</p>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-slate">An allow decision during feed unavailability is recorded as unchecked context, not proof that a package is safe.</p>
-        </section>
-      ) : null}
-
-      <section className="shrink-0 rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="font-mono text-[10px] tracking-widest text-slate">PACKAGE POLICY</p>
-            <h2 className="mt-1 font-serif text-xl font-semibold text-ink">Decisions made during this coding session</h2>
-            <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-slate">These are the exact package-policy outcomes persisted by the adapter. They do not claim a package was installed unless a separate installation event exists.</p>
-          </div>
-          {runId ? (
-            <Link to="/runs/$runId/security" params={{ runId }} className="text-[12px] font-medium text-accent underline-offset-2 hover:underline">Open run security →</Link>
-          ) : null}
-        </div>
-        {policies.evaluations.length ? (
-          <div className="mt-5 grid gap-3 xl:grid-cols-2">
-            {policies.evaluations.map((evaluation) => <PolicyCard key={evaluation.id} evaluation={evaluation} />)}
-          </div>
-        ) : (
-          <div className="mt-5 rounded-xl border border-dashed border-line-2 bg-surface-2 px-4 py-8 text-center">
-            <p className="font-serif text-lg font-semibold text-ink">No package policy decisions</p>
-            <p className="mt-1 text-sm text-slate">This session has not submitted a package request to the MeshAgent gate.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="shrink-0 overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]">
-        <div className="border-b border-line px-5 py-4">
-          <p className="font-mono text-[10px] tracking-widest text-slate">OBSERVED PACKAGES</p>
-          <h2 className="mt-1 font-serif text-lg font-semibold text-ink">Request and installation evidence</h2>
-        </div>
-        {packages.length ? (
-          <div className="responsive-table-wrap">
-            <table className="w-full border-collapse text-left">
-              <thead><tr className="border-b border-line bg-surface-2">
-                {["Sequence", "Observation", "Package", "Policy coverage", "Projection"].map((heading) => <th key={heading} className="px-4 py-2.5 font-mono text-[10px] font-normal tracking-widest text-slate">{heading.toUpperCase()}</th>)}
-              </tr></thead>
-              <tbody>
-                {packages.map((item) => (
-                  <tr key={item.key} className="border-b border-line last:border-b-0">
-                    <td className="px-4 py-3 font-mono text-xs text-slate">{item.event.sequence}</td>
-                    <td className="px-4 py-3 text-[13px] text-ink">{item.event.type === "package.installed" ? "Installed" : "Requested"}</td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-ink">{item.package}{item.version ? `@${item.version}` : ""}</td>
-                    <td className="px-4 py-3">{item.decision ? <Badge tone={verdictTone(item.decision.verdict)}>{item.decision.verdict}</Badge> : <Badge tone="warn">no matching decision</Badge>}</td>
-                    <td className="px-4 py-3"><ProjectionBadge status={item.event.projection_status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="px-5 py-8 text-center text-sm text-slate">No package request or installation activity was observed.</p>
-        )}
-      </section>
-
-      {projectionAttention.length ? (
-        <section className="shrink-0 rounded-2xl border border-risk bg-risk-soft p-5">
-          <h2 className="font-serif text-lg font-semibold text-ink">Projection requires attention</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-slate">The activity ledger is durable, but these events did not become governed evidence yet.</p>
-          <ul className="mt-4 space-y-2">
-            {projectionAttention.map((event) => (
-              <li key={event.event_id} className="flex flex-wrap items-center gap-2 rounded-lg bg-surface px-3 py-2 text-[12px] text-ink">
-                <span className="font-mono text-slate">#{event.sequence}</span>
-                <span>{event.type}</span>
-                <ProjectionBadge status={event.projection_status} />
-                {event.projection_error ? <span className="basis-full text-risk">{event.projection_error}</span> : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-    </div>
+    </SidePanel>
   );
 }
 
 export function DeveloperSessionSecurity() {
-  const { sessionId } = useParams({ from: "/developer/sessions/$sessionId" });
-  const session = useQuery({
-    queryKey: ["developer-session", sessionId],
-    queryFn: () => api.developerSession(sessionId),
-  });
-  const policies = useQuery({
-    queryKey: ["developer-session", sessionId, "policies"],
-    queryFn: () => api.developerPolicyEvaluations(sessionId),
-    refetchInterval: 5_000,
-  });
-  const activity = useQuery({
-    queryKey: ["developer-session", sessionId, "activity"],
-    queryFn: () => api.developerActivity(sessionId, { limit: 500 }),
-    refetchInterval: 5_000,
-  });
+  const session = useOpenDeveloperSession();
+  const [selected, setSelected] = useState<PolicyEvaluation | null>(null);
+  const policies = useQuery({ queryKey: ["developer-session", session.id, "policies"], queryFn: () => api.developerPolicyEvaluations(session.id), refetchInterval: 5_000 });
+  const activity = useQuery({ queryKey: ["developer-session", session.id, "activity"], queryFn: () => api.developerActivity(session.id, { limit: 500 }), refetchInterval: 5_000 });
+  const evaluations = policies.data?.evaluations ?? [];
+  const events = activity.data?.events ?? [];
+  const summary = summarizeSecurity(evaluations);
+  const evidenceIssues = events.filter((event) => event.projection_status === "failed" || event.projection_status === "refused");
+  const dominant = summary.blocked
+    ? { label: `${summary.blocked} blocked`, tone: "danger" as const, icon: "lock" as const }
+    : summary.warnings + summary.unknown + summary.unavailable
+      ? { label: "Review", tone: "warning" as const, icon: "warning" as const }
+      : evidenceIssues.length
+        ? { label: "Evidence issue", tone: "danger" as const, icon: "evidence" as const }
+        : { label: "No issues", tone: "success" as const, icon: "check" as const };
 
-  if (policies.isPending || activity.isPending || session.isPending) return <Loading label="Assembling session security evidence…" />;
-  if (policies.isError) return <ErrorState error={policies.error} retry={() => void policies.refetch()} />;
-  if (activity.isError) return <ErrorState error={activity.error} retry={() => void activity.refetch()} />;
-  if (session.isError) return <ErrorState error={session.error} retry={() => void session.refetch()} />;
+  return (
+    <div className="dev-scroll dev-stack">
+      <section className="dev-surface dev-security-state">
+        <span className={`dev-tone-${dominant.tone}`}><DevIcon name={dominant.icon} /></span>
+        <strong>{dominant.label}</strong>
+        <span className="ml-auto dev-muted text-xs">{evaluations.length} checks</span>
+      </section>
 
-  return <SecurityContent policies={policies.data} events={activity.data.events} runId={session.data.run_id} />;
+      <section className="dev-surface">
+        <header className="dev-panel-heading"><h2>Package checks</h2></header>
+        {policies.isPending || activity.isPending ? <EmptyVisual icon="live" title="Loading" /> : evaluations.length ? (
+          <div>
+            {evaluations.map((evaluation) => {
+              const verdict = verdictVisual(evaluation);
+              const installed = matchingPackageEvents(events, evaluation).some((event) => event.type === "package.installed");
+              return (
+                <button key={evaluation.id} type="button" className="dev-policy-row" onClick={() => setSelected(evaluation)}>
+                  <span className="dev-policy-package"><DevIcon name="package" size={17} /><span>{evaluation.package}{evaluation.version ? `@${evaluation.version}` : ""}</span></span>
+                  <Status label={verdict.label} tone={verdict.tone} icon={evaluation.verdict === "block" ? "lock" : evaluation.unavailable ? "warning" : "security"} title={verdict.detail} />
+                  <Status label={installed ? "Installed" : "Not installed"} tone={installed ? "success" : "neutral"} icon={installed ? "check" : "package"} title={installed ? "An installation event was observed." : "No installation event."} />
+                  <span className="dev-relative-time">{relativeTimeMs(evaluation.evaluated_at_ms)}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : <EmptyVisual icon="security" title="No checks" />}
+      </section>
+
+      <section className="dev-surface">
+        <header className="dev-panel-heading"><h2>Evidence sync</h2><Link to="/developer/sessions/$sessionId/activity" params={{ sessionId: session.id }} className="dev-icon-button" aria-label="Open activity"><DevIcon name="arrow" size={17} /></Link></header>
+        {evidenceIssues.length ? evidenceIssues.map((event) => {
+          const projection = projectionVisual(event.projection_status);
+          return <div key={event.event_id} className="dev-compact-row"><DevIcon name="evidence" /><span className="dev-compact-row-main"><strong>Event #{event.sequence}</strong><small>{event.projection_error ?? projection.detail}</small></span><Status label={projection.label} tone={projection.tone} /></div>;
+        }) : <div className="dev-security-state"><span className="dev-tone-success"><DevIcon name="check" /></span><strong>Recorded</strong></div>}
+      </section>
+      {selected ? <PolicyDetail evaluation={selected} events={events} close={() => setSelected(null)} /> : null}
+    </div>
+  );
 }

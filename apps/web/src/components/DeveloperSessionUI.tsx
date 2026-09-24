@@ -8,6 +8,8 @@ import type {
   PolicyEvaluation,
   ProjectionStatus,
 } from "../lib/api";
+import type { DevIconName } from "./DeveloperIcons";
+import type { VisualTone } from "./DeveloperVisual";
 
 export type BadgeTone = "neutral" | "ok" | "warn" | "risk" | "accent";
 
@@ -125,6 +127,48 @@ export function summarizeProjection(events: ActivityEvent[]): ProjectionSummary 
 export function compactId(value: string, head = 8, tail = 5): string {
   if (value.length <= head + tail + 1) return value;
   return `${value.slice(0, head)}…${value.slice(-tail)}`;
+}
+
+export function activityIcon(type: ActivityEvent["type"]): DevIconName {
+  if (type === "prompt.submitted" || type === "response.completed") return "prompt";
+  if (type === "file.changed") return "file";
+  if (type.startsWith("tool.")) return "tool";
+  if (type.startsWith("package.")) return "package";
+  if (type === "policy.evaluated") return "security";
+  if (type === "decision.recorded") return "evidence";
+  return "session";
+}
+
+export function activityNeedsAttention(event: ActivityEvent): boolean {
+  if (event.type === "tool.failed") return true;
+  if (event.projection_status === "failed" || event.projection_status === "refused") return true;
+  if (event.type === "policy.evaluated") {
+    const verdict = text(event.payload, "verdict");
+    return verdict === "block" || verdict === "warn" || verdict === "unknown";
+  }
+  return false;
+}
+
+export function projectionVisual(status: ProjectionStatus): {
+  label: string;
+  tone: VisualTone;
+  detail: string;
+} {
+  if (status === "projected") return { label: "Recorded", tone: "success", detail: "Governed evidence was created." };
+  if (status === "projecting") return { label: "Syncing", tone: "accent", detail: "MeshAgent is creating evidence." };
+  if (status === "pending") return { label: "Stored", tone: "warning", detail: "The event is stored and waiting for evidence." };
+  if (status === "refused") return { label: "Refused", tone: "danger", detail: "The evidence write was refused." };
+  return { label: "Failed", tone: "danger", detail: "The event is stored, but evidence was not created." };
+}
+
+export function sessionVisual(status: DeveloperSessionStatus): {
+  label: string;
+  tone: VisualTone;
+} {
+  if (status === "completed") return { label: "Complete", tone: "success" };
+  if (status === "failed") return { label: "Failed", tone: "danger" };
+  if (status === "ending") return { label: "Ending", tone: "warning" };
+  return { label: "Live", tone: "accent" };
 }
 
 export const activityDot: Record<ActivityCopy["group"], string> = {

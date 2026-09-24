@@ -32,6 +32,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (
+            id.includes("/apps/web/src/routes/Developer")
+            || id.includes("/apps/web/src/components/Developer")
+          ) {
+            return "developer-workspace";
+          }
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("cytoscape") || id.includes("d3-")) {
             return "graph-vendor";
