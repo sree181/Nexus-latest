@@ -5,7 +5,9 @@ import {
   summarizeProjection,
 } from "../components/DeveloperSessionUI";
 import { projectsFromSessions, sessionsForProject } from "../components/DeveloperProject";
-import type { ActivityEvent, DeveloperSession, PolicyEvaluation } from "../lib/api";
+import { releasedFixes, reviewVisual } from "../components/ReviewUI";
+import type { ActivityEvent, AttentionItem, DeveloperSession, PolicyEvaluation } from "../lib/api";
+import { filterAttention } from "./DeveloperAttention";
 import { filterActivity } from "./DeveloperSessionActivity";
 import { editorHook, repositoryConfig } from "./DeveloperConnectionsEditors";
 import { filterDeveloperSessions } from "./DeveloperSessions";
@@ -70,6 +72,7 @@ function policy(verdict: PolicyEvaluation["verdict"], unavailable: string | null
     activity_event_id: `event-${verdict}`,
     package: "httpx",
     version: "0.27.2",
+    ecosystem: "PyPI",
     verdict,
     reasons: [],
     advisories: [],
@@ -165,5 +168,26 @@ describe("Developer Sessions workspace", () => {
     expect(JSON.parse(repositoryConfig(true, ["*.env"]))).toEqual({ record: true, gate: true, exclude: ["*.env"] });
     expect(editorHook("cursor", "/opt/meshagent")).toContain("/opt/meshagent/adapters/cursor/meshagent_hook.py");
     expect(editorHook("claude", "/opt/meshagent")).toContain("/opt/meshagent/adapters/claude-code/meshagent_hook.py");
+  });
+
+  it("keeps unresolved package risks in Attention and uses plain review language", () => {
+    const item = {
+      id: "att-1", session_id: "session-1", policy_evaluation_id: "policy-1",
+      run_id: "run-1", repository_id: "repo-test", repository_name: "test",
+      package: "httpx", version: "0.27.2", ecosystem: "PyPI", verdict: "block",
+      worst: "high", reasons: [], advisories: [], unavailable: null,
+      code_entities: ["Client"], suggested_version: "0.28.1", checked_at_ms: 1,
+      review_request_id: "review-1", review_status: "changes_requested",
+      priority: 80, priority_reasons: ["high severity"],
+    } satisfies AttentionItem;
+    const closed = { ...item, id: "att-2", review_status: "verified" as const };
+    expect(filterAttention([item, closed], "open")).toEqual([item]);
+    expect(reviewVisual("changes_requested").label).toBe("Change needed");
+    expect(reviewVisual("verified").label).toBe("Fix verified");
+    expect(releasedFixes({
+      id: "CVE-1", severity: "high", summary: "x", cwe: null,
+      fixed_versions: ["2.20.0", "c45d7c49ea75133e52ab22a8e9e13173938e36ff"],
+      references: [],
+    })).toEqual(["2.20.0"]);
   });
 });

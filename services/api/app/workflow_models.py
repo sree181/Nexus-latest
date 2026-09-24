@@ -6,6 +6,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from .developer_session_models import PolicyAdvisory
+from .models import GraphPayload
+
 Severity = Literal["critical", "high", "medium", "low", "unknown"]
 CaseState = Literal[
     "open", "triaged", "investigating", "remediation", "resolved", "closed",
@@ -218,3 +221,129 @@ class CisoOverviewOut(BaseModel):
     trends: list[dict[str, Any]]
     data_health: dict[str, Any]
     origin: OriginOut
+
+
+# -- Developer attention -> Analyst review ------------------------------------
+
+ReviewState = Literal[
+    "waiting", "changes_requested", "exception_approved", "not_approved",
+    "false_positive", "escalated", "verified",
+]
+ReviewKind = Literal[
+    "security_guidance", "safe_version", "exception", "false_positive",
+]
+
+
+class AttentionItemOut(BaseModel):
+    id: str
+    session_id: str
+    policy_evaluation_id: str
+    run_id: str | None = None
+    repository_id: str
+    repository_name: str
+    package: str
+    version: str
+    ecosystem: Literal["PyPI", "npm"]
+    verdict: Literal["allow", "warn", "block", "unknown"]
+    worst: Severity | None = None
+    reasons: list[str] = Field(default_factory=list)
+    advisories: list[PolicyAdvisory] = Field(default_factory=list)
+    unavailable: str | None = None
+    code_entities: list[str] = Field(default_factory=list)
+    suggested_version: str | None = None
+    checked_at_ms: int
+    review_request_id: str | None = None
+    review_status: ReviewState | None = None
+    priority: int
+    priority_reasons: list[str] = Field(default_factory=list)
+
+
+class AttentionListOut(BaseModel):
+    items: list[AttentionItemOut] = Field(default_factory=list)
+    total: int
+
+
+class CreateReviewRequest(BaseModel):
+    session_id: str = Field(min_length=1, max_length=128)
+    policy_evaluation_id: str = Field(min_length=1, max_length=128)
+    kind: ReviewKind
+    rationale: str = Field(min_length=1, max_length=4_096)
+
+
+class ReviewDecisionRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    decision: Literal[
+        "request_changes", "approve_exception", "reject", "false_positive",
+        "escalate",
+    ]
+    rationale: str = Field(min_length=1, max_length=4_096)
+    recommended_version: str | None = Field(default=None, max_length=128)
+    expires_at: int | None = None
+
+    @model_validator(mode="after")
+    def _decision_requirements(self) -> "ReviewDecisionRequest":
+        if self.decision == "approve_exception" and not self.expires_at:
+            raise ValueError("exception approval requires expires_at")
+        if self.decision == "request_changes" and not self.recommended_version:
+            raise ValueError("requested changes require a recommended_version")
+        return self
+
+
+class ReviewEventOut(BaseModel):
+    id: str
+    request_id: str
+    actor: str
+    actor_name: str
+    actor_role: str
+    action: str
+    from_state: str | None = None
+    to_state: str
+    rationale: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    at: int
+
+
+class ReviewRequestOut(BaseModel):
+    id: str
+    owner_subject: str
+    owner_name: str
+    session_id: str
+    run_id: str | None = None
+    repository_id: str
+    repository_name: str
+    policy_evaluation_id: str
+    package: str
+    version: str
+    ecosystem: Literal["PyPI", "npm"]
+    verdict: Literal["allow", "warn", "block", "unknown"]
+    severity: Severity
+    advisories: list[PolicyAdvisory] = Field(default_factory=list)
+    code_entities: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    kind: ReviewKind
+    rationale: str
+    state: ReviewState
+    analyst_subject: str | None = None
+    analyst_name: str | None = None
+    decision_rationale: str | None = None
+    recommended_version: str | None = None
+    exception_expires_at: int | None = None
+    verification_evidence_id: str | None = None
+    version_counter: int
+    created_at: int
+    updated_at: int
+    priority: int
+    priority_reasons: list[str] = Field(default_factory=list)
+    events: list[ReviewEventOut] = Field(default_factory=list)
+
+
+class ReviewRequestListOut(BaseModel):
+    requests: list[ReviewRequestOut] = Field(default_factory=list)
+    total: int
+
+
+class ReviewGraphOut(BaseModel):
+    request_id: str
+    perspective: Literal["developer", "analyst", "ciso"]
+    graph: GraphPayload
+    note: str

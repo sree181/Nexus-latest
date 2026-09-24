@@ -41,10 +41,12 @@ import urllib.error
 import urllib.request
 
 try:
+    from meshagent_cli import package_commands
     from meshagent_cli import state as local_state
     from meshagent_cli import protocol as session_protocol
 except ImportError:  # source checkout, before `pip install meshagent-cli`
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cli"))
+    from meshagent_cli import package_commands
     from meshagent_cli import state as local_state
     from meshagent_cli import protocol as session_protocol
 
@@ -65,15 +67,7 @@ WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 # The gate runs *before* the command, so the developer is watching. Kept
 # tight for that reason: a check that takes longer than the install is one
 # nobody keeps switched on.
-GATE_TIMEOUT = float(os.environ.get("MESHAGENT_GATE_TIMEOUT", "3.0"))
-
-INSTALL_MARKERS = ("pip install", "pip3 install", "npm install", "npm i ",
-                   "yarn add", "uv add", "poetry add")
-
-# Subcommands and flags that appear between the tool and the package names.
-INSTALL_WORDS = {"pip", "pip3", "npm", "yarn", "uv", "poetry", "python",
-                 "python3", "install", "add", "i", "-m", "&&", "sudo"}
-
+GATE_TIMEOUT = float(os.environ.get("MESHAGENT_GATE_TIMEOUT", "8.0"))
 
 # -- where this adapter keeps its own state -----------------------------------
 
@@ -268,7 +262,7 @@ def on_tool(payload: dict, cfg: dict) -> list[dict]:
         return _code_events(args, cwd, cfg,
                             payload.get("session_id") or "")
     if tool in ("Bash", "PowerShell"):
-        return _command_events(args)
+        return _command_events(args, payload.get("tool_response"))
     return []
 
 
@@ -319,7 +313,7 @@ def _code_events(args: dict, cwd: str, cfg: dict,
     return [event]
 
 
-def _command_events(args: dict) -> list[dict]:
+def _command_events(args: dict, response: object | None = None) -> list[dict]:
     """A shell command, plus any dependency it pinned.
 
     An unpinned install yields no package event. `pip install requests`
@@ -329,27 +323,27 @@ def _command_events(args: dict) -> list[dict]:
     command = (args.get("command") or "").strip()
     if not command:
         return []
-    events: list[dict] = [{"type": "tool", "name": "Bash", "detail": command}]
-    events += [{"type": "package", "package": name, "version": version}
-               for name, version in pinned_packages(command)]
+    response_body = response if isinstance(response, dict) else {}
+    exit_code = response_body.get("exit_code", response_body.get("exitCode"))
+    failed = bool(response_body.get("is_error")) or exit_code not in (None, 0, "0")
+    tool_event: dict = {"type": "tool", "name": "Bash", "detail": command}
+    if exit_code is not None or response_body.get("is_error") is not None:
+        tool_event["failed"] = failed
+        tool_event["exit_code"] = int(exit_code) if str(exit_code).isdigit() else None
+    events: list[dict] = [tool_event]
+    if not failed:
+        events += [{
+            "type": "package", "package": target.name,
+            "version": target.version, "ecosystem": target.ecosystem,
+            "command": command,
+        } for target in package_commands.pinned_installs(command)]
     return events
 
 
 def pinned_packages(command: str) -> list[tuple[str, str]]:
     """Dependencies the command names with an exact version."""
-    if not any(k in command for k in ("pip install", "npm install", "pip3 install")):
-        return []
-    out: list[tuple[str, str]] = []
-    for word in command.split():
-        if word.startswith("-"):
-            continue
-        for sep in ("==", "@"):
-            # npm scoped names start with @, which is not a version separator
-            name, found, version = word.partition(sep)
-            if found and name and version and not word.startswith("@"):
-                out.append((name, version))
-                break
-    return out
+    return [(target.name, target.version)
+            for target in package_commands.pinned_installs(command)]
 
 
 def on_session_end(payload: dict, cfg: dict) -> list[dict]:
@@ -371,7 +365,8 @@ HANDLERS = {
 
 # -- the one place this adapter refuses ---------------------------------------
 
-def ask_gate(package: str, version: str, session_id: str) -> dict | None:
+def ask_gate(package: str, version: str, session_id: str,
+             ecosystem: str = "PyPI") -> dict | None:
     """Ask MeshAgent whether this install is allowed. None if it cannot say.
 
     Deliberately not merged with `post`: that one queues on failure so
@@ -381,6 +376,7 @@ def ask_gate(package: str, version: str, session_id: str) -> dict | None:
     req = urllib.request.Request(
         f"{api}/api/gate/package",
         data=json.dumps({"package": package, "version": version,
+                         "ecosystem": ecosystem,
                          "session": session_id}).encode(),
         headers=_headers(), method="POST")
     try:
@@ -411,8 +407,9 @@ def on_pre_tool(payload: dict, cfg: dict) -> dict | None:
         return None
 
     session_id = payload.get("session_id") or ""
-    for package, version in installs(command):
-        got = ask_gate(package, version, session_id)
+    for target in package_commands.parse_installs(command):
+        package, version = target.name, target.version
+        got = ask_gate(package, version, session_id, target.ecosystem)
         repository = payload.get("cwd") or os.getcwd()
         state = read_session(session_id, repository)
         if got is not None and state.get("opened"):
@@ -420,6 +417,7 @@ def on_pre_tool(payload: dict, cfg: dict) -> dict | None:
                 session_id,
                 [{
                     "type": "policy", "package": package, "version": version,
+                    "ecosystem": target.ecosystem,
                     "verdict": got.get("verdict", "unknown"),
                     "reasons": got.get("reasons") or [],
                     "policy": got.get("policy") or "",
@@ -456,23 +454,8 @@ def installs(command: str) -> list[tuple[str, str]]:
     guess a version. The gate has to see the unpinned ones too: whether an
     unpinned install is acceptable is a question for the deployment's
     policy, and it cannot answer a question it was never asked."""
-    if not any(k in command for k in INSTALL_MARKERS):
-        return []
-    out: list[tuple[str, str]] = []
-    for word in command.split():
-        if word.startswith("-") or word in INSTALL_WORDS:
-            continue
-        for sep in ("==", "@"):
-            name, found, version = word.partition(sep)
-            if found and name and version and not word.startswith("@"):
-                out.append((name, version))
-                break
-        else:
-            # a bare name: unpinned, and still the deployment's call
-            if word and word.replace("-", "").replace("_", "").replace(
-                    ".", "").isalnum():
-                out.append((word, ""))
-    return out
+    return [(target.name, target.version)
+            for target in package_commands.parse_installs(command)]
 
 
 def main() -> int:

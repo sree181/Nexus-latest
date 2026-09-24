@@ -202,6 +202,9 @@ function AnalystNav() {
   return (
     <>
       <Group label="INVESTIGATION">
+        <NavLink to="/analyst/reviews" exact icon={<Icon d={icons.security} />}>
+          Developer reviews
+        </NavLink>
         <NavLink to="/analyst/queue" exact icon={<Icon d={icons.queue} />}>
           Priority queue
         </NavLink>
@@ -233,6 +236,9 @@ function CisoNav() {
   return (
     <>
       <Group label="GOVERNANCE">
+        <NavLink to="/analyst/reviews" icon={<Icon d={icons.security} />}>
+          Developer reviews
+        </NavLink>
         <NavLink to="/ciso/overview" exact icon={<Icon d={icons.report} />}>
           Executive overview
         </NavLink>

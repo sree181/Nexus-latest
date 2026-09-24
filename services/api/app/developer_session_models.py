@@ -106,15 +106,25 @@ class PackagePayload(StrictModel):
     command: str | None = Field(default=None, max_length=4_096)
 
 
+class PolicyAdvisory(StrictModel):
+    id: str = Field(min_length=1, max_length=256)
+    severity: Literal["critical", "high", "medium", "low", "unknown"]
+    summary: str = Field(min_length=1, max_length=2_048)
+    cwe: str | None = Field(default=None, max_length=128)
+    fixed_versions: list[str] = Field(default_factory=list, max_length=20)
+    references: list[str] = Field(default_factory=list, max_length=10)
+
+
 class PolicyPayload(StrictModel):
     package: str = Field(min_length=1, max_length=256)
     version: str = Field(default="", max_length=128)
+    ecosystem: Literal["PyPI", "npm"] = "PyPI"
     verdict: Literal["allow", "warn", "block", "unknown"]
     reasons: list[str] = Field(default_factory=list, max_length=32)
     policy: str = Field(default="", max_length=4_096)
     worst: Literal["critical", "high", "medium", "low", "unknown"] | None = None
     unavailable: str | None = Field(default=None, max_length=2_048)
-    advisories: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    advisories: list[PolicyAdvisory] = Field(default_factory=list, max_length=100)
 
 
 class ResponsePayload(StrictModel):
@@ -291,9 +301,10 @@ class PolicyEvaluationOut(BaseModel):
     activity_event_id: str
     package: str
     version: str
+    ecosystem: Literal["PyPI", "npm"] = "PyPI"
     verdict: Literal["allow", "warn", "block", "unknown"]
     reasons: list[str] = Field(default_factory=list)
-    advisories: list[dict[str, Any]] = Field(default_factory=list)
+    advisories: list[PolicyAdvisory] = Field(default_factory=list)
     worst: Literal["critical", "high", "medium", "low", "unknown"] | None = None
     unavailable: str | None = None
     policy: str

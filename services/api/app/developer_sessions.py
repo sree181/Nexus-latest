@@ -392,13 +392,14 @@ class Store:
     ) -> None:
         conn.execute(
             """INSERT INTO policy_evaluations (
-                id, session_id, activity_event_id, package, version, verdict,
+                id, session_id, activity_event_id, package, version, ecosystem, verdict,
                 reasons_json, advisories_json, worst, unavailable, policy,
                 evaluated_at_ms, owner_subject, device_id, created_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 _policy_id(event.event_id), session["id"], event.event_id,
-                payload["package"], payload.get("version", ""), payload["verdict"],
+                payload["package"], payload.get("version", ""),
+                payload.get("ecosystem", "PyPI"), payload["verdict"],
                 _canonical(payload.get("reasons", [])),
                 _canonical(payload.get("advisories", [])), payload.get("worst"),
                 payload.get("unavailable"), payload.get("policy", ""),
@@ -603,7 +604,8 @@ class Store:
             PolicyEvaluationOut(
                 id=row["id"], session_id=row["session_id"],
                 activity_event_id=row["activity_event_id"], package=row["package"],
-                version=row["version"], verdict=row["verdict"],
+                version=row["version"], ecosystem=row["ecosystem"],
+                verdict=row["verdict"],
                 reasons=json.loads(row["reasons_json"]),
                 advisories=json.loads(row["advisories_json"]), worst=row["worst"],
                 unavailable=row["unavailable"], policy=row["policy"],
@@ -613,6 +615,28 @@ class Store:
             for row in rows
         ]
         return PolicyEvaluationListOut(evaluations=values, total=len(values))
+
+    def policy_evaluation(
+        self, session_id: str, evaluation_id: str, who: Principal,
+    ) -> PolicyEvaluationOut:
+        with self._read() as conn:
+            self._owned(conn, session_id, who)
+            row = conn.execute(
+                "SELECT * FROM policy_evaluations WHERE session_id=? AND id=?",
+                (session_id, evaluation_id),
+            ).fetchone()
+        if row is None:
+            raise MissingSession("unknown policy evaluation")
+        return PolicyEvaluationOut(
+            id=row["id"], session_id=row["session_id"],
+            activity_event_id=row["activity_event_id"], package=row["package"],
+            version=row["version"], ecosystem=row["ecosystem"],
+            verdict=row["verdict"], reasons=json.loads(row["reasons_json"]),
+            advisories=json.loads(row["advisories_json"]), worst=row["worst"],
+            unavailable=row["unavailable"], policy=row["policy"],
+            evaluated_at_ms=row["evaluated_at_ms"],
+            owner_subject=row["owner_subject"], device_id=row["device_id"],
+        )
 
 
 def load(base: str) -> Store:

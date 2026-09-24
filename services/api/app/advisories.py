@@ -32,6 +32,8 @@ class Advisory:
     summary: str
     severity: str           # critical | high | medium | low | unknown
     cwe: str | None = None
+    fixed_versions: list[str] = field(default_factory=list)
+    references: list[str] = field(default_factory=list)
 
 
 # Import names that more than one PyPI project provides. An import statement
@@ -77,6 +79,29 @@ class Resolved:
     unavailable: str | None = None
 
 
+_SEVERITY_RANK = {"unknown": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def _add_advisory(out: Resolved, advisory: Advisory) -> None:
+    """Merge duplicate OSV records that name the same CVE."""
+    existing = next((item for item in out.advisories if item.id == advisory.id), None)
+    if existing is None:
+        out.advisories.append(advisory)
+        return
+    if _SEVERITY_RANK.get(advisory.severity, 0) > _SEVERITY_RANK.get(existing.severity, 0):
+        existing.severity = advisory.severity
+    if existing.cwe is None:
+        existing.cwe = advisory.cwe
+    if len(advisory.summary) > len(existing.summary):
+        existing.summary = advisory.summary
+    existing.fixed_versions = list(dict.fromkeys([
+        *existing.fixed_versions, *advisory.fixed_versions,
+    ]))[:20]
+    existing.references = list(dict.fromkeys([
+        *existing.references, *advisory.references,
+    ]))[:10]
+
+
 def _severity(vuln: dict) -> str:
     """OSV states severity two ways and sometimes neither. Prefer the CVSS
     score, fall back to the ecosystem's own label, else admit it is unknown."""
@@ -120,6 +145,26 @@ def _cwe(vuln: dict) -> str | None:
     return None
 
 
+def _fixed_versions(vuln: dict) -> list[str]:
+    values: list[str] = []
+    for affected in vuln.get("affected") or []:
+        for version_range in affected.get("ranges") or []:
+            for event in version_range.get("events") or []:
+                fixed = str(event.get("fixed") or "").strip()
+                if fixed and fixed not in values:
+                    values.append(fixed)
+    return values[:20]
+
+
+def _references(vuln: dict) -> list[str]:
+    values: list[str] = []
+    for reference in vuln.get("references") or []:
+        url = str(reference.get("url") or "").strip()
+        if url.startswith(("https://", "http://")) and url not in values:
+            values.append(url)
+    return values[:10]
+
+
 def _license(info: dict) -> str | None:
     """The license, from whichever field the project actually populated.
 
@@ -142,7 +187,7 @@ def _license(info: dict) -> str | None:
     return None
 
 
-def resolve_at(package: str, version: str, *,
+def resolve_at(package: str, version: str, *, ecosystem: str = "PyPI",
                client: httpx.Client | None = None) -> Resolved:
     """Advisories against one *specific* version.
 
@@ -155,10 +200,10 @@ def resolve_at(package: str, version: str, *,
     Never raises, and never guesses. If OSV cannot be reached the result says
     so on `unavailable`, and the caller has to decide what to do about not
     knowing rather than being handed a clean bill of health."""
-    project = DISTRIBUTIONS.get(package, package)
+    project = DISTRIBUTIONS.get(package, package) if ecosystem == "PyPI" else package
     out = Resolved(package=package, project=project, version=version)
 
-    if rivals := AMBIGUOUS.get(package):
+    if ecosystem == "PyPI" and (rivals := AMBIGUOUS.get(package)):
         out.project = ""
         out.unavailable = (
             f"`{package}` is provided by more than one PyPI project "
@@ -173,19 +218,21 @@ def resolve_at(package: str, version: str, *,
     http = client or httpx.Client(timeout=TIMEOUT)
     try:
         r = http.post(OSV, json={
-            "package": {"name": project, "ecosystem": "PyPI"},
+            "package": {"name": project, "ecosystem": ecosystem},
             "version": version,
         })
         r.raise_for_status()
         for vuln in r.json().get("vulns") or []:
             if vid := _advisory_id(vuln):
-                out.advisories.append(Advisory(
+                _add_advisory(out, Advisory(
                     id=vid,
                     summary=(vuln.get("summary")
                              or (vuln.get("details") or "")[:160]
                              or "no summary published"),
                     severity=_severity(vuln),
                     cwe=_cwe(vuln),
+                    fixed_versions=_fixed_versions(vuln),
+                    references=_references(vuln),
                 ))
     except (httpx.HTTPError, ValueError) as exc:
         out.unavailable = f"OSV was unreachable ({type(exc).__name__})"
@@ -248,13 +295,15 @@ def resolve(package: str, *, client: httpx.Client | None = None) -> Resolved:
                 vid = _advisory_id(vuln)
                 if not vid:
                     continue
-                out.advisories.append(Advisory(
+                _add_advisory(out, Advisory(
                     id=vid,
                     summary=(vuln.get("summary")
                              or (vuln.get("details") or "")[:160]
                              or "no summary published"),
                     severity=_severity(vuln),
                     cwe=_cwe(vuln),
+                    fixed_versions=_fixed_versions(vuln),
+                    references=_references(vuln),
                 ))
         except (httpx.HTTPError, ValueError) as exc:
             # the version is still good; only the advisory half is missing

@@ -64,6 +64,25 @@ def test_a_cve_alias_is_preferred_over_the_osv_id():
     assert advisories._advisory_id({"id": "PYSEC-2021-1"}) == "PYSEC-2021-1"
 
 
+def test_duplicate_cve_records_merge_severity_fixes_and_sources():
+    resolved = advisories.Resolved(package="requests")
+    advisories._add_advisory(resolved, advisories.Advisory(
+        id="CVE-2024-1234", summary="short", severity="unknown",
+        fixed_versions=["2.20.0"], references=["https://one.example"],
+    ))
+    advisories._add_advisory(resolved, advisories.Advisory(
+        id="CVE-2024-1234", summary="a more useful summary", severity="high",
+        cwe="CWE-200", fixed_versions=["2.32.4"],
+        references=["https://two.example"],
+    ))
+    assert len(resolved.advisories) == 1
+    merged = resolved.advisories[0]
+    assert merged.severity == "high"
+    assert merged.cwe == "CWE-200"
+    assert merged.fixed_versions == ["2.20.0", "2.32.4"]
+    assert merged.references == ["https://one.example", "https://two.example"]
+
+
 @pytest.mark.parametrize("vuln,expected", [
     ({"severity": [{"score": "9.8"}]}, "critical"),
     ({"severity": [{"score": "7.5"}]}, "high"),

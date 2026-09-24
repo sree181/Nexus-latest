@@ -23,6 +23,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Lifespan-managed Developer activity projection reconciliation with durable retry timestamps and capped exponential backoff.
 - Developer-first Sessions, Activity, and Security screens backed by the owner-scoped connected-agent APIs, including live status refresh, ordered event evidence, package-policy history, projection-health diagnostics, deep links to governed runs, responsive states, and capability guards.
 - Visual-first Developer shell with icon navigation, repository-derived Project scope, compact session lists, session Overview and Evidence views, dense event inspection, package lifecycle visualization, contextual technical drawers, and a unified Connections workspace for Editors, Repositories, Devices, privacy settings, and verification. The interface uses scoped implementation tokens, plain-language status, responsive infographics, keyboard-accessible disclosure, and no editor-like chrome.
+- Developer **Attention** with ecosystem-aware CVE cards, published fixed releases, code-to-package impact, and plain-language next actions; durable Developer-to-Analyst review requests with immutable evidence snapshots, prioritized Analyst queue, separation of duties, optimistic decisions, automatic clean-check verification, and role-scoped contributor/code/package/advisory hypergraphs.
 
 ### Changed
 
@@ -35,6 +36,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Production startup now requires distinct Analyst and CISO groups plus the public OIDC client ID used by the API-owned code flow.
 - Model-backed runs now default to the supported `gpt-5-mini` model, accept both standard OpenAI base-URL environment names, and receive optional model settings through local and production Compose.
 - Offline adapter queue limits now apply backpressure to new observations without truncating accepted ordered records; CLI diagnostics expose any rejected observation count.
+- Cursor and Claude Code package gates now recognize only supported install-command grammars, preserve PyPI/npm ecosystem identity, and allow enough bounded time for a cold advisory lookup while remaining fail-open on an unavailable control plane.
 
 ### Fixed
 
@@ -45,6 +47,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Corrected session-opener crash replay, cross-repository engine correlation, replay identity checks, repository-relative path validation, and paginated session totals.
 - Device pairing now opens the Programmer UI's Connections → Devices tab directly instead of the legacy standalone device route.
 - Cursor and Claude Code now retain subsequent developer prompts as ordered `prompt.submitted` activity instead of showing only the session's opening request.
+- Shell navigation and inspection commands such as `cd`, `head`, `tail`, `git show`, `pip show`, and `npm view` no longer appear as packages. Duplicate OSV records for the same CVE are merged, and visible remediation guidance excludes raw commit hashes.
 
 ## [0.1.0] — production v1 baseline
 

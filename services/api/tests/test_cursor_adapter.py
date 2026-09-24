@@ -153,14 +153,25 @@ def test_a_shell_command_becomes_a_tool_event(repo):
 def test_a_pinned_install_also_records_the_package(repo):
     got = cursor.on_shell_done(base("afterShellExecution",
                                     command="pip install numpy==1.26.4"), CFG)
-    assert {"type": "package", "package": "numpy",
-            "version": "1.26.4"} in got
+    assert {
+        "type": "package", "package": "numpy", "version": "1.26.4",
+        "ecosystem": "PyPI", "command": "pip install numpy==1.26.4",
+    } in got
 
 
 def test_an_unpinned_install_records_no_version(repo):
     got = cursor.on_shell_done(base("afterShellExecution",
                                     command="pip install requests"), CFG)
     assert all(e["type"] != "package" for e in got)
+
+
+def test_a_failed_install_never_becomes_installed_package_evidence(repo):
+    got = cursor.on_shell_done(base(
+        "afterShellExecution", command="pip install numpy==1.26.4",
+        exit_code=1,
+    ), CFG)
+    assert got[0]["failed"] is True
+    assert all(event["type"] != "package" for event in got)
 
 
 # -- the trap: silence means refusal under Cursor ------------------------------

@@ -700,12 +700,15 @@ class GateAdvisory(BaseModel):
     severity: Literal["critical", "high", "medium", "low", "unknown"]
     summary: str
     cwe: str | None = None
+    fixed_versions: list[str] = Field(default_factory=list, max_length=20)
+    references: list[str] = Field(default_factory=list, max_length=10)
 
 
 class GateRequest(BaseModel):
     """An agent is about to install something."""
     package: str = Field(max_length=256)
     version: str = Field(default="", max_length=128)
+    ecosystem: Literal["PyPI", "npm"] = "PyPI"
     # The session it belongs to, when there is one. Optional because a gate
     # check is useful before a session exists -- an agent may ask before it
     # has written anything.
@@ -743,6 +746,7 @@ class GateDecision(BaseModel):
     decision -- says what happens then."""
     package: str
     version: str
+    ecosystem: Literal["PyPI", "npm"] = "PyPI"
     verdict: Literal["allow", "warn", "block", "unknown"]
     # Why, in full sentences, because a blocked developer reads this rather
     # than being told to file a ticket.

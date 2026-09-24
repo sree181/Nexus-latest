@@ -17,7 +17,7 @@ function initials(name: string): string {
 }
 
 function RailLink({ to, label, icon, exact = false, onClick }: {
-  to: "/developer/sessions" | "/developer/connections";
+  to: "/developer/sessions" | "/developer/attention" | "/developer/connections";
   label: string;
   icon: DevIconName;
   exact?: boolean;
@@ -95,6 +95,7 @@ export function DeveloperRail() {
         </Link>
         <nav className="dev-rail-nav">
           <RailLink to="/developer/sessions" label="Sessions" icon="session" exact onClick={close} />
+          <RailLink to="/developer/attention" label="Attention" icon="warning" onClick={close} />
           <RailLink to="/developer/connections" label="Connections" icon="connect" onClick={close} />
         </nav>
         {!me?.verified ? (

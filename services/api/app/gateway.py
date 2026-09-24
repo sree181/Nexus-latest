@@ -32,7 +32,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 
-from . import analysis, auth, gate, sample
+from . import advisories, analysis, auth, gate, sample
 from .models import (
     ApplyReceipt,
     CodeOut,
@@ -104,12 +104,20 @@ def gate_decision(req: GateRequest, *, fleet_agents: int,
     would mean a package allowed in sample mode and refused in production,
     or worse, the other way round."""
     pol = gate.policy()
-    got = gate.check(req.package, req.version, pol)
+    got = gate.check(
+        req.package, req.version, pol,
+        lambda package, version: advisories.resolve_at(
+            package, version, ecosystem=req.ecosystem,
+        ),
+    )
     return GateDecision(
-        package=got.package, version=got.version, verdict=got.verdict,
+        package=got.package, version=got.version, ecosystem=req.ecosystem,
+        verdict=got.verdict,
         reasons=got.reasons, worst=got.worst, unavailable=got.unavailable,
-        advisories=[GateAdvisory(id=a.id, severity=a.severity,
-                                 summary=a.summary, cwe=a.cwe)
+        advisories=[GateAdvisory(
+            id=a.id, severity=a.severity, summary=a.summary, cwe=a.cwe,
+            fixed_versions=a.fixed_versions, references=a.references,
+        )
                     for a in got.advisories],
         policy=pol.described, fleet_agents=fleet_agents, sample=sample,
     )

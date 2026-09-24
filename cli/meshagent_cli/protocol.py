@@ -64,6 +64,7 @@ def _normalise(event: dict, *, sequence: int) -> dict:
             "payload": {
                 "package": event["package"],
                 "version": event.get("version", ""),
+                "ecosystem": event.get("ecosystem"),
                 "verdict": event["verdict"],
                 "reasons": event.get("reasons") or [],
                 "policy": event.get("policy") or "",

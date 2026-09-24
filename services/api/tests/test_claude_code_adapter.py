@@ -189,8 +189,10 @@ def test_a_pinned_install_also_records_the_package(repo):
         "cwd": str(repo), "tool_name": "Bash",
         "tool_input": {"command": "pip install numpy==1.26.4"},
     }, CFG)
-    assert events[1] == {"type": "package", "package": "numpy",
-                         "version": "1.26.4"}
+    assert events[1] == {
+        "type": "package", "package": "numpy", "version": "1.26.4",
+        "ecosystem": "PyPI", "command": "pip install numpy==1.26.4",
+    }
 
 
 def test_an_unpinned_install_records_the_command_and_guesses_no_version(repo):
@@ -293,8 +295,9 @@ def test_a_repository_that_never_opted_in_short_circuits_before_posting(
 
 def gate_says(verdict: str, **extra):
     """Stand in for the API's answer."""
-    def ask(package, version, session):
+    def ask(package, version, session, ecosystem="PyPI"):
         return {"verdict": verdict, "package": package, "version": version,
+                "ecosystem": ecosystem,
                 "reasons": ["because the policy says so"],
                 "policy": "advisories of high severity or above are refused",
                 **extra}

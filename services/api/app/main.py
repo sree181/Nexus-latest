@@ -29,6 +29,7 @@ from . import (
     developer_sessions,
     devices,
     paths,
+    review_service,
     session_projection,
 )
 from .auth import AuthError, Forbidden, Principal
@@ -87,6 +88,7 @@ from .workflow_models import (
     ApprovalDecisionRequest,
     ApprovalOut,
     AssignCaseRequest,
+    AttentionListOut,
     CaseListOut,
     CaseOut,
     CisoOverviewOut,
@@ -94,12 +96,17 @@ from .workflow_models import (
     CreateExceptionRequest,
     CreatePolicyRequest,
     CreateRemediationRequest,
+    CreateReviewRequest,
     ExceptionOut,
     OriginOut,
     PolicyOut,
     RemediationOut,
     ReportOut,
     ReportRequest,
+    ReviewDecisionRequest,
+    ReviewGraphOut,
+    ReviewRequestListOut,
+    ReviewRequestOut,
     TransitionCaseRequest,
 )
 
@@ -1272,6 +1279,129 @@ def developer_policy_evaluations(
         session_id, who, limit=max(1, min(limit, 500)),
     )
 
+
+@app.get("/api/v1/developer/attention", response_model=AttentionListOut)
+def developer_attention(
+    limit: int = 200,
+    who: Principal = Depends(require_capability("review.own")),
+) -> AttentionListOut:
+    """Actionable security signals from only the caller's connected sessions."""
+    return review_service.attention_items(
+        developer_session_store, gateway, workflow_store, who,
+        limit=max(1, min(limit, 500)),
+    )
+
+
+@app.get("/api/v1/developer/review-requests", response_model=ReviewRequestListOut)
+def developer_review_requests(
+    who: Principal = Depends(require_capability("review.own")),
+) -> ReviewRequestListOut:
+    values = workflow_store.list_review_requests(owner_subject=who.subject)
+    return ReviewRequestListOut(requests=values, total=len(values))
+
+
+@app.post(
+    "/api/v1/developer/review-requests",
+    response_model=ReviewRequestOut,
+    status_code=201,
+)
+def create_developer_review_request(
+    req: CreateReviewRequest,
+    who: Principal = Depends(require_capability("review.own")),
+) -> ReviewRequestOut:
+    session = developer_session_store.get(req.session_id, who)
+    evaluation = developer_session_store.policy_evaluation(
+        req.session_id, req.policy_evaluation_id, who,
+    )
+    snapshot = {
+        "session_id": session.id, "run_id": session.run_id,
+        "repository_id": session.repository.id,
+        "repository_name": session.repository.name,
+        "policy_evaluation_id": evaluation.id,
+        "package": evaluation.package, "version": evaluation.version,
+        "ecosystem": evaluation.ecosystem, "verdict": evaluation.verdict,
+        "severity": evaluation.worst or "unknown",
+        "advisories": [item.model_dump(mode="json") for item in evaluation.advisories],
+        "reasons": evaluation.reasons,
+        "code_entities": review_service.linked_code_entities(
+            developer_session_store, gateway, session.id, who,
+            session.run_id, evaluation.package,
+        ),
+    }
+    created = workflow_store.create_review_request(
+        snapshot=snapshot, kind=req.kind, rationale=req.rationale,
+        actor=who.subject, actor_name=who.name,
+    )
+    note(who, "review.request", created["id"], f"{evaluation.package}@{evaluation.version}")
+    return ReviewRequestOut.model_validate(created)
+
+
+@app.get(
+    "/api/v1/developer/review-requests/{request_id}",
+    response_model=ReviewRequestOut,
+)
+def developer_review_request(
+    request_id: str,
+    who: Principal = Depends(require_capability("review.own")),
+) -> ReviewRequestOut:
+    return ReviewRequestOut.model_validate(
+        workflow_store.review_request(request_id, owner_subject=who.subject),
+    )
+
+
+@app.get(
+    "/api/v1/developer/review-requests/{request_id}/graph",
+    response_model=ReviewGraphOut,
+)
+def developer_review_graph(
+    request_id: str,
+    who: Principal = Depends(require_capability("review.own")),
+) -> ReviewGraphOut:
+    review = workflow_store.review_request(request_id, owner_subject=who.subject)
+    return review_service.request_graph(review, "developer")
+
+
+@app.get("/api/reviews", response_model=ReviewRequestListOut)
+def analyst_review_requests(
+    state: str | None = None,
+    _: Principal = Depends(require_capability("review.read")),
+) -> ReviewRequestListOut:
+    values = workflow_store.list_review_requests(state=state)
+    return ReviewRequestListOut(requests=values, total=len(values))
+
+
+@app.get("/api/reviews/{request_id}", response_model=ReviewRequestOut)
+def analyst_review_request(
+    request_id: str,
+    _: Principal = Depends(require_capability("review.read")),
+) -> ReviewRequestOut:
+    return ReviewRequestOut.model_validate(workflow_store.review_request(request_id))
+
+
+@app.post("/api/reviews/{request_id}/decision", response_model=ReviewRequestOut)
+def decide_review_request(
+    request_id: str, req: ReviewDecisionRequest,
+    who: Principal = Depends(require_capability("review.write")),
+) -> ReviewRequestOut:
+    note(who, "review.decision.requested", request_id, req.decision, require_commit=True)
+    value = workflow_store.decide_review_request(
+        request_id, expected_version=req.expected_version,
+        decision=req.decision, rationale=req.rationale,
+        recommended_version=req.recommended_version,
+        expires_at=req.expires_at, actor=who.subject,
+        actor_name=who.name, actor_role=who.role,
+    )
+    return ReviewRequestOut.model_validate(value)
+
+
+@app.get("/api/reviews/{request_id}/graph", response_model=ReviewGraphOut)
+def analyst_review_graph(
+    request_id: str,
+    who: Principal = Depends(require_capability("review.read")),
+) -> ReviewGraphOut:
+    review = workflow_store.review_request(request_id)
+    return review_service.request_graph(review, "ciso" if who.ciso else "analyst")
+
 @app.get("/api/fleet/coverage", response_model=CoverageOut)
 def fleet_coverage(_: Principal = Depends(analyst)) -> CoverageOut:
     """How much of the recorded code states a reason, per developer.
@@ -1298,6 +1428,20 @@ def check_package(req: GateRequest,
         note(who, f"gate.{decision.verdict}",
              f"{req.package}@{req.version or 'unpinned'}",
              decision.reasons[0][:160] if decision.reasons else "")
+    if decision.verdict == "allow" and req.session:
+        try:
+            session = developer_session_store.get(req.session, who)
+        except developer_sessions.SessionStoreError:
+            session = None
+        if session is not None:
+            evidence_id = f"gate:{req.session}:{req.ecosystem}:{req.package}:{req.version}"
+            verified = workflow_store.verify_package_reviews(
+                owner_subject=who.subject, repository_id=session.repository.id,
+                ecosystem=req.ecosystem, package=req.package,
+                version=req.version, evidence_id=evidence_id,
+            )
+            for request_id in verified:
+                note(who, "review.verified", request_id, evidence_id)
     return decision
 
 

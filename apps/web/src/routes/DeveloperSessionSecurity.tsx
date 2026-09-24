@@ -3,8 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { DevIcon } from "../components/DeveloperIcons";
+import { AdvisoryCard } from "../components/ReviewUI";
 import {
-  Disclosure,
   EmptyVisual,
   SidePanel,
   Status,
@@ -69,6 +69,7 @@ function PolicyDetail({ evaluation, events, close }: { evaluation: PolicyEvaluat
         ]} />
         <dl className="dev-kv">
           <dt>Package</dt><dd className="dev-mono">{evaluation.package}{evaluation.version ? `@${evaluation.version}` : ""}</dd>
+          <dt>Registry</dt><dd>{evaluation.ecosystem}</dd>
           <dt>Decision</dt><dd><Status label={verdict.label} tone={verdict.tone} /></dd>
           <dt>Policy</dt><dd>{evaluation.policy || "Not recorded"}</dd>
           <dt>Checked</dt><dd>{timestampMs(evaluation.evaluated_at_ms)}</dd>
@@ -82,7 +83,8 @@ function PolicyDetail({ evaluation, events, close }: { evaluation: PolicyEvaluat
           </section>
         ) : null}
         {evaluation.unavailable ? <div className="dev-compact-row dev-tone-warning"><DevIcon name="warning" /><span className="dev-compact-row-main"><strong>Security data unavailable</strong><small>{evaluation.unavailable}</small></span></div> : null}
-        {evaluation.advisories.length ? <Disclosure label={`${evaluation.advisories.length} advisories`} icon="security"><pre className="dev-code-block">{JSON.stringify(evaluation.advisories, null, 2)}</pre></Disclosure> : null}
+        {evaluation.advisories.length ? <section className="dev-surface"><header className="dev-panel-heading"><h2>Advisories</h2></header>{evaluation.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />)}</section> : null}
+        {(evaluation.verdict !== "allow" || evaluation.unavailable) ? <Link to="/developer/attention" className="dev-action dev-action-primary w-full">Open Attention <DevIcon name="arrow" size={16} /></Link> : null}
       </div>
     </SidePanel>
   );

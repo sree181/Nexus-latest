@@ -48,10 +48,12 @@ import urllib.error
 import urllib.request
 
 try:
+    from meshagent_cli import package_commands
     from meshagent_cli import state as local_state
     from meshagent_cli import protocol as session_protocol
 except ImportError:  # source checkout, before `pip install meshagent-cli`
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cli"))
+    from meshagent_cli import package_commands
     from meshagent_cli import state as local_state
     from meshagent_cli import protocol as session_protocol
 
@@ -59,14 +61,8 @@ AGENT = "cursor"
 CONFIG = ".meshagent.json"
 
 TIMEOUT = float(os.environ.get("MESHAGENT_HOOK_TIMEOUT", "2.0"))
-GATE_TIMEOUT = float(os.environ.get("MESHAGENT_GATE_TIMEOUT", "3.0"))
+GATE_TIMEOUT = float(os.environ.get("MESHAGENT_GATE_TIMEOUT", "8.0"))
 MAX_BYTES = int(os.environ.get("MESHAGENT_HOOK_MAX_BYTES", "200000"))
-
-INSTALL_MARKERS = ("pip install", "pip3 install", "npm install", "npm i ",
-                   "yarn add", "uv add", "poetry add")
-INSTALL_WORDS = {"pip", "pip3", "npm", "yarn", "uv", "poetry", "python",
-                 "python3", "install", "add", "i", "-m", "&&", "sudo"}
-
 
 # -- state, shared with every other MeshAgent adapter on this machine ---------
 
@@ -199,11 +195,13 @@ def send(session_id: str, events: list[dict], repository: str | None = None) -> 
         return None
 
 
-def ask_gate(package: str, version: str, session_id: str) -> dict | None:
+def ask_gate(package: str, version: str, session_id: str,
+             ecosystem: str = "PyPI") -> dict | None:
     api = local_state.endpoint()
     req = urllib.request.Request(
         f"{api}/api/gate/package",
         data=json.dumps({"package": package, "version": version,
+                         "ecosystem": ecosystem,
                          "session": session_id}).encode(),
         headers=_headers(), method="POST")
     try:
@@ -274,48 +272,34 @@ def on_shell_done(payload: dict, cfg: dict) -> list[dict]:
     command = (payload.get("command") or "").strip()
     if not command:
         return []
-    events: list[dict] = [{"type": "tool", "name": "Shell", "detail": command}]
-    events += [{"type": "package", "package": name, "version": version}
-               for name, version in pinned_packages(command)]
+    exit_code = payload.get("exit_code", payload.get("exitCode"))
+    failed = exit_code not in (None, 0, "0")
+    tool_event: dict = {"type": "tool", "name": "Shell", "detail": command}
+    if exit_code is not None:
+        tool_event["failed"] = failed
+        tool_event["exit_code"] = int(exit_code) if str(exit_code).isdigit() else None
+    events: list[dict] = [tool_event]
+    if not failed:
+        events += [{
+            "type": "package", "package": target.name,
+            "version": target.version, "ecosystem": target.ecosystem,
+            "command": command,
+        } for target in package_commands.pinned_installs(command)]
     return events
 
 
 def pinned_packages(command: str) -> list[tuple[str, str]]:
     """Dependencies the command names with an exact version."""
-    if not any(k in command for k in INSTALL_MARKERS):
-        return []
-    out: list[tuple[str, str]] = []
-    for word in command.split():
-        if word.startswith("-") or word in INSTALL_WORDS:
-            continue
-        for sep in ("==", "@"):
-            name, found, version = word.partition(sep)
-            if found and name and version and not word.startswith("@"):
-                out.append((name, version))
-                break
-    return out
+    return [(target.name, target.version)
+            for target in package_commands.pinned_installs(command)]
 
 
 def installs(command: str) -> list[tuple[str, str]]:
     """Every dependency the command would add, pinned or not. Wider than
     `pinned_packages`, because whether an unpinned install is acceptable is
     the deployment's call and it cannot answer a question never asked."""
-    if not any(k in command for k in INSTALL_MARKERS):
-        return []
-    out: list[tuple[str, str]] = []
-    for word in command.split():
-        if word.startswith("-") or word in INSTALL_WORDS:
-            continue
-        for sep in ("==", "@"):
-            name, found, version = word.partition(sep)
-            if found and name and version and not word.startswith("@"):
-                out.append((name, version))
-                break
-        else:
-            if word and word.replace("-", "").replace("_", "").replace(
-                    ".", "").isalnum():
-                out.append((word, ""))
-    return out
+    return [(target.name, target.version)
+            for target in package_commands.parse_installs(command)]
 
 
 def on_session_end(payload: dict, cfg: dict) -> list[dict]:
@@ -366,14 +350,16 @@ def on_before_shell(payload: dict, cfg: dict) -> dict:
         return allow
 
     session_id = conversation(payload)
-    for package, version in installs(command):
-        got = ask_gate(package, version, session_id)
+    for target in package_commands.parse_installs(command):
+        package, version = target.name, target.version
+        got = ask_gate(package, version, session_id, target.ecosystem)
         state = read_session(session_id, workspace(payload))
         if got is not None and state.get("opened"):
             send(
                 session_id,
                 [{
                     "type": "policy", "package": package, "version": version,
+                    "ecosystem": target.ecosystem,
                     "verdict": got.get("verdict", "unknown"),
                     "reasons": got.get("reasons") or [],
                     "policy": got.get("policy") or "",

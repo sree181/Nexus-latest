@@ -249,6 +249,60 @@ class ControlPlane:
                   metrics TEXT NOT NULL,
                   origin TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS review_requests (
+                  id TEXT PRIMARY KEY,
+                  owner_subject TEXT NOT NULL,
+                  owner_name TEXT NOT NULL,
+                  session_id TEXT NOT NULL,
+                  run_id TEXT,
+                  repository_id TEXT NOT NULL,
+                  repository_name TEXT NOT NULL,
+                  policy_evaluation_id TEXT NOT NULL,
+                  package TEXT NOT NULL,
+                  package_version TEXT NOT NULL,
+                  ecosystem TEXT NOT NULL,
+                  verdict TEXT NOT NULL,
+                  severity TEXT NOT NULL,
+                  advisories_json TEXT NOT NULL,
+                  affected_files_json TEXT NOT NULL,
+                  reasons_json TEXT NOT NULL,
+                  kind TEXT NOT NULL,
+                  rationale TEXT NOT NULL,
+                  state TEXT NOT NULL,
+                  analyst_subject TEXT,
+                  analyst_name TEXT,
+                  decision_rationale TEXT,
+                  recommended_version TEXT,
+                  exception_expires_at INTEGER,
+                  verification_evidence_id TEXT,
+                  version_counter INTEGER NOT NULL,
+                  created_at INTEGER NOT NULL,
+                  updated_at INTEGER NOT NULL,
+                  UNIQUE(owner_subject, policy_evaluation_id)
+                );
+                CREATE INDEX IF NOT EXISTS review_requests_queue
+                  ON review_requests(state, severity, updated_at DESC);
+                CREATE INDEX IF NOT EXISTS review_requests_owner
+                  ON review_requests(owner_subject, updated_at DESC);
+                CREATE INDEX IF NOT EXISTS review_requests_package
+                  ON review_requests(owner_subject, repository_id, ecosystem,
+                                     package, package_version, state);
+                CREATE TABLE IF NOT EXISTS review_events (
+                  id TEXT PRIMARY KEY,
+                  request_id TEXT NOT NULL REFERENCES review_requests(id)
+                    ON DELETE CASCADE,
+                  actor TEXT NOT NULL,
+                  actor_name TEXT NOT NULL,
+                  actor_role TEXT NOT NULL,
+                  action TEXT NOT NULL,
+                  from_state TEXT,
+                  to_state TEXT NOT NULL,
+                  rationale TEXT NOT NULL,
+                  evidence_ids TEXT NOT NULL,
+                  at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS review_events_request
+                  ON review_events(request_id, at, id);
                 """
                 )
             finally:
@@ -575,6 +629,226 @@ class ControlPlane:
             body["status"] = "overdue"
         body["evidence_ids"] = _loads(body["evidence_ids"], [])
         return body
+
+    @staticmethod
+    def _review(row: sqlite3.Row, events: list[sqlite3.Row] | None = None) -> dict[str, Any]:
+        body = dict(row)
+        body["version"] = body.pop("package_version")
+        body["version_counter"] = body.pop("version_counter")
+        body["advisories"] = _loads(body.pop("advisories_json"), [])
+        body["code_entities"] = _loads(body.pop("affected_files_json"), [])
+        body["reasons"] = _loads(body.pop("reasons_json"), [])
+        severity_weight = {
+            "critical": 50, "high": 38, "medium": 24, "low": 12,
+            "unknown": 18,
+        }.get(body["severity"], 0)
+        verdict_weight = {"block": 30, "unknown": 22, "warn": 12, "allow": 0}.get(
+            body["verdict"], 0,
+        )
+        state_weight = {
+            "waiting": 18, "escalated": 25, "changes_requested": 8,
+            "exception_approved": 5, "not_approved": -20,
+            "false_positive": -35, "verified": -45,
+        }.get(body["state"], 0)
+        file_weight = min(15, len(body["code_entities"]) * 2)
+        age_days = max(0, (_now() - body["created_at"]) // 86400)
+        body["priority"] = severity_weight + verdict_weight + state_weight + file_weight + min(15, age_days)
+        reasons = [f"{body['severity']} severity", f"{body['state'].replace('_', ' ')}"]
+        if body["code_entities"]:
+            reasons.append(f"{len(body['code_entities'])} linked code item(s)")
+        if age_days:
+            reasons.append(f"waiting {age_days} day(s)")
+        body["priority_reasons"] = reasons
+        body["events"] = []
+        if events is not None:
+            body["events"] = []
+            for event in events:
+                item = dict(event)
+                item["evidence_ids"] = _loads(item["evidence_ids"], [])
+                body["events"].append(item)
+        return body
+
+    def create_review_request(
+        self, *, snapshot: dict[str, Any], kind: str, rationale: str,
+        actor: str, actor_name: str,
+    ) -> dict[str, Any]:
+        now = _now()
+        request_id, event_id = _id("rev"), _id("rve")
+        with self._write() as conn:
+            existing = conn.execute(
+                "SELECT * FROM review_requests WHERE owner_subject=? "
+                "AND policy_evaluation_id=?",
+                (actor, snapshot["policy_evaluation_id"]),
+            ).fetchone()
+            if existing is not None:
+                return self._review(existing)
+            conn.execute(
+                """INSERT INTO review_requests (
+                  id,owner_subject,owner_name,session_id,run_id,repository_id,
+                  repository_name,policy_evaluation_id,package,package_version,
+                  ecosystem,verdict,severity,advisories_json,affected_files_json,
+                  reasons_json,kind,rationale,state,version_counter,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'waiting',1,?,?)""",
+                (
+                    request_id, actor, actor_name, snapshot["session_id"],
+                    snapshot.get("run_id"), snapshot["repository_id"],
+                    snapshot["repository_name"], snapshot["policy_evaluation_id"],
+                    snapshot["package"], snapshot.get("version", ""),
+                    snapshot.get("ecosystem", "PyPI"), snapshot["verdict"],
+                    snapshot.get("severity") or "unknown",
+                    _json(snapshot.get("advisories", [])),
+                    _json(snapshot.get("code_entities", [])),
+                    _json(snapshot.get("reasons", [])), kind, rationale, now, now,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO review_events
+                (id,request_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at)
+                VALUES (?,?,?,?,?,'review.requested',NULL,'waiting',?,?,?)""",
+                (
+                    event_id, request_id, actor, actor_name, "developer", rationale,
+                    _json([snapshot["policy_evaluation_id"]]), now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM review_requests WHERE id=?", (request_id,),
+            ).fetchone()
+        assert row is not None
+        return self._review(row)
+
+    def review_request(self, request_id: str, *, owner_subject: str | None = None) -> dict[str, Any]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM review_requests WHERE id=?", (request_id,),
+            ).fetchone()
+            if row is None or (owner_subject is not None and row["owner_subject"] != owner_subject):
+                raise Missing("unknown review request")
+            events = conn.execute(
+                "SELECT * FROM review_events WHERE request_id=? ORDER BY at,id",
+                (request_id,),
+            ).fetchall()
+        return self._review(row, events)
+
+    def review_for_evaluation(self, owner_subject: str, evaluation_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM review_requests WHERE owner_subject=? "
+                "AND policy_evaluation_id=?",
+                (owner_subject, evaluation_id),
+            ).fetchone()
+        return self._review(row) if row is not None else None
+
+    def list_review_requests(
+        self, *, owner_subject: str | None = None, state: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        args: list[Any] = []
+        if owner_subject is not None:
+            clauses.append("owner_subject=?")
+            args.append(owner_subject)
+        if state is not None:
+            clauses.append("state=?")
+            args.append(state)
+        sql = "SELECT * FROM review_requests"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY updated_at DESC,id DESC LIMIT ?"
+        args.append(max(1, min(limit, 500)))
+        with self._connect() as conn:
+            values = [self._review(row) for row in conn.execute(sql, args).fetchall()]
+        return sorted(values, key=lambda item: (-item["priority"], -item["updated_at"]))
+
+    def decide_review_request(
+        self, request_id: str, *, expected_version: int, decision: str,
+        rationale: str, recommended_version: str | None,
+        expires_at: int | None, actor: str, actor_name: str, actor_role: str,
+    ) -> dict[str, Any]:
+        states = {
+            "request_changes": "changes_requested",
+            "approve_exception": "exception_approved",
+            "reject": "not_approved",
+            "false_positive": "false_positive",
+            "escalate": "escalated",
+        }
+        now = _now()
+        if decision == "approve_exception" and (expires_at is None or expires_at <= now):
+            raise StoreError("exception expiry must be in the future")
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM review_requests WHERE id=?", (request_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown review request")
+            if current["owner_subject"] == actor:
+                raise SeparationConflict("developers cannot decide their own review request")
+            if current["version_counter"] != expected_version:
+                raise VersionConflict("review request changed; reload before deciding")
+            if current["state"] in ("verified", "false_positive", "not_approved"):
+                raise StoreError("review request is already terminal")
+            target = states[decision]
+            conn.execute(
+                """UPDATE review_requests SET state=?,analyst_subject=?,
+                analyst_name=?,decision_rationale=?,recommended_version=?,
+                exception_expires_at=?,version_counter=version_counter+1,
+                updated_at=? WHERE id=?""",
+                (
+                    target, actor, actor_name, rationale, recommended_version,
+                    expires_at, now, request_id,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO review_events
+                (id,request_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at)
+                VALUES (?,?,?,?,?,?,?,?,?,'[]',?)""",
+                (
+                    _id("rve"), request_id, actor, actor_name, actor_role,
+                    f"review.{decision}", current["state"], target, rationale, now,
+                ),
+            )
+        return self.review_request(request_id)
+
+    def verify_package_reviews(
+        self, *, owner_subject: str, repository_id: str, ecosystem: str,
+        package: str, version: str, evidence_id: str,
+    ) -> list[str]:
+        """Close matching actionable requests after a clean package check."""
+        now = _now()
+        verified: list[str] = []
+        with self._write() as conn:
+            rows = conn.execute(
+                """SELECT * FROM review_requests
+                WHERE owner_subject=? AND repository_id=? AND ecosystem=?
+                  AND lower(package)=lower(?)
+                  AND state IN ('waiting','changes_requested','exception_approved','escalated')""",
+                (owner_subject, repository_id, ecosystem, package),
+            ).fetchall()
+            for row in rows:
+                recommended = row["recommended_version"]
+                if recommended and recommended != version:
+                    continue
+                conn.execute(
+                    """UPDATE review_requests SET state='verified',
+                    verification_evidence_id=?,version_counter=version_counter+1,
+                    updated_at=? WHERE id=?""",
+                    (evidence_id, now, row["id"]),
+                )
+                conn.execute(
+                    """INSERT INTO review_events
+                    (id,request_id,actor,actor_name,actor_role,action,from_state,
+                     to_state,rationale,evidence_ids,at)
+                    VALUES (?,?,?,?,?,'review.verified',?,'verified',?,?,?)""",
+                    (
+                        _id("rve"), row["id"], "meshagent", "MeshAgent",
+                        "system", row["state"],
+                        f"A clean check confirmed {package}@{version}.",
+                        _json([evidence_id]), now,
+                    ),
+                )
+                verified.append(row["id"])
+        return verified
 
     def create_report(self, *, title: str, period_start: int, period_end: int,
                       requested_by: str, manifest: dict[str, Any]) -> dict[str, Any]:

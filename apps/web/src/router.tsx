@@ -36,6 +36,8 @@ import { Audit } from "./routes/Audit";
 import { Devices } from "./routes/Devices";
 import { StartTask } from "./routes/StartTask";
 import { DeveloperSessions } from "./routes/DeveloperSessions";
+import { DeveloperAttention } from "./routes/DeveloperAttention";
+import { DeveloperReviewDetail } from "./routes/DeveloperReviewDetail";
 import { DeveloperSessionLayout } from "./routes/DeveloperSessionLayout";
 import { DeveloperSessionOverview } from "./routes/DeveloperSessionOverview";
 import { DeveloperSessionActivity } from "./routes/DeveloperSessionActivity";
@@ -46,6 +48,8 @@ import { DeveloperConnectionsOverview } from "./routes/DeveloperConnectionsOverv
 import { DeveloperConnectionsEditors } from "./routes/DeveloperConnectionsEditors";
 import { DeveloperConnectionsRepositories } from "./routes/DeveloperConnectionsRepositories";
 import { DeveloperConnectionsDevices } from "./routes/DeveloperConnectionsDevices";
+import { AnalystReviews } from "./routes/AnalystReviews";
+import { AnalystReviewDetail } from "./routes/AnalystReviewDetail";
 import { useIdentity } from "./lib/useIdentity";
 
 /** The banner sits above the rail rather than inside a screen: what it reports
@@ -107,6 +111,26 @@ const developerStartRoute = createRoute({
   component: () => (
     <RequiresCapability capability="run.create">
       <StartTask />
+    </RequiresCapability>
+  ),
+});
+
+const developerAttentionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/developer/attention",
+  component: () => (
+    <RequiresCapability capability="review.own">
+      <DeveloperAttention />
+    </RequiresCapability>
+  ),
+});
+
+const developerReviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/developer/reviews/$requestId",
+  component: () => (
+    <RequiresCapability capability="review.own">
+      <DeveloperReviewDetail />
     </RequiresCapability>
   ),
 });
@@ -183,6 +207,18 @@ const analystQueueRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/analyst/queue",
   component: () => <RequiresCapability capability="case.read"><AnalystQueue /></RequiresCapability>,
+});
+
+const analystReviewsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/analyst/reviews",
+  component: () => <RequiresCapability capability="review.read"><AnalystReviews /></RequiresCapability>,
+});
+
+const analystReviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/analyst/reviews/$requestId",
+  component: () => <RequiresCapability capability="review.read"><AnalystReviewDetail /></RequiresCapability>,
 });
 
 const analystCaseRoute = createRoute({
@@ -348,6 +384,8 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   developerSessionsRoute,
   developerStartRoute,
+  developerAttentionRoute,
+  developerReviewRoute,
   developerSessionRoute.addChildren([
     developerSessionOverviewRoute,
     developerSessionActivityRoute,
@@ -361,6 +399,8 @@ const routeTree = rootRoute.addChildren([
     developerConnectionsDevicesRoute,
   ]),
   analystQueueRoute,
+  analystReviewsRoute,
+  analystReviewRoute,
   analystCaseRoute,
   analystInvestigationRoute,
   cisoOverviewRoute,

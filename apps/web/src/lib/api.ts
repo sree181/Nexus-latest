@@ -143,9 +143,10 @@ export interface PolicyEvaluation {
   activity_event_id: string;
   package: string;
   version: string;
+  ecosystem: "PyPI" | "npm";
   verdict: "allow" | "warn" | "block" | "unknown";
   reasons: string[];
-  advisories: Array<Record<string, unknown>>;
+  advisories: PolicyAdvisory[];
   worst: "critical" | "high" | "medium" | "low" | "unknown" | null;
   unavailable: string | null;
   policy: string;
@@ -154,9 +155,122 @@ export interface PolicyEvaluation {
   device_id: string | null;
 }
 
+export interface PolicyAdvisory {
+  id: string;
+  severity: "critical" | "high" | "medium" | "low" | "unknown";
+  summary: string;
+  cwe: string | null;
+  fixed_versions: string[];
+  references: string[];
+}
+
 export interface PolicyEvaluationList {
   evaluations: PolicyEvaluation[];
   total: number;
+}
+
+export type ReviewState =
+  | "waiting"
+  | "changes_requested"
+  | "exception_approved"
+  | "not_approved"
+  | "false_positive"
+  | "escalated"
+  | "verified";
+
+export type ReviewKind =
+  | "security_guidance"
+  | "safe_version"
+  | "exception"
+  | "false_positive";
+
+export interface AttentionItem {
+  id: string;
+  session_id: string;
+  policy_evaluation_id: string;
+  run_id: string | null;
+  repository_id: string;
+  repository_name: string;
+  package: string;
+  version: string;
+  ecosystem: "PyPI" | "npm";
+  verdict: "allow" | "warn" | "block" | "unknown";
+  worst: "critical" | "high" | "medium" | "low" | "unknown" | null;
+  reasons: string[];
+  advisories: PolicyAdvisory[];
+  unavailable: string | null;
+  code_entities: string[];
+  suggested_version: string | null;
+  checked_at_ms: number;
+  review_request_id: string | null;
+  review_status: ReviewState | null;
+  priority: number;
+  priority_reasons: string[];
+}
+
+export interface AttentionList {
+  items: AttentionItem[];
+  total: number;
+}
+
+export interface ReviewEvent {
+  id: string;
+  request_id: string;
+  actor: string;
+  actor_name: string;
+  actor_role: string;
+  action: string;
+  from_state: string | null;
+  to_state: string;
+  rationale: string;
+  evidence_ids: string[];
+  at: number;
+}
+
+export interface ReviewRequest {
+  id: string;
+  owner_subject: string;
+  owner_name: string;
+  session_id: string;
+  run_id: string | null;
+  repository_id: string;
+  repository_name: string;
+  policy_evaluation_id: string;
+  package: string;
+  version: string;
+  ecosystem: "PyPI" | "npm";
+  verdict: "allow" | "warn" | "block" | "unknown";
+  severity: "critical" | "high" | "medium" | "low" | "unknown";
+  advisories: PolicyAdvisory[];
+  code_entities: string[];
+  reasons: string[];
+  kind: ReviewKind;
+  rationale: string;
+  state: ReviewState;
+  analyst_subject: string | null;
+  analyst_name: string | null;
+  decision_rationale: string | null;
+  recommended_version: string | null;
+  exception_expires_at: number | null;
+  verification_evidence_id: string | null;
+  version_counter: number;
+  created_at: number;
+  updated_at: number;
+  priority: number;
+  priority_reasons: string[];
+  events: ReviewEvent[];
+}
+
+export interface ReviewRequestList {
+  requests: ReviewRequest[];
+  total: number;
+}
+
+export interface ReviewGraph {
+  request_id: string;
+  perspective: "developer" | "analyst" | "ciso";
+  graph: GraphPayload;
+  note: string;
 }
 
 export interface RunSummary {
@@ -254,6 +368,9 @@ export type Capability =
   | "recorder.write"
   | "package.gate"
   | "device.own"
+  | "review.own"
+  | "review.read"
+  | "review.write"
   | "fleet.read"
   | "evidence.read"
   | "case.read"
@@ -950,6 +1067,8 @@ export interface GateAdvisory {
   severity: "critical" | "high" | "medium" | "low" | "unknown";
   summary: string;
   cwe: string | null;
+  fixed_versions: string[];
+  references: string[];
 }
 
 /** Whether an agent may install a package, and everything the answer rests on.
@@ -960,6 +1079,7 @@ export interface GateAdvisory {
 export interface GateDecision {
   package: string;
   version: string;
+  ecosystem: "PyPI" | "npm";
   verdict: "allow" | "warn" | "block" | "unknown";
   reasons: string[];
   advisories: GateAdvisory[];
@@ -1065,8 +1185,16 @@ export const api = {
   me: () => get<Me>("/me"),
   audit: () => get<AuditOut>("/audit"),
 
-  checkPackage: (packageName: string, version: string) =>
-    post<GateDecision>("/gate/package", { package: packageName, version }),
+  checkPackage: (
+    packageName: string,
+    version: string,
+    ecosystem: "PyPI" | "npm" = "PyPI",
+  ) =>
+    post<GateDecision>("/gate/package", {
+      package: packageName,
+      version,
+      ecosystem,
+    }),
 
   devices: () => get<DeviceOut[]>("/devices"),
   revokeDevice: (id: string) =>
@@ -1150,6 +1278,41 @@ export const api = {
     get<PolicyEvaluationList>(
       `/v1/developer/sessions/${encodeURIComponent(sessionId)}/policy-evaluations?limit=${Math.max(1, Math.min(limit, 500))}`,
     ),
+  developerAttention: (limit = 200) =>
+    get<AttentionList>(
+      `/v1/developer/attention?limit=${Math.max(1, Math.min(limit, 500))}`,
+    ),
+  developerReviewRequests: () =>
+    get<ReviewRequestList>("/v1/developer/review-requests"),
+  createDeveloperReviewRequest: (input: {
+    session_id: string;
+    policy_evaluation_id: string;
+    kind: ReviewKind;
+    rationale: string;
+  }) => post<ReviewRequest>("/v1/developer/review-requests", input),
+  developerReviewRequest: (requestId: string) =>
+    get<ReviewRequest>(
+      `/v1/developer/review-requests/${encodeURIComponent(requestId)}`,
+    ),
+  developerReviewGraph: (requestId: string) =>
+    get<ReviewGraph>(
+      `/v1/developer/review-requests/${encodeURIComponent(requestId)}/graph`,
+    ),
+  reviews: (state?: ReviewState) =>
+    get<ReviewRequestList>(
+      `/reviews${state ? `?state=${encodeURIComponent(state)}` : ""}`,
+    ),
+  review: (requestId: string) =>
+    get<ReviewRequest>(`/reviews/${encodeURIComponent(requestId)}`),
+  reviewGraph: (requestId: string) =>
+    get<ReviewGraph>(`/reviews/${encodeURIComponent(requestId)}/graph`),
+  decideReview: (requestId: string, input: {
+    expected_version: number;
+    decision: "request_changes" | "approve_exception" | "reject" | "false_positive" | "escalate";
+    rationale: string;
+    recommended_version?: string | null;
+    expires_at?: number | null;
+  }) => post<ReviewRequest>(`/reviews/${encodeURIComponent(requestId)}/decision`, input),
 
   runGraph: (runId: string) => get<GraphPayload>(`/runs/${runId}/graph`),
   runWhy: (runId: string, node: string) =>

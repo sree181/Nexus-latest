@@ -23,6 +23,9 @@ Capability = Literal[
     "recorder.write",
     "package.gate",
     "device.own",
+    "review.own",
+    "review.read",
+    "review.write",
     "fleet.read",
     "evidence.read",
     "case.read",
@@ -43,16 +46,19 @@ ENVIRONMENTS = frozenset({"development", "test", "production"})
 CAPABILITIES: dict[Role, frozenset[str]] = {
     "developer": frozenset({
         "run.own", "run.create", "recorder.write", "package.gate", "device.own",
+        "review.own",
     }),
     "analyst": frozenset({
         "fleet.read", "evidence.read", "case.read", "case.write", "audit.read",
-        "exception.request", "policy.read", "device.own",
+        "exception.request", "policy.read", "device.own", "review.read",
+        "review.write",
     }),
     "ciso": frozenset({
         "fleet.read", "evidence.read", "case.read", "case.write", "audit.read",
         "exception.request", "policy.read", "policy.write", "exception.read",
         "exception.approve", "recommendation.apply", "remediation.write",
         "report.generate", "device.fleet", "device.own",
+        "review.read", "review.write",
     }),
 }
 
