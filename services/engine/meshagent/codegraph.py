@@ -46,6 +46,7 @@ P_LICENSE = "license:"
 P_CVE = "cve:"
 P_ENTRY = "entry:"
 P_TOOL = "tool:"
+P_ACTIVITY = "activity:"
 
 
 # Dangerous call sites, keyed by the resolved dotted call name. Each maps to
@@ -428,6 +429,26 @@ class CodeGraphRecorder:
     _modules: dict[str, str] = field(default_factory=dict)      # name -> ulid
     _classes: dict[str, str] = field(default_factory=dict)      # name -> ulid
 
+    def _projection_subject(
+        self, external_event_id: str | None, component: str,
+    ) -> str | None:
+        if not external_event_id:
+            return None
+        return f"{P_ACTIVITY}{external_event_id}:{component}"
+
+    def _projected(
+        self, external_event_id: str | None, component: str,
+    ) -> str | None:
+        """Return the live ULID for one event component, if already written."""
+        subject = self._projection_subject(external_event_id, component)
+        if subject is None:
+            return None
+        for ulid in reversed(self.memory.find_by_subject(subject)):
+            record = self.memory.get(ulid)
+            if record is not None and not record.tombstoned:
+                return ulid
+        return None
+
     # ── sources and decisions ─────────────────────────────────────────────
 
     def record_source(
@@ -454,7 +475,7 @@ class CodeGraphRecorder:
 
     def record_decision(
         self, decision_id: str, statement: str, *, from_sources: list[str],
-        unexplained: bool = False,
+        unexplained: bool = False, external_event_id: str | None = None,
     ) -> str:
         """A design decision, linked to the sources that informed it.
 
@@ -463,13 +484,21 @@ class CodeGraphRecorder:
         it, and code has to hang off a decision; inventing a plausible one
         would be the worst answer. Recording the absence instead makes "how
         much of this estate has a stated why" a number rather than a guess."""
+        component = f"decision:{decision_id}"
+        if existing := self._projected(external_event_id, component):
+            self._decisions[decision_id] = existing
+            return existing
         parents = [self._sources[s] for s in from_sources if s in self._sources]
+        subjects = [f"{P_DECISION}{decision_id}"]
+        if marker := self._projection_subject(external_event_id, component):
+            subjects.append(marker)
         ulid = self.memory.write(
-            Kind.FACT, [f"{P_DECISION}{decision_id}"],
+            Kind.FACT, subjects,
             origin=Origin.AGENT, status=Status.UNVERIFIED,
             source="agent:design",
             payload={"type": "decision", "statement": statement,
-                     "unexplained": unexplained},
+                     "unexplained": unexplained,
+                     "external_event_id": external_event_id},
             derived_from=parents or None,
         )
         self._decisions[decision_id] = ulid
@@ -492,22 +521,32 @@ class CodeGraphRecorder:
 
     # ── activity an external recorder observes ────────────────────────────
 
-    def record_tool(self, name: str, detail: str = "") -> str:
+    def record_tool(
+        self, name: str, detail: str = "", *, external_event_id: str | None = None,
+    ) -> str:
         """A tool an agent invoked: a shell command, a package install, a
         test run. Not provenance for any particular line of code, but it is
         how the code came to exist, and a reviewer asking why a package
         appeared has nowhere else to look."""
+        component = "tool"
+        if existing := self._projected(external_event_id, component):
+            return existing
+        subjects = [f"{P_TOOL}{name}"]
+        if marker := self._projection_subject(external_event_id, component):
+            subjects.append(marker)
         return self.memory.write(
-            Kind.FACT, [f"{P_TOOL}{name}"],
+            Kind.FACT, subjects,
             origin=Origin.AGENT, status=Status.UNVERIFIED,
             source="agent:tool",
-            payload={"type": "tool", "name": name, "detail": detail},
+            payload={"type": "tool", "name": name, "detail": detail,
+                     "external_event_id": external_event_id},
         )
 
     # ── code ──────────────────────────────────────────────────────────────
 
     def record_module(self, source_code: str, *, decision_id: str,
-                      module: str = "main") -> str:
+                      module: str = "main",
+                      external_event_id: str | None = None) -> str:
         """Record *source_code* verbatim as a module, and nothing more.
 
         This is the half of `record_code` that holds for any language. The
@@ -522,47 +561,68 @@ class CodeGraphRecorder:
         # see the module has to take those assertions on trust. It is kept
         # off the provenance graph deliberately -- `module:` is not a node
         # kind there, and a class already carries the decision as its parent.
+        component = "module"
+        if existing := self._projected(external_event_id, component):
+            self._modules[module] = existing
+            return existing
+        subjects = [f"{P_MODULE}{module}"]
+        if marker := self._projection_subject(external_event_id, component):
+            subjects.append(marker)
         module_ulid = self.memory.write(
-            Kind.FACT, [f"{P_MODULE}{module}"],
+            Kind.FACT, subjects,
             origin=Origin.AGENT, status=Status.VERIFIED,
             source="agent:codegen",
-            payload={"type": "module", "name": module, "code": source_code},
+            payload={"type": "module", "name": module, "code": source_code,
+                     "external_event_id": external_event_id},
             derived_from=[self._decisions[decision_id]],
         )
         self._modules[module] = module_ulid
         return module_ulid
 
     def record_code(self, source_code: str, *, decision_id: str,
-                    module: str = "main") -> list[str]:
+                    module: str = "main",
+                    external_event_id: str | None = None) -> list[str]:
         """Record *source_code* as a module, then each class it defines as a
         hyperedge over the class and the packages it imports. The module is
         kept verbatim so the code can be read back; the classes derive from
         it and from *decision_id*. Returns the ULIDs of the class edges."""
-        self.record_module(source_code, decision_id=decision_id, module=module)
+        self.record_module(
+            source_code, decision_id=decision_id, module=module,
+            external_event_id=external_event_id,
+        )
         decision_ulid = self._decisions[decision_id]
 
         written: list[str] = []
-        for cls in extract_code_entities(source_code):
+        for class_index, cls in enumerate(extract_code_entities(source_code)):
+            component = f"class:{class_index}"
             members = [f"{P_CLASS}{cls.name}"]
             members += [f"{P_PACKAGE}{p}" for p in cls.packages]
-            ulid = self.memory.write(
-                Kind.FACT, members,
-                origin=Origin.AGENT, status=Status.VERIFIED,
-                source="agent:codegen",
-                payload={
-                    "type": "class",
-                    "name": cls.name,
-                    "packages": cls.packages,
-                    "bases": cls.bases,
-                    "module": module,
-                },
-                derived_from=[decision_ulid],
-            )
+            if marker := self._projection_subject(external_event_id, component):
+                members.append(marker)
+            ulid = self._projected(external_event_id, component)
+            if ulid is None:
+                ulid = self.memory.write(
+                    Kind.FACT, members,
+                    origin=Origin.AGENT, status=Status.VERIFIED,
+                    source="agent:codegen",
+                    payload={
+                        "type": "class",
+                        "name": cls.name,
+                        "packages": cls.packages,
+                        "bases": cls.bases,
+                        "module": module,
+                        "external_event_id": external_event_id,
+                    },
+                    derived_from=[decision_ulid],
+                )
             self._classes[cls.name] = ulid
             written.append(ulid)
             # each dangerous call site becomes its own n-ary finding edge:
             # {class, sink, cwe, capability}, derived from the class.
-            for s in cls.sinks:
+            for sink_index, s in enumerate(cls.sinks):
+                sink_component = f"class:{class_index}:sink:{sink_index}"
+                if self._projected(external_event_id, sink_component):
+                    continue
                 members = [
                     f"{P_CLASS}{cls.name}",
                     f"{P_SINK}{s.call}",
@@ -570,6 +630,10 @@ class CodeGraphRecorder:
                 ]
                 if s.cwe:
                     members.append(f"{P_CWE}{s.cwe}")
+                if marker := self._projection_subject(
+                    external_event_id, sink_component,
+                ):
+                    members.append(marker)
                 self.memory.write(
                     Kind.FACT, members,
                     origin=Origin.AGENT, status=Status.VERIFIED,
@@ -582,6 +646,7 @@ class CodeGraphRecorder:
                         "capability": s.capability,
                         "shell_true": s.shell_true,
                         "class": cls.name,
+                        "external_event_id": external_event_id,
                     },
                     derived_from=[ulid],
                 )
@@ -589,11 +654,19 @@ class CodeGraphRecorder:
             # No severity is attached: the scan establishes that a value from
             # outside reaches the call, which is not the same as knowing how
             # bad that is, and inventing a rating would undo the point.
-            for t in cls.taints:
+            for taint_index, t in enumerate(cls.taints):
+                taint_component = f"class:{class_index}:taint:{taint_index}"
+                if self._projected(external_event_id, taint_component):
+                    continue
+                members = [f"{P_SINK}{t.sink}", f"{P_ENTRY}{t.entry}"]
+                members += [f"{P_CWE}{t.cwe}"] if t.cwe else []
+                if marker := self._projection_subject(
+                    external_event_id, taint_component,
+                ):
+                    members.append(marker)
                 self.memory.write(
                     Kind.FACT,
-                    [f"{P_SINK}{t.sink}", f"{P_ENTRY}{t.entry}"]
-                    + ([f"{P_CWE}{t.cwe}"] if t.cwe else []),
+                    members,
                     origin=Origin.AGENT, status=Status.VERIFIED,
                     source="agent:taint-scan",
                     payload={
@@ -601,6 +674,7 @@ class CodeGraphRecorder:
                         "entry_kind": t.entry_kind, "cwe": t.cwe,
                         "severity": None, "rule": "py/external-data-reaches-sink",
                         "flow": t.flow, "reachable": True, "class": t.owner,
+                        "external_event_id": external_event_id,
                     },
                     derived_from=[ulid],
                 )
@@ -610,17 +684,24 @@ class CodeGraphRecorder:
 
     def record_version(
         self, package: str, version: str, *, license: str,
+        external_event_id: str | None = None,
     ) -> str:
         """One SBOM entry as an n-ary edge {version, package, license}. In a
         real run these come from the lockfile; here they are supplied."""
+        component = "version"
+        if existing := self._projected(external_event_id, component):
+            return existing
         vsub = f"{P_VERSION}{package}@{version}"
         members = [vsub, f"{P_PACKAGE}{package}", f"{P_LICENSE}{license}"]
+        if marker := self._projection_subject(external_event_id, component):
+            members.append(marker)
         return self.memory.write(
             Kind.FACT, members,
             origin=Origin.AGENT, status=Status.VERIFIED, source="agent:sbom",
             payload={
                 "type": "version", "package": package, "version": version,
                 "license": license,
+                "external_event_id": external_event_id,
             },
         )
 

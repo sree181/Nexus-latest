@@ -548,6 +548,7 @@ class SessionEvent(BaseModel):
     # would put a partial picture under a finished heading.
     ends: bool = False
     at: int | None = None
+    event_id: str | None = Field(default=None, max_length=124)
 
 
 class DecisionEvent(BaseModel):
@@ -557,6 +558,7 @@ class DecisionEvent(BaseModel):
     id: str = Field(max_length=256)  # the adapter's handle, referenced by `because`
     statement: str = Field(max_length=4_096)
     at: int | None = None
+    event_id: str | None = Field(default=None, max_length=124)
 
 
 class CodeEvent(BaseModel):
@@ -569,6 +571,7 @@ class CodeEvent(BaseModel):
     # explicitly unexplained rather than invented.
     because: str | None = Field(default=None, max_length=256)
     at: int | None = None
+    event_id: str | None = Field(default=None, max_length=124)
 
 
 class PackageEvent(BaseModel):
@@ -578,6 +581,7 @@ class PackageEvent(BaseModel):
     version: str = Field(max_length=128)
     license: str = Field(default="unknown", max_length=256)
     at: int | None = None
+    event_id: str | None = Field(default=None, max_length=124)
 
 
 class ToolEvent(BaseModel):
@@ -586,6 +590,7 @@ class ToolEvent(BaseModel):
     name: str = Field(max_length=256)
     detail: str = Field(default="", max_length=4_096)
     at: int | None = None
+    event_id: str | None = Field(default=None, max_length=124)
 
 
 RecorderEvent = Annotated[

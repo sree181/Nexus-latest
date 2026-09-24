@@ -56,13 +56,21 @@ the security office can act on.
 
 ## What it records
 
-| Claude Code event | Becomes |
-| --- | --- |
-| First `UserPromptSubmit` of a session | `session` — opens the run, with the developer's request as its task |
-| `PostToolUse` on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` | `code` — the file as it now stands on disk |
-| `PostToolUse` on `Bash` | `tool`, plus `package` for any exactly-pinned install |
-| `SessionEnd` | `session` with `ends`, completing the run |
-| `PreToolUse` on `Bash` | a gate check on every package the command installs |
+| Claude Code event                                          | Becomes                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| First `UserPromptSubmit` of a session                      | `session` — opens the run, with the developer's request as its task |
+| `PostToolUse` on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` | `code` — the file as it now stands on disk                          |
+| `PostToolUse` on `Bash`                                    | `tool`, plus `package` for any exactly-pinned install               |
+| `SessionEnd`                                               | `session` with `ends`, completing the run                           |
+| `PreToolUse` on `Bash`                                     | a gate check on every package the command installs                  |
+
+The hook translates these observations into the versioned Developer session
+API. It opens the session with `POST /api/v1/developer/sessions`, then appends
+strictly ordered events to
+`POST /api/v1/developer/sessions/{id}/events`. Package-gate answers are recorded
+as first-class `policy.evaluated` events. The API commits activity before its
+ordered projection into HyperMesh, so delivery and projection failures are not
+conflated.
 
 ## What it refuses
 
@@ -113,7 +121,12 @@ refuses — a hook deciding for itself which installs to stop would be the exact
 overreach this product argues against.
 
 The queue is bounded by count and bytes and stored under a repository/editor
-namespace with process locks. Inspect or replay it without printing secrets:
+namespace with process locks. A recoverable `.inflight` lease keeps records
+until the API acknowledges them, including across a hook-process crash. The
+oldest undelivered causal prefix is retained, including the session opener. If
+the queue is full, a new observation is not retained until the backlog advances;
+the unused sequence reservation is rolled back so replay remains contiguous.
+Inspect or replay it without printing secrets:
 
 ```bash
 meshagent status

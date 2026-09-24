@@ -19,7 +19,17 @@ from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSock
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from . import __version__, audit, auth, browser_sessions, control_plane, devices, paths
+from . import (
+    __version__,
+    audit,
+    auth,
+    browser_sessions,
+    control_plane,
+    developer_sessions,
+    devices,
+    paths,
+    session_projection,
+)
 from .auth import AuthError, Forbidden, Principal
 from .gateway import Conflict, NotFound, Stale, get_gateway
 from .models import (
@@ -62,6 +72,15 @@ from .models import (
     ScanOut,
     SarifDocument,
     WhyOut,
+)
+from .developer_session_models import (
+    ActivityBatchRequest,
+    ActivityIngestReceipt,
+    ActivityListOut,
+    DeveloperSessionOut,
+    PolicyEvaluationListOut,
+    SessionListOut,
+    SessionStartRequest,
 )
 from .workflow_models import (
     ApprovalDecisionRequest,
@@ -215,6 +234,37 @@ def _workflow_separation(
 
 @app.exception_handler(control_plane.StoreError)
 def _workflow_conflict(_: Request, exc: control_plane.StoreError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(developer_sessions.MissingSession)
+@app.exception_handler(developer_sessions.SessionAccessDenied)
+def _developer_session_missing(
+    _: Request, exc: developer_sessions.SessionStoreError
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(developer_sessions.SequenceConflict)
+def _developer_session_sequence(
+    _: Request, exc: developer_sessions.SequenceConflict
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "detail": str(exc),
+            "code": "sequence_conflict",
+            "expected_sequence": exc.expected,
+            "received_sequence": exc.received,
+        },
+    )
+
+
+@app.exception_handler(developer_sessions.ReplayConflict)
+@app.exception_handler(developer_sessions.LifecycleConflict)
+def _developer_session_conflict(
+    _: Request, exc: developer_sessions.SessionStoreError
+) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
@@ -373,6 +423,23 @@ audit_log = audit.Log(base=paths.base_dir())
 # Cases and approvals can change state; the HyperMesh relations they reference
 # remain immutable evidence.
 workflow_store = control_plane.load(paths.base_dir())
+
+# Connected coding-agent sessions are operational state, not beliefs. Activity
+# is committed here before ordered projection into governed HyperMesh memory.
+developer_session_store = developer_sessions.load(paths.base_dir())
+developer_session_store.reset_interrupted_projections()
+for _session in developer_session_store.recoverable_sessions():
+    _principal = Principal(
+        subject=_session.owner_subject,
+        name=_session.owner_name,
+        email=_session.owner_subject,
+        role="developer",
+        verified=_session.verified,
+        device=_session.device_id,
+    )
+    session_projection.project_pending(
+        developer_session_store, gateway, _session, _principal,
+    )
 
 # OIDC transactions and browser sessions are server-owned. Only hashes of the
 # opaque cookie values are retained; access tokens never enter browser storage.
@@ -1038,6 +1105,127 @@ def create_run(req: CreateRunRequest,
 
 
 # -- the recorder: agents this product does not own ---------------------------
+
+@app.post(
+    "/api/v1/developer/sessions",
+    response_model=DeveloperSessionOut,
+    status_code=201,
+)
+def start_developer_session(
+    req: SessionStartRequest,
+    who: Principal = Depends(recorder),
+) -> DeveloperSessionOut:
+    """Open one authenticated Cursor or Claude Code work session.
+
+    The client supplies a collision-safe opaque session id and stable source
+    event id. Exact retries return the same session; divergent reuse is a 409.
+    The opening activity commits before its ordered HyperMesh projection.
+    """
+    session, replayed = developer_session_store.create(req, who)
+    session_projection.project_pending(
+        developer_session_store, gateway, session, who,
+    )
+    current = developer_session_store.get(session.id, who)
+    note(
+        who,
+        "developer.session.replay" if replayed else "developer.session.start",
+        current.id,
+        f"{current.adapter} {current.repository.id}",
+    )
+    return current
+
+
+@app.get("/api/v1/developer/sessions", response_model=SessionListOut)
+def list_developer_sessions(
+    limit: int = 100,
+    who: Principal = Depends(caller),
+) -> SessionListOut:
+    """List only the authenticated developer's connected-agent sessions."""
+    return developer_session_store.list(who, limit=max(1, min(limit, 200)))
+
+
+@app.get(
+    "/api/v1/developer/sessions/{session_id}",
+    response_model=DeveloperSessionOut,
+)
+def developer_session(
+    session_id: str,
+    who: Principal = Depends(caller),
+) -> DeveloperSessionOut:
+    return developer_session_store.get(session_id, who)
+
+
+@app.post(
+    "/api/v1/developer/sessions/{session_id}/events",
+    response_model=ActivityIngestReceipt,
+)
+def ingest_developer_activity(
+    session_id: str,
+    batch: ActivityBatchRequest,
+    who: Principal = Depends(recorder),
+) -> ActivityIngestReceipt:
+    """Append a contiguous activity batch and project it in session order.
+
+    SQLite uniqueness constraints make event retries safe. The receipt's
+    acknowledged sequence is the durable append boundary; projection state is
+    independently visible on the event history for operational reconciliation.
+    """
+    _, accepted, duplicates = developer_session_store.ingest(
+        session_id, batch, who,
+    )
+    session = developer_session_store.get(session_id, who)
+    projected, refused, run_id = session_projection.project_pending(
+        developer_session_store, gateway, session, who,
+    )
+    current = developer_session_store.get(session_id, who)
+    note(
+        who,
+        "developer.activity.ingest",
+        session_id,
+        f"accepted={accepted} duplicate={duplicates} projected={projected}",
+    )
+    return ActivityIngestReceipt(
+        session=current,
+        accepted=accepted,
+        duplicates=duplicates,
+        projected=projected,
+        refused=refused,
+        acknowledged_through=current.last_acked_sequence,
+        next_sequence=current.next_sequence,
+        run_id=run_id or current.run_id,
+    )
+
+
+@app.get(
+    "/api/v1/developer/sessions/{session_id}/events",
+    response_model=ActivityListOut,
+)
+def developer_activity(
+    session_id: str,
+    after_sequence: int = 0,
+    limit: int = 200,
+    who: Principal = Depends(caller),
+) -> ActivityListOut:
+    return developer_session_store.events(
+        session_id,
+        who,
+        after_sequence=max(0, after_sequence),
+        limit=max(1, min(limit, 500)),
+    )
+
+
+@app.get(
+    "/api/v1/developer/sessions/{session_id}/policy-evaluations",
+    response_model=PolicyEvaluationListOut,
+)
+def developer_policy_evaluations(
+    session_id: str,
+    limit: int = 200,
+    who: Principal = Depends(caller),
+) -> PolicyEvaluationListOut:
+    return developer_session_store.policy_evaluations(
+        session_id, who, limit=max(1, min(limit, 500)),
+    )
 
 @app.get("/api/fleet/coverage", response_model=CoverageOut)
 def fleet_coverage(_: Principal = Depends(analyst)) -> CoverageOut:

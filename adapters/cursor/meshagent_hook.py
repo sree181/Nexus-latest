@@ -49,9 +49,11 @@ import urllib.request
 
 try:
     from meshagent_cli import state as local_state
+    from meshagent_cli import protocol as session_protocol
 except ImportError:  # source checkout, before `pip install meshagent-cli`
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "cli"))
     from meshagent_cli import state as local_state
+    from meshagent_cli import protocol as session_protocol
 
 AGENT = "cursor"
 CONFIG = ".meshagent.json"
@@ -179,38 +181,22 @@ def _headers() -> dict[str, str]:
 
 
 def post(batch: dict) -> dict | None:
-    api = local_state.endpoint()
-    headers = _headers()
-    headers["Idempotency-Key"] = local_state.batch_key(batch)
-    keys = [str(event.get("idempotency_key") or "")
-            for event in batch.get("events") or []]
-    if keys:
-        headers["X-MeshAgent-Event-Keys"] = ",".join(keys)
-    req = urllib.request.Request(f"{api}/api/recorder",
-                                 data=json.dumps(batch).encode(),
-                                 headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
-            return json.loads(res.read().decode())
-    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
-        return None
+    return session_protocol.post(batch, headers=_headers(), timeout=TIMEOUT)
 
 
 def send(session_id: str, events: list[dict], repository: str | None = None) -> dict | None:
-    """Oldest queued batches first: a code event arriving before the session
-    event that opens its run would be refused."""
-    keyed = local_state.add_event_keys(AGENT, session_id, events, repository=repository)
-    batch = {"agent": AGENT, "session": session_id, "events": keyed}
-    pending = drain(repository) + [batch]
-    last = None
-    for item in pending:
-        got = post(item)
-        if got is None:
-            for rest in pending[pending.index(item):]:
-                enqueue(rest, repository)
-            return None
-        last = got
-    return last
+    try:
+        return session_protocol.send(
+            agent=AGENT,
+            native_session=session_id,
+            events=events,
+            repository=repository or os.getcwd(),
+            headers=_headers(),
+            timeout=TIMEOUT,
+            post_fn=post,
+        )
+    except Exception:
+        return None
 
 
 def ask_gate(package: str, version: str, session_id: str) -> dict | None:
@@ -379,6 +365,21 @@ def on_before_shell(payload: dict, cfg: dict) -> dict:
     session_id = conversation(payload)
     for package, version in installs(command):
         got = ask_gate(package, version, session_id)
+        state = read_session(session_id, workspace(payload))
+        if got is not None and state.get("opened"):
+            send(
+                session_id,
+                [{
+                    "type": "policy", "package": package, "version": version,
+                    "verdict": got.get("verdict", "unknown"),
+                    "reasons": got.get("reasons") or [],
+                    "policy": got.get("policy") or "",
+                    "worst": got.get("worst"),
+                    "unavailable": got.get("unavailable"),
+                    "advisories": got.get("advisories") or [],
+                }],
+                workspace(payload),
+            )
         if got is None or got.get("verdict") != "block":
             continue
         reasons = " ".join(got.get("reasons") or ["no reason given"])

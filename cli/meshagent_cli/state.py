@@ -13,8 +13,10 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 from urllib.parse import urlsplit, urlunsplit
@@ -30,8 +32,8 @@ STATE_DIR = "state"
 QUEUE_DIR = "queues"
 
 # Retention is deliberately bounded.  A laptop kept offline must not accumulate
-# unbounded source snapshots under $HOME.  The newest batches are retained,
-# because they represent the current working tree.
+# unbounded source snapshots under $HOME.  The oldest undelivered prefix is
+# retained because the v1 server requires contiguous sequence numbers.
 DEFAULT_MAX_QUEUE_BATCHES = 200
 DEFAULT_MAX_QUEUE_BYTES = 5 * 1024 * 1024
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -350,32 +352,33 @@ def _queue_contents(batches: list[dict]) -> str:
                    for item in batches)
 
 
-def _retained(batches: list[dict]) -> list[dict]:
-    """Keep a bounded suffix of batches and bytes without corrupting JSONL."""
-    out: list[dict] = []
+def _within_queue_limits(batches: list[dict]) -> bool:
+    """Return whether a complete ordered queue fits without dropping records."""
+    if len(batches) > max_queue_batches():
+        return False
     total = 0
-    for batch in reversed(batches[-max_queue_batches():]):
-        encoded = json.dumps(batch, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-        if len(encoded) > max_queue_bytes():
-            continue
-        if total + len(encoded) > max_queue_bytes():
-            break
-        out.append(batch)
-        total += len(encoded)
-    out.reverse()
-    return out
+    for batch in batches:
+        total += len(
+            json.dumps(batch, sort_keys=True, separators=(",", ":")).encode()
+        ) + 1
+        if total > max_queue_bytes():
+            return False
+    return True
 
 
 def enqueue(batch: dict, *, repository: str | None = None,
-            editor: str | None = None, session_id: str | None = None) -> None:
+            editor: str | None = None, session_id: str | None = None) -> bool:
     agent = editor or str(batch.get("agent") or "unknown")
     session = session_id or str(batch.get("session") or "")
     if not session:
-        return
+        return False
     path = queue_path(session, repository=repository, editor=agent)
     with locked(path):
-        entries = _retained(_parse_lines(path) + [batch])
+        entries = _parse_lines(path) + [batch]
+        if not _within_queue_limits(entries):
+            return False
         _atomic_write(path, _queue_contents(entries))
+        return True
 
 
 def drain(*, repository: str | None = None, editor: str = "unknown",
@@ -387,6 +390,59 @@ def drain(*, repository: str | None = None, editor: str = "unknown",
         if batches or os.path.exists(path):
             _atomic_write(path, "")
         return batches
+
+
+@dataclass
+class QueueLease:
+    """One session queue held by a sender until server acknowledgement."""
+
+    batches: list[dict]
+    remaining: list[dict]
+
+
+@contextlib.contextmanager
+def lease_path(path: str) -> Iterator[QueueLease]:
+    """Claim one queue path without deleting it before acknowledgement.
+
+    The `.inflight` file survives process death. The next hook recovers it
+    before newer records, preserving the session opener and causal order across
+    editor or CLI crashes and ambiguous HTTP outcomes.
+    """
+    inflight = path + ".inflight"
+    with locked(path):
+        os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+        if os.path.exists(inflight):
+            recovered = _parse_lines(inflight) + _parse_lines(path)
+            # Never truncate an already accepted queue. A configured bound is
+            # admission control for new records, not permission to create a
+            # sequence gap while recovering a process crash.
+            _atomic_write(inflight, _queue_contents(recovered))
+            if os.path.exists(path):
+                _atomic_write(path, "")
+        elif os.path.exists(path):
+            os.replace(path, inflight)
+        batches = _parse_lines(inflight)
+        lease = QueueLease(batches=batches, remaining=list(batches))
+        try:
+            yield lease
+        finally:
+            newer = _parse_lines(path)
+            combined = lease.remaining + newer
+            if combined:
+                _atomic_write(path, _queue_contents(combined))
+            elif os.path.exists(path):
+                _atomic_write(path, "")
+            with contextlib.suppress(OSError):
+                os.unlink(inflight)
+
+
+@contextlib.contextmanager
+def lease_queue(*, repository: str | None = None, editor: str = "unknown",
+                session_id: str) -> Iterator[QueueLease]:
+    """Claim one namespaced session queue until its sender acknowledges it."""
+    path = queue_path(session_id, repository=repository, editor=editor)
+    with lease_path(path) as lease:
+        yield lease
 
 
 def drain_matching(*, repository: str | None = None, editor: str = "unknown") -> list[dict]:
@@ -405,7 +461,13 @@ def queue_files() -> list[str]:
     root = Path(home()) / QUEUE_DIR
     if not root.exists():
         return []
-    return sorted(str(path) for path in root.rglob("*.jsonl") if path.is_file())
+    paths = {
+        str(path) for path in root.rglob("*.jsonl") if path.is_file()
+    }
+    for inflight in root.rglob("*.jsonl.inflight"):
+        if inflight.is_file():
+            paths.add(str(inflight)[:-len(".inflight")])
+    return sorted(paths)
 
 
 def drain_path(path: str) -> list[dict]:
@@ -416,17 +478,23 @@ def drain_path(path: str) -> list[dict]:
         return batches
 
 
-def enqueue_path(path: str, batches: list[dict]) -> None:
+def enqueue_path(path: str, batches: list[dict]) -> bool:
     if not batches:
-        return
+        return True
     with locked(path):
-        entries = _retained(_parse_lines(path) + batches)
+        entries = _parse_lines(path) + batches
+        if not _within_queue_limits(entries):
+            return False
         _atomic_write(path, _queue_contents(entries))
+        return True
 
 
 def queue_summary() -> tuple[int, int]:
     files = queue_files()
-    return len(files), sum(len(_parse_lines(path)) for path in files)
+    return len(files), sum(
+        len(_parse_lines(path + ".inflight")) + len(_parse_lines(path))
+        for path in files
+    )
 
 
 def session_files() -> list[str]:
@@ -455,6 +523,16 @@ def event_key(agent: str, session_id: str, event: dict, *, repository: str | Non
     canonical = json.dumps(event, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     material = "\x1f".join((repository_id(repository), agent, session_id, canonical))
     return "evt_" + hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def new_session_id() -> str:
+    """A collision-safe opaque identifier generated once and persisted locally."""
+    return "ses_" + secrets.token_hex(16)
+
+
+def new_event_id() -> str:
+    """A distinct observed occurrence id; identical saves remain distinct events."""
+    return "evt_" + secrets.token_hex(16)
 
 
 def batch_key(batch: dict) -> str:
@@ -487,6 +565,15 @@ def permissions(path: str) -> str:
 
 def diagnostic() -> dict:
     queues, batches = queue_summary()
+    session_records = sessions()
+    rejected = sum(
+        int(value.get("queue_rejected_events", 0))
+        for _, value in session_records
+    )
+    backpressured = sum(
+        1 for _, value in session_records
+        if int(value.get("queue_rejected_events", 0)) > 0
+    )
     return {
         "home": home(),
         "home_mode": permissions(home()),
@@ -497,6 +584,8 @@ def diagnostic() -> dict:
         "credentials_mode": permissions(credentials_path()),
         "queues": queues,
         "queued_batches": batches,
-        "sessions": len(session_files()),
+        "sessions": len(session_records),
+        "queue_rejected_events": rejected,
+        "backpressured_sessions": backpressured,
         "credentials": credential_status(),
     }

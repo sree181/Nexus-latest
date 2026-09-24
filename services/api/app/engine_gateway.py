@@ -1419,19 +1419,28 @@ class EngineGateway(Gateway):
                     run.status = "complete"
                     self._join_fleet(run)
                 receipt.recorded += 1
-            elif isinstance(event, DecisionEvent):
+                continue
+
+            if isinstance(event, DecisionEvent):
                 rec.record_decision(
                     event.id, event.statement,
-                    from_sources=[f"task-{run.id}"])
+                    from_sources=[f"task-{run.id}"],
+                    external_event_id=event.event_id,
+                )
                 receipt.recorded += 1
             elif isinstance(event, CodeEvent):
                 self._record_code_event(rec, run, event, receipt)
             elif isinstance(event, PackageEvent):
-                rec.record_version(event.package, event.version,
-                                   license=event.license)
+                rec.record_version(
+                    event.package, event.version, license=event.license,
+                    external_event_id=event.event_id,
+                )
                 receipt.recorded += 1
             elif isinstance(event, ToolEvent):
-                rec.record_tool(event.name, event.detail)
+                rec.record_tool(
+                    event.name, event.detail,
+                    external_event_id=event.event_id,
+                )
                 receipt.recorded += 1
 
         self._remember()
@@ -1457,7 +1466,8 @@ class EngineGateway(Gateway):
                     decision,
                     f"No rationale was recorded for {event.module}. "
                     f"{run.agent or 'The agent'} wrote it without saying why.",
-                    from_sources=[f"task-{run.id}"], unexplained=True)
+                    from_sources=[f"task-{run.id}"], unexplained=True,
+                    external_event_id=event.event_id)
             receipt.unexplained += 1
 
         # Decided before writing anything, not by letting the decomposition
@@ -1471,10 +1481,12 @@ class EngineGateway(Gateway):
             # decomposition, and `analysed` is what stops a reader from
             # reading that silence as "this file defines no classes".
             rec.record_module(event.code, decision_id=decision,
-                              module=event.module)
+                              module=event.module,
+                              external_event_id=event.event_id)
         else:
             rec.record_code(event.code, decision_id=decision,
-                            module=event.module)
+                            module=event.module,
+                            external_event_id=event.event_id)
             receipt.analysed += 1
         receipt.recorded += 1
 

@@ -1,6 +1,6 @@
 # MeshAgent Production v1 Release Validation Report
 
-**Release candidate:** `manus/role-journeys-v1`
+**Release candidate:** `manus/developer-sessions-v1`
 **Baseline version:** `0.1.0`  
 **Validation date:** 2026-09-23  
 **Code status:** Production-ready single-tenant release candidate. Customer-environment acceptance remains required before go-live.
@@ -13,44 +13,48 @@ The release was validated from locked dependencies and rebuilt native code. Both
 
 ## Implemented production controls
 
-| Area | Production-v1 outcome |
-|---|---|
+| Area                       | Production-v1 outcome                                                                                                                                                                                                                                                                                |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Identity and authorization | API-owned OIDC Authorization Code + PKCE; access tokens excluded from browser storage; opaque HttpOnly sessions; expiry/revocation; exact-origin CSRF and WebSocket checks; closed Developer/Analyst/CISO mapping; device-token scope separation; production rejection of local asserted identities. |
-| Analyst journey | Server-prioritized case queue, evidence-linked case creation, assignment/SLA, immutable events, controlled transitions, source labels, and case-linked time-bounded exception requests. |
-| CISO journey | Coverage-qualified overview, versioned policy register, exception approvals with rationale and separation of duties, remediation ownership, and live-source report manifests/digests. |
-| Destructive actions | Preview/execute separation, optimistic graph-version check, durable idempotency journal, conflict detection, restart recovery, deletion certificates, actor attribution. |
-| Governed memory integrity | Graph-to-content hash verification, fail-closed corruption handling, valid interrupted-redaction recovery, fsync-safe registries and device state. |
-| RAG safety | Citation allowlist enforcement for streaming and non-streaming output, mixed valid/invented citation rejection, honest abstention support. |
-| Agent integrations | Cursor and Claude Code hooks, MCP tools, namespaced locked local state, bounded offline queues, retry commands, recording-only device credentials. |
-| Product UI | Enterprise sign-in boundary, authoritative role landing, capability-scoped navigation and route guards, complete Analyst and CISO workspaces, terminal WebSocket session states, accessible graph table alternative, responsive tables, and recoverable loading/error states. |
-| Runtime hardening | Non-root containers, read-only filesystems, dropped capabilities, internal-only API network, exact CORS configuration, CSP and related browser headers, production health checks. |
-| Operations | Quiesced backup, checksums, encryption hooks, clean restore, state/audit verification, retention and legal hold, DR drill, upgrade preflight, rollback handoff. |
-| Release engineering | Hash-locked Python dependencies, frozen pnpm lockfile, pinned container bases, CI tests/builds, SBOM, OSV and Trivy gates, image checksums. |
+| Analyst journey            | Server-prioritized case queue, evidence-linked case creation, assignment/SLA, immutable events, controlled transitions, source labels, and case-linked time-bounded exception requests.                                                                                                              |
+| CISO journey               | Coverage-qualified overview, versioned policy register, exception approvals with rationale and separation of duties, remediation ownership, and live-source report manifests/digests.                                                                                                                |
+| Destructive actions        | Preview/execute separation, optimistic graph-version check, durable idempotency journal, conflict detection, restart recovery, deletion certificates, actor attribution.                                                                                                                             |
+| Governed memory integrity  | Graph-to-content hash verification, fail-closed corruption handling, valid interrupted-redaction recovery, fsync-safe registries and device state.                                                                                                                                                   |
+| RAG safety                 | Citation allowlist enforcement for streaming and non-streaming output, mixed valid/invented citation rejection, honest abstention support.                                                                                                                                                           |
+| Agent integrations         | Cursor and Claude Code hooks, MCP tools, namespaced locked local state, bounded offline queues, retry commands, recording-only device credentials.                                                                                                                                                   |
+| Developer sessions         | Owner-scoped connected-agent sessions, transactional ordered event ingestion, replay conflicts, projection health, package-policy history, restart reconciliation, and exact activity-to-HyperMesh correlation.                                                                                      |
+| Product UI                 | Enterprise sign-in boundary, authoritative role landing, capability-scoped navigation and route guards, complete Analyst and CISO workspaces, terminal WebSocket session states, accessible graph table alternative, responsive tables, and recoverable loading/error states.                        |
+| Runtime hardening          | Non-root containers, read-only filesystems, dropped capabilities, internal-only API network, exact CORS configuration, CSP and related browser headers, production health checks.                                                                                                                    |
+| Operations                 | Quiesced backup, checksums, encryption hooks, clean restore, state/audit verification, retention and legal hold, DR drill, upgrade preflight, rollback handoff.                                                                                                                                      |
+| Release engineering        | Hash-locked Python dependencies, frozen pnpm lockfile, pinned container bases, CI tests/builds, SBOM, OSV and Trivy gates, image checksums.                                                                                                                                                          |
 
 ## Validation evidence
 
-| Gate | Result |
-|---|---|
-| Frontend TypeScript check | Passed |
-| Frontend deterministic lint | Passed |
-| Frontend Vitest | **7 files, 17 tests passed** |
-| Frontend production build | Passed; largest generated chunk approximately **479 kB** before gzip |
-| Complete Python/API suite | **458 passed, 1 skipped** |
-| Native HyperMesh suites | **20 + 119 + 28 + 37 + WAL recovery + 18** checks passed |
-| JavaScript production dependency audit | **No known vulnerabilities found** |
-| Python locked dependency audit | **No known vulnerabilities found** after upgrading FastAPI and PyJWT |
-| Production Compose rendering | Passed; only the web service publishes a host port |
-| API production image | Built successfully; non-root; healthy in engine mode with durable workflow/session state and OIDC enabled |
-| Web production image | Built successfully; non-root; healthy; API and `/auth/*` proxy passed |
-| Browser security headers | CSP, Permissions-Policy, Referrer-Policy, X-Content-Type-Options, and X-Frame-Options present |
-| Browser identity boundary | OIDC-configured image showed the company sign-in gate and no local identity picker |
-| Live model execution | `gpt-5-mini` completed “Build a small language model training pipeline in Python” as run `e639`: 250-line `main.py`, 4 classes, 9 governed memories, resolved `torch@2.14.0`, and 0 scanner findings. |
-| Model failure handling | Empty or unsupported provider responses are rejected explicitly; the failed state and redacted reason persist across reloads and render as an actionable run banner. |
+| Gate                                   | Result                                                                                                                                                                                                                                       |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend TypeScript check              | Passed                                                                                                                                                                                                                                       |
+| Frontend deterministic lint            | Passed                                                                                                                                                                                                                                       |
+| Frontend Vitest                        | **7 files, 17 tests passed**                                                                                                                                                                                                                 |
+| Frontend production build              | Passed; largest generated chunk approximately **479 kB** before gzip                                                                                                                                                                         |
+| Complete Python/API suite | **468 passed, 1 skipped** |
+| Focused Developer session suites       | **86 passed** across the ledger, projection, shared protocol, Cursor adapter, Claude Code adapter, and recorder                                                                                                                              |
+| Native HyperMesh suites                | **20 + 119 + 28 + 37 + WAL recovery + 18** checks passed                                                                                                                                                                                     |
+| JavaScript production dependency audit | **No known vulnerabilities found**                                                                                                                                                                                                           |
+| Python locked dependency audit         | **No known vulnerabilities found** after upgrading FastAPI and PyJWT                                                                                                                                                                         |
+| Production Compose rendering           | Passed; only the web service publishes a host port                                                                                                                                                                                           |
+| API production image                   | Built successfully; non-root; healthy in engine mode with durable workflow/session state and OIDC enabled                                                                                                                                    |
+| Web production image                   | Built successfully; non-root; healthy; API and `/auth/*` proxy passed                                                                                                                                                                        |
+| Browser security headers               | CSP, Permissions-Policy, Referrer-Policy, X-Content-Type-Options, and X-Frame-Options present                                                                                                                                                |
+| Browser identity boundary              | OIDC-configured image showed the company sign-in gate and no local identity picker                                                                                                                                                           |
+| Live model execution                   | `gpt-5-mini` completed “Build a small language model training pipeline in Python” as run `e639`: 250-line `main.py`, 4 classes, 9 governed memories, resolved `torch@2.14.0`, and 0 scanner findings.                                        |
+| Model failure handling                 | Empty or unsupported provider responses are rejected explicitly; the failed state and redacted reason persist across reloads and render as an actionable run banner.                                                                         |
+| Live Cursor adapter                    | Final hosted lifecycle opened session `ses_de3d5ac125b402ee1ae743af51e1e8cc`, committed and projected six ordered activities, persisted an `httpx@0.27.2` policy evaluation, completed run `e69a`, and projected the edited `app.py` module into HyperMesh. |
+| Developer session API image smoke      | Rebuilt API image ran as `meshagent:meshagent`, opened real-engine run `73ac`, accepted ordered sequence 2, acknowledged through 2, persisted `developer-sessions.sqlite3`, and reported the event projected.                                |
 
 Validated local image identifiers:
 
-- `meshagent-api:model-fix`: `sha256:5626b41da066a0a3951581bbacd86517a2b70133cea822cc43215031226bd266`
-- `meshagent-web:model-fix`: `sha256:afdb0c61c7a4ba98fc731c0bf0c33a104b4ac3436ccb351479486628f2c2a05e`
+- `meshagent-api:developer-sessions`: `sha256:2bcd230ca78420aa88b6f16139021f81ee516e822dd04f6fe7601d8f5afdd2bb`
+- `meshagent-web:developer-sessions`: `sha256:32ac69fc514e7086fb901abfb572b59aa4ac426ec072cc6e8a38c20078a9c0aa`
 
 These local identifiers are build evidence, not registry release references. CI or the deployment pipeline must record immutable registry digests for the promoted images.
 

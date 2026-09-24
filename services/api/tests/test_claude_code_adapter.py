@@ -228,11 +228,30 @@ def test_the_queue_is_delivered_in_order_once_meshagent_returns(
     hook.send("abc123", [{"type": "code", "module": "a.py", "code": "x = 1\n"}])
 
     sent: list[dict] = []
-    monkeypatch.setattr(hook, "post", lambda batch: sent.append(batch) or
-                        {"run_id": "r1"})
+    monkeypatch.setattr(
+        hook,
+        "post",
+        lambda batch: sent.append(batch) or (
+            {
+                "id": batch["session_id"],
+                "run_id": "r1",
+                "last_acked_sequence": 1,
+            }
+            if batch["kind"] == "start"
+            else {
+                "run_id": "r1",
+                "acknowledged_through": batch["body"]["events"][-1]["sequence"],
+            }
+        ),
+    )
     hook.send("abc123", [{"type": "tool", "name": "Bash"}])
 
-    assert [b["events"][0]["type"] for b in sent] == ["session", "code", "tool"]
+    assert [b["kind"] for b in sent] == ["start", "events", "events"]
+    assert sent[0]["body"]["adapter"] == "claude-code"
+    assert [b["body"]["events"][0]["type"] for b in sent[1:]] == [
+        "file.changed", "tool.completed",
+    ]
+    assert [b["body"]["events"][0]["sequence"] for b in sent[1:]] == [2, 3]
     assert hook.drain() == []
 
 

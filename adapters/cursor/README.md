@@ -33,13 +33,23 @@ works-council conversation before it is an engineering one.
 
 ## What it records
 
-| Cursor event | Becomes |
-| --- | --- |
-| First `beforeSubmitPrompt` of a conversation | `session` — opens the run |
-| `afterFileEdit` | `code` — the file as it now stands on disk |
-| `afterShellExecution` | `tool`, plus `package` for any exactly-pinned install |
-| `beforeShellExecution` | a gate check on every package the command installs |
-| `sessionEnd` | `session` with `ends`, completing the run |
+| Cursor event                                 | Becomes                                               |
+| -------------------------------------------- | ----------------------------------------------------- |
+| First `beforeSubmitPrompt` of a conversation | `session` — opens the run                             |
+| `afterFileEdit`                              | `code` — the file as it now stands on disk            |
+| `afterShellExecution`                        | `tool`, plus `package` for any exactly-pinned install |
+| `beforeShellExecution`                       | a gate check on every package the command installs    |
+| `sessionEnd`                                 | `session` with `ends`, completing the run             |
+
+These editor events are translated into the versioned Developer session API:
+
+- `POST /api/v1/developer/sessions` opens the authenticated session.
+- `POST /api/v1/developer/sessions/{id}/events` appends strictly ordered activity.
+- Package-gate answers are mirrored as `policy.evaluated` events before the
+  corresponding shell completion is recorded.
+
+The server commits activity before projecting it into HyperMesh. Delivery and
+projection state therefore remain separately observable.
 
 ## Four things Cursor does differently
 
@@ -47,7 +57,7 @@ These are the reasons this is a translation rather than a copy of the Claude
 Code adapter, and each one is a real bug avoided.
 
 **Silence is not neutral.** Cursor treats unparseable or schema-invalid
-output from a permission hook as a *denial*, even with `failClosed` off.
+output from a permission hook as a _denial_, even with `failClosed` off.
 Claude Code treats a silent hook as "carry on". So `beforeShellExecution`
 here always prints an explicit decision, including when allowing — and it
 prints one even when the JSON on stdin could not be parsed at all. An adapter
@@ -85,7 +95,12 @@ named it — never because of when it was written.
 
 Recorder batches are kept in bounded, locked queues under
 `~/.meshagent/queues/<repository>/<editor>/`. When the service returns, hooks
-replay them in order. Operators can inspect and force replay without exposing
+replay them in order. A recoverable `.inflight` lease prevents a process crash
+or ambiguous network response from deleting an unacknowledged record. The
+oldest undelivered causal prefix is retained, including the session opener. If
+the configured queue limit is full, new observations are not retained until the
+backlog can advance; unused sequence reservations are rolled back so recovery
+cannot create a permanent server gap. Operators can inspect and force replay without exposing
 credentials:
 
 ```bash

@@ -17,6 +17,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from meshagent_cli import protocol as session_protocol
 from meshagent_cli import state
 
 GIVE_UP_AFTER = 600
@@ -202,6 +203,12 @@ def status(args: argparse.Namespace) -> int:
         print(f"Recording device: {'configured' if local['credentials']['device'] else 'not configured'}")
         print(f"Delegated read credential: {'configured' if local['credentials']['read'] else 'not configured'}")
         print(f"Queued batches: {local['queued_batches']} across {local['queues']} queue(s)")
+        if local["queue_rejected_events"]:
+            print(
+                "Recording backpressure: "
+                f"{local['queue_rejected_events']} observation(s) were not recorded "
+                f"across {local['backpressured_sessions']} session(s)"
+            )
         if health:
             print(f"API: {health.get('status', 'unknown')} ({health.get('gateway', 'unknown')})")
             mode = health.get("mode") or {}
@@ -219,6 +226,11 @@ def doctor(args: argparse.Namespace) -> int:
         problems.append("MeshAgent home must have mode 0700")
     if details["credentials_present"] and details["credentials_mode"] != "0o600":
         problems.append("credentials file must have mode 0600")
+    if details["queue_rejected_events"]:
+        problems.append(
+            f"local recording queue rejected {details['queue_rejected_events']} "
+            "observation(s); run meshagent replay and investigate connectivity"
+        )
     health, problem = _health()
     if not health:
         problems.append(f"API health check failed: {problem}")
@@ -235,6 +247,11 @@ def doctor(args: argparse.Namespace) -> int:
         print(f"  device recording credential: {'present' if details['credentials']['device'] else 'absent'}")
         print(f"  delegated read credential: {'present' if details['credentials']['read'] else 'absent'}")
         print(f"  queued batches: {details['queued_batches']} across {details['queues']} queue(s)")
+        print(
+            "  recording backpressure: "
+            f"{details['queue_rejected_events']} rejected observation(s) across "
+            f"{details['backpressured_sessions']} session(s)"
+        )
         for issue in problems:
             print(f"  FAIL: {issue}")
         if not problems:
@@ -246,6 +263,13 @@ def _post_replay(batch: dict) -> tuple[dict | None, str]:
     token = state.device_token()
     if not token:
         return None, "recording device credential is not configured"
+    if batch.get("protocol") == session_protocol.PROTOCOL:
+        response = session_protocol.post(
+            batch,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10.0,
+        )
+        return (response, "" if response is not None else "delivery failed")
     keyed_events = state.add_event_keys(str(batch.get("agent") or "unknown"),
                                         str(batch.get("session") or ""),
                                         list(batch.get("events") or []))
@@ -270,16 +294,15 @@ def replay(args: argparse.Namespace) -> int:
     paths = state.queue_files()
     attempted = delivered = retained = 0
     for path in paths:
-        pending = state.drain_path(path)
-        for index, batch in enumerate(pending):
-            attempted += 1
-            _, problem = _post_replay(batch)
-            if problem:
-                remaining = pending[index:]
-                state.enqueue_path(path, remaining)
-                retained += len(remaining)
-                break
-            delivered += 1
+        with state.lease_path(path) as lease:
+            for batch in lease.batches:
+                attempted += 1
+                _, problem = _post_replay(batch)
+                if problem:
+                    retained += len(lease.remaining)
+                    break
+                delivered += 1
+                lease.remaining = lease.remaining[1:]
     if args.json:
         print(json.dumps({"queues": len(paths), "attempted": attempted,
                           "delivered": delivered, "retained": retained}, sort_keys=True))

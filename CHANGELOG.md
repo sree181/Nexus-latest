@@ -18,6 +18,8 @@ All notable production-v1 operational and repository changes should be recorded 
 - Durable Analyst casework: prioritized queue, case assignment and SLA, controlled transitions, immutable events, source labels, and policy-exception requests.
 - Durable CISO governance: executive overview, versioned policy register, separated exception approvals, remediation ownership, and live-source report manifests.
 - API-owned Authorization Code + PKCE, opaque HttpOnly browser sessions, one-time login state, bounded expiry and revocation, exact-origin CSRF checks, and terminal WebSocket session handling.
+- Durable owner-scoped Developer sessions with ordered activity events, projection state, package-policy history, strict sequencing, replay conflict detection, and startup reconciliation.
+- Versioned Cursor and Claude Code session adapters with collision-safe event identities, acknowledgement-based `.inflight` queues, bounded offline replay, and synchronous policy-result capture.
 
 ### Changed
 

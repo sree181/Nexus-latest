@@ -252,6 +252,16 @@ def test_both_adapters_agree_on_what_counts_as_an_install(repo):
         assert cursor.installs(command) == claude.installs(command), command
 
 
+def test_both_adapters_fail_open_when_local_telemetry_state_fails(repo, monkeypatch):
+    def fail(**kwargs):
+        raise OSError("state volume is unavailable")
+
+    monkeypatch.setattr(cursor.session_protocol, "send", fail)
+    event = [{"type": "tool", "name": "Shell", "detail": "pytest -q"}]
+    assert cursor.send("conv-fail-open", event, str(repo)) is None
+    assert claude.send("conv-fail-open", event, str(repo)) is None
+
+
 class _Stdin:
     def __init__(self, text: str) -> None:
         self._text = text
