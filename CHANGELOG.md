@@ -44,6 +44,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Corrected unsupported or malformed model responses so the run persists a redacted failure reason and the UI shows an actionable error instead of stopping after the task statement.
 - Corrected session-opener crash replay, cross-repository engine correlation, replay identity checks, repository-relative path validation, and paginated session totals.
 - Device pairing now opens the Programmer UI's Connections → Devices tab directly instead of the legacy standalone device route.
+- Cursor and Claude Code now retain subsequent developer prompts as ordered `prompt.submitted` activity instead of showing only the session's opening request.
 
 ## [0.1.0] — production v1 baseline
 

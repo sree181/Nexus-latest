@@ -240,17 +240,22 @@ def send(session_id: str, events: list[dict], repository: str | None = None) -> 
 def on_prompt(payload: dict, cfg: dict) -> list[dict]:
     """The developer said what they want. The first one opens the session.
 
-    Later prompts are not recorded. They are sources, not agent decisions, and
-    the protocol has no source event yet -- filing them as decisions would
-    attribute the developer's words to the agent."""
+    Later prompts remain developer-authored source activity. They are recorded
+    as prompts, never as agent decisions."""
     del cfg
     state = read_session(payload.get("session_id", ""), payload.get("cwd"))
+    prompt = (payload.get("prompt") or "").strip()[:4096]
+    if not prompt:
+        return []
     if state.get("opened"):
-        return []
-    task = (payload.get("prompt") or "").strip()
-    if not task:
-        return []
-    return [{"type": "session", "agent": AGENT, "task": task}]
+        return [{
+            "type": "prompt",
+            "prompt": prompt,
+            "turn_id": str(
+                payload.get("prompt_id") or payload.get("message_id") or ""
+            ) or None,
+        }]
+    return [{"type": "session", "agent": AGENT, "task": prompt}]
 
 
 def on_tool(payload: dict, cfg: dict) -> list[dict]:

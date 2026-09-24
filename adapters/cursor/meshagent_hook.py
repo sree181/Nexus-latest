@@ -216,17 +216,20 @@ def ask_gate(package: str, version: str, session_id: str) -> dict | None:
 # -- translating Cursor's events into the recorder vocabulary ------------------
 
 def on_prompt(payload: dict, cfg: dict) -> list[dict]:
-    """`beforeSubmitPrompt`. The first one opens the run with what the
-    developer asked for; later ones are not decisions and are not recorded
-    as such."""
+    """`beforeSubmitPrompt`. The first prompt names the session; later prompts
+    remain developer-authored activity and are never mislabeled as decisions."""
     del cfg
     session_id = conversation(payload)
+    prompt = (payload.get("prompt") or "").strip()[:4096]
+    if not prompt:
+        return []
     if read_session(session_id, workspace(payload)).get("opened"):
-        return []
-    task = (payload.get("prompt") or "").strip()
-    if not task:
-        return []
-    return [{"type": "session", "agent": AGENT, "task": task}]
+        return [{
+            "type": "prompt",
+            "prompt": prompt,
+            "turn_id": str(payload.get("generation_id") or "") or None,
+        }]
+    return [{"type": "session", "agent": AGENT, "task": prompt}]
 
 
 def on_file_edit(payload: dict, cfg: dict) -> list[dict]:

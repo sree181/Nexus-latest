@@ -36,6 +36,7 @@ works-council conversation before it is an engineering one.
 | Cursor event                                 | Becomes                                               |
 | -------------------------------------------- | ----------------------------------------------------- |
 | First `beforeSubmitPrompt` of a conversation | `session` — opens the run                             |
+| Later `beforeSubmitPrompt` events             | `prompt` — records each developer-authored turn       |
 | `afterFileEdit`                              | `code` — the file as it now stands on disk            |
 | `afterShellExecution`                        | `tool`, plus `package` for any exactly-pinned install |
 | `beforeShellExecution`                       | a gate check on every package the command installs    |

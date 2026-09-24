@@ -59,6 +59,7 @@ the security office can act on.
 | Claude Code event                                          | Becomes                                                             |
 | ---------------------------------------------------------- | ------------------------------------------------------------------- |
 | First `UserPromptSubmit` of a session                      | `session` — opens the run, with the developer's request as its task |
+| Later `UserPromptSubmit` events                            | `prompt` — records each developer-authored turn                     |
 | `PostToolUse` on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` | `code` — the file as it now stands on disk                          |
 | `PostToolUse` on `Bash`                                    | `tool`, plus `package` for any exactly-pinned install               |
 | `SessionEnd`                                               | `session` with `ends`, completing the run                           |

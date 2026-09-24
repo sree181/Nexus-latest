@@ -74,15 +74,17 @@ def test_the_first_prompt_opens_the_session_with_what_the_developer_asked(repo):
                        "task": "Write a shard loader for the training pipeline"}]
 
 
-def test_later_prompts_do_not_reopen_or_get_filed_as_agent_decisions(repo):
-    """A prompt is the developer speaking. Recording it as a decision would
-    attribute their words to the agent."""
+def test_later_prompts_are_source_activity_not_agent_decisions(repo):
+    """A prompt is the developer speaking, so it is activity rather than an
+    agent-authored decision."""
     hook.write_session("abc123", {"opened": True, "task": "first"})
     events = hook.on_prompt({
         "session_id": "abc123", "cwd": str(repo),
-        "prompt": "now add tests",
+        "prompt": "now add tests", "prompt_id": "prompt-2",
     }, CFG)
-    assert events == []
+    assert events == [{
+        "type": "prompt", "prompt": "now add tests", "turn_id": "prompt-2",
+    }]
 
 
 def test_session_end_closes_a_session_that_was_opened(repo):

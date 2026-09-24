@@ -89,10 +89,19 @@ def test_the_first_prompt_opens_the_run_with_what_was_asked(repo):
                     "task": "Write a shard loader."}]
 
 
-def test_later_prompts_do_not_reopen_the_run(repo):
+def test_later_prompts_are_activity_without_reopening_the_run(repo):
     cursor.write_session("conv-1", {"opened": True, "task": "first"})
-    assert cursor.on_prompt(base("beforeSubmitPrompt", prompt="and now"),
-                            CFG) == []
+    assert cursor.on_prompt(base("beforeSubmitPrompt", prompt="and now"), CFG) == [{
+        "type": "prompt", "prompt": "and now", "turn_id": "gen-1",
+    }]
+
+
+def test_prompt_text_is_bounded_to_the_server_contract(repo):
+    cursor.write_session("conv-1", {"opened": True, "task": "first"})
+    event = cursor.on_prompt(
+        base("beforeSubmitPrompt", prompt="x" * 5000), CFG,
+    )[0]
+    assert len(event["prompt"]) == 4096
 
 
 def test_an_edit_records_the_file_as_it_now_stands_not_the_diff(repo):
