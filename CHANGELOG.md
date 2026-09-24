@@ -43,6 +43,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Corrected MCP session discovery and module claims to use the locked namespaced state store.
 - Corrected unsupported or malformed model responses so the run persists a redacted failure reason and the UI shows an actionable error instead of stopping after the task statement.
 - Corrected session-opener crash replay, cross-repository engine correlation, replay identity checks, repository-relative path validation, and paginated session totals.
+- Device pairing now opens the Programmer UI's Connections → Devices tab directly instead of the legacy standalone device route.
 
 ## [0.1.0] — production v1 baseline
 

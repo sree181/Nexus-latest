@@ -232,6 +232,7 @@ def test_the_pairing_route_needs_no_credential(client):
                       headers={auth.DEV_USER: ""})
     assert res.status_code == 200
     assert res.json()["user_code"]
+    assert res.json()["verify_url"].endswith("/developer/connections/devices")
     assert main.device_store.devices == {}
 
 

@@ -668,7 +668,7 @@ def pair_start(req: PairRequest) -> PairStart:
     return PairStart(
         device_code=device_code, user_code=user_code,
         expires_in=devices.PAIRING_TTL, grants=list(devices.SCOPE),
-        verify_url=_web_url() + "/devices",
+        verify_url=_web_url() + "/developer/connections/devices",
     )
 
 
