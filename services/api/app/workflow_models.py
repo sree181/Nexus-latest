@@ -13,6 +13,11 @@ Severity = Literal["critical", "high", "medium", "low", "unknown"]
 CaseState = Literal[
     "open", "triaged", "investigating", "remediation", "resolved", "closed",
 ]
+PolicyVersionState = Literal[
+    "draft", "in_review", "active", "superseded", "withdrawn", "retired",
+]
+PolicyState = Literal["active", "retired"]
+ExceptionState = Literal["pending", "approved", "rejected", "expired", "revoked"]
 
 
 class OriginOut(BaseModel):
@@ -98,63 +103,121 @@ class CreatePolicyRequest(BaseModel):
     rationale: str = Field(min_length=1, max_length=4_096)
 
 
+class CreatePolicyVersionRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    severity_threshold: Severity
+    denied_licenses: list[str] = Field(default_factory=list, max_length=100)
+    block_on_unknown: bool = True
+    rationale: str = Field(min_length=1, max_length=4_096)
+
+
+class PolicyLifecycleRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    rationale: str = Field(min_length=1, max_length=4_096)
+
+
+class GovernanceEventOut(BaseModel):
+    id: str
+    resource_kind: Literal["policy", "exception"]
+    resource_id: str
+    actor: str
+    actor_name: str
+    actor_role: str
+    action: str
+    from_state: str | None = None
+    to_state: str
+    rationale: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    at: int
+    correlation_id: str
+
+
 class PolicyVersionOut(BaseModel):
     policy_id: str
     version: int
+    state: PolicyVersionState
     severity_threshold: Severity
     denied_licenses: list[str]
     block_on_unknown: bool
     rationale: str
+    content_digest: str = Field(min_length=64, max_length=64)
+    effective_from: int | None = None
+    effective_until: int | None = None
     created_at: int
     created_by: str
+    created_by_name: str
 
 
 class PolicyOut(BaseModel):
     id: str
     name: str
     scope: str
-    status: str
+    status: PolicyState
     active_version: int
+    version: int = Field(ge=1)
     created_at: int
     updated_at: int
     created_by: str
     current: PolicyVersionOut
+    versions: list[PolicyVersionOut] = Field(default_factory=list)
+    events: list[GovernanceEventOut] = Field(default_factory=list)
 
 
 class CreateExceptionRequest(BaseModel):
     policy_id: str = Field(min_length=1, max_length=256)
+    policy_version: int | None = Field(default=None, ge=1)
     scope: str = Field(min_length=1, max_length=512)
     rationale: str = Field(min_length=1, max_length=4_096)
     compensating_controls: str = Field(min_length=1, max_length=4_096)
     owner: str = Field(min_length=1, max_length=256)
+    owner_name: str | None = Field(default=None, min_length=1, max_length=256)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=100)
     expires_at: int
 
 
 class ExceptionOut(BaseModel):
     id: str
     policy_id: str
+    policy_version: int = Field(ge=1)
+    policy_digest: str = Field(min_length=64, max_length=64)
     scope: str
     rationale: str
     compensating_controls: str
     owner: str
+    owner_name: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    request_digest: str = Field(min_length=64, max_length=64)
     expires_at: int
-    status: str
+    status: ExceptionState
+    expired: bool = False
     version: int
     requested_by: str
+    requested_by_name: str
     approved_by: str | None = None
+    approved_by_name: str | None = None
+    decision_rationale: str | None = None
+    decided_at: int | None = None
+    revoked_by: str | None = None
+    revoked_at: int | None = None
     created_at: int
     updated_at: int
+    events: list[GovernanceEventOut] = Field(default_factory=list)
 
 
 class ApprovalOut(BaseModel):
     id: str
     kind: str
     resource_id: str
+    resource_version: int = Field(ge=1)
+    request_digest: str = Field(min_length=64, max_length=64)
+    evidence_ids: list[str] = Field(default_factory=list)
     requester: str
     requester_name: str
     status: str
+    expired: bool = False
     rationale: str
     approver: str | None = None
+    approver_name: str | None = None
     decision_rationale: str | None = None
     version: int
     expires_at: int

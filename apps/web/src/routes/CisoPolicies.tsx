@@ -33,7 +33,7 @@ function PolicyForm() {
   );
 }
 
-function ExceptionForm({ policies }: { policies: { id: string; name: string }[] }) {
+function ExceptionForm({ policies }: { policies: { id: string; name: string; active_version: number }[] }) {
   const client = useQueryClient();
   const [success, setSuccess] = useState<string | null>(null);
   const request = useMutation({ mutationFn: (input: CreateExceptionInput) => api.requestException(input), onSuccess: (approval) => { setSuccess(`Exception request sent for approval as ${approval.id}.`); void client.invalidateQueries({ queryKey: ["approvals"] }); void client.invalidateQueries({ queryKey: ["exceptions"] }); } });
@@ -44,7 +44,8 @@ function ExceptionForm({ policies }: { policies: { id: string; name: string }[] 
       <p className="mt-1 text-sm text-slate">Requests require an owner, an expiry, and compensating controls. The requester cannot approve their own request.</p>
       {policies.length === 0 ? <p className="mt-4 rounded-xl border border-line-2 bg-surface-2 px-4 py-4 text-sm text-slate">Create a policy before requesting an exception.</p> : <form className="mt-4 grid gap-4 lg:grid-cols-2" onSubmit={(event) => {
         event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget);
-        request.mutate({ policy_id: String(form.get("policy_id")), scope: String(form.get("scope") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), compensating_controls: String(form.get("controls") ?? "").trim(), owner: String(form.get("owner") ?? "").trim(), expires_at: dateInputToEpoch(form.get("expires_at")) });
+        const selectedPolicy = policies.find((policy) => policy.id === String(form.get("policy_id")));
+        request.mutate({ policy_id: String(form.get("policy_id")), policy_version: selectedPolicy?.active_version, scope: String(form.get("scope") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), compensating_controls: String(form.get("controls") ?? "").trim(), owner: String(form.get("owner") ?? "").trim(), expires_at: dateInputToEpoch(form.get("expires_at")) });
       }}>
         <Field label="Policy"><Select name="policy_id" required>{policies.map((policy) => <option key={policy.id} value={policy.id}>{policy.name}</option>)}</Select></Field>
         <Field label="Exception scope"><TextInput name="scope" required maxLength={512} /></Field>
@@ -66,7 +67,7 @@ export function CisoPolicies() {
     <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
       <PageHeader section="CISO" title="Policies & exceptions" meta={<span>live control-plane records</span>} />
       <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
-        <div className="grid gap-5 2xl:grid-cols-2"><PolicyForm />{policies.isPending ? <Loading label="Loading policies…" /> : policies.isError ? <ErrorState error={policies.error} retry={() => void policies.refetch()} /> : <ExceptionForm policies={policies.data.map(({ id, name }) => ({ id, name }))} />}</div>
+        <div className="grid gap-5 2xl:grid-cols-2"><PolicyForm />{policies.isPending ? <Loading label="Loading policies…" /> : policies.isError ? <ErrorState error={policies.error} retry={() => void policies.refetch()} /> : <ExceptionForm policies={policies.data.map(({ id, name, active_version }) => ({ id, name, active_version }))} />}</div>
         <section className="rounded-2xl border border-line bg-surface p-5">
           <h2 className="font-serif text-lg font-semibold text-ink">Active policy versions</h2>
           {policies.isPending ? <Loading label="Loading policy versions…" /> : policies.isError ? <ErrorState error={policies.error} retry={() => void policies.refetch()} /> : policies.data.length === 0 ? <p className="mt-4 text-sm text-slate">No policies have been created.</p> : <div className="responsive-table-wrap mt-4"><table className="w-full border-collapse text-left"><thead><tr className="border-b border-line">{["Policy", "Scope", "Controls", "Version", "Updated"].map((heading) => <th key={heading} className="pb-2 pr-4 font-mono text-[10.5px] font-normal tracking-widest text-slate">{heading.toUpperCase()}</th>)}</tr></thead><tbody>{policies.data.map((policy) => <tr key={policy.id} className="border-b border-line align-top"><td className="py-3 pr-4"><p className="font-medium text-ink">{policy.name}</p><p className="font-mono text-[11px] text-slate">{policy.id}</p></td><td className="py-3 pr-4 text-sm text-ink">{policy.scope}</td><td className="py-3 pr-4"><div className="flex flex-wrap gap-2"><SeverityBadge severity={policy.current.severity_threshold} /><StatusBadge status={policy.current.block_on_unknown ? "blocks unknown" : "allows unknown"} /></div><p className="mt-1 text-xs text-slate">Denied: {policy.current.denied_licenses.join(", ") || "none"}</p></td><td className="py-3 pr-4 font-mono text-xs text-ink">{policy.active_version}</td><td className="py-3 font-mono text-xs text-slate">{timestamp(policy.updated_at)}</td></tr>)}</tbody></table></div>}

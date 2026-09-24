@@ -603,27 +603,59 @@ export interface TransitionCaseInput {
   evidence_ids: string[];
 }
 
+export type PolicyVersionState =
+  | "draft"
+  | "in_review"
+  | "active"
+  | "superseded"
+  | "withdrawn"
+  | "retired";
+
+export interface GovernanceEvent {
+  id: string;
+  resource_kind: "policy" | "exception";
+  resource_id: string;
+  actor: string;
+  actor_name: string;
+  actor_role: string;
+  action: string;
+  from_state: string | null;
+  to_state: string;
+  rationale: string;
+  evidence_ids: string[];
+  at: number;
+  correlation_id: string;
+}
+
 export interface PolicyVersion {
   policy_id: string;
   version: number;
+  state: PolicyVersionState;
   severity_threshold: WorkflowSeverity;
   denied_licenses: string[];
   block_on_unknown: boolean;
   rationale: string;
+  content_digest: string;
+  effective_from: number | null;
+  effective_until: number | null;
   created_at: number;
   created_by: string;
+  created_by_name: string;
 }
 
 export interface Policy {
   id: string;
   name: string;
   scope: string;
-  status: string;
+  status: "active" | "retired";
   active_version: number;
+  version: number;
   created_at: number;
   updated_at: number;
   created_by: string;
   current: PolicyVersion;
+  versions: PolicyVersion[];
+  events: GovernanceEvent[];
 }
 
 export interface CreatePolicyInput {
@@ -635,28 +667,57 @@ export interface CreatePolicyInput {
   rationale: string;
 }
 
+export interface CreatePolicyVersionInput {
+  expected_version: number;
+  severity_threshold: WorkflowSeverity;
+  denied_licenses: string[];
+  block_on_unknown: boolean;
+  rationale: string;
+}
+
+export interface PolicyLifecycleInput {
+  expected_version: number;
+  rationale: string;
+}
+
 export interface PolicyException {
   id: string;
   policy_id: string;
+  policy_version: number;
+  policy_digest: string;
   scope: string;
   rationale: string;
   compensating_controls: string;
   owner: string;
+  owner_name: string;
+  evidence_ids: string[];
+  request_digest: string;
   expires_at: number;
-  status: string;
+  status: "pending" | "approved" | "rejected" | "expired" | "revoked";
+  expired: boolean;
   version: number;
   requested_by: string;
+  requested_by_name: string;
   approved_by: string | null;
+  approved_by_name: string | null;
+  decision_rationale: string | null;
+  decided_at: number | null;
+  revoked_by: string | null;
+  revoked_at: number | null;
   created_at: number;
   updated_at: number;
+  events: GovernanceEvent[];
 }
 
 export interface CreateExceptionInput {
   policy_id: string;
+  policy_version?: number;
   scope: string;
   rationale: string;
   compensating_controls: string;
   owner: string;
+  owner_name?: string;
+  evidence_ids?: string[];
   expires_at: number;
 }
 
@@ -666,11 +727,16 @@ export interface Approval {
   id: string;
   kind: string;
   resource_id: string;
+  resource_version: number;
+  request_digest: string;
+  evidence_ids: string[];
   requester: string;
   requester_name: string;
   status: string;
+  expired: boolean;
   rationale: string;
   approver: string | null;
+  approver_name: string | null;
   decision_rationale: string | null;
   version: number;
   expires_at: number;
@@ -1376,13 +1442,38 @@ export const api = {
   governanceOverview: () => get<GovernanceOverview>("/governance/overview"),
   policies: () => get<Policy[]>("/policies"),
   createPolicy: (input: CreatePolicyInput) => post<Policy>("/policies", input),
+  policy: (policyId: string) =>
+    get<Policy>(`/policies/${encodeURIComponent(policyId)}`),
+  createPolicyVersion: (policyId: string, input: CreatePolicyVersionInput) =>
+    post<Policy>(`/policies/${encodeURIComponent(policyId)}/versions`, input),
+  submitPolicyVersion: (policyId: string, version: number, input: PolicyLifecycleInput) =>
+    post<Policy>(
+      `/policies/${encodeURIComponent(policyId)}/versions/${version}/submit`,
+      input,
+    ),
+  activatePolicyVersion: (policyId: string, version: number, input: PolicyLifecycleInput) =>
+    post<Policy>(
+      `/policies/${encodeURIComponent(policyId)}/versions/${version}/activate`,
+      input,
+    ),
+  withdrawPolicyVersion: (policyId: string, version: number, input: PolicyLifecycleInput) =>
+    post<Policy>(
+      `/policies/${encodeURIComponent(policyId)}/versions/${version}/withdraw`,
+      input,
+    ),
+  retirePolicy: (policyId: string, input: PolicyLifecycleInput) =>
+    post<Policy>(`/policies/${encodeURIComponent(policyId)}/retire`, input),
   exceptions: () => get<PolicyException[]>("/exceptions"),
+  exception: (exceptionId: string) =>
+    get<PolicyException>(`/exceptions/${encodeURIComponent(exceptionId)}`),
   requestException: (input: CreateExceptionInput) =>
     post<Approval>("/exceptions", input),
   approvals: (status?: string) =>
     get<Approval[]>(
       `/approvals${status ? `?status=${encodeURIComponent(status)}` : ""}`,
     ),
+  approval: (approvalId: string) =>
+    get<Approval>(`/approvals/${encodeURIComponent(approvalId)}`),
   decideApproval: (approvalId: string, input: ApprovalDecisionInput) =>
     post<Approval>(
       `/approvals/${encodeURIComponent(approvalId)}/decision`,

@@ -44,6 +44,15 @@ def _loads(value: str | None, fallback: Any) -> Any:
     return json.loads(value)
 
 
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_json(value).encode()).hexdigest()
+
+
+def _stable_id(prefix: str, *parts: object) -> str:
+    value = "\0".join(str(part) for part in parts)
+    return f"{prefix}_{hashlib.sha256(value.encode()).hexdigest()[:24]}"
+
+
 class StoreError(Exception):
     """A control-plane domain or optimistic-concurrency conflict."""
 
@@ -171,6 +180,7 @@ class ControlPlane:
                   scope TEXT NOT NULL,
                   status TEXT NOT NULL,
                   active_version INTEGER NOT NULL,
+                  version INTEGER NOT NULL DEFAULT 1,
                   created_at INTEGER NOT NULL,
                   updated_at INTEGER NOT NULL,
                   created_by TEXT NOT NULL
@@ -178,38 +188,92 @@ class ControlPlane:
                 CREATE TABLE IF NOT EXISTS policy_versions (
                   policy_id TEXT NOT NULL REFERENCES policies(id) ON DELETE CASCADE,
                   version INTEGER NOT NULL,
+                  state TEXT NOT NULL DEFAULT 'active',
                   severity_threshold TEXT NOT NULL,
                   denied_licenses TEXT NOT NULL,
                   block_on_unknown INTEGER NOT NULL,
                   rationale TEXT NOT NULL,
+                  content_digest TEXT,
+                  effective_from INTEGER,
+                  effective_until INTEGER,
                   created_at INTEGER NOT NULL,
                   created_by TEXT NOT NULL,
+                  created_by_name TEXT,
                   PRIMARY KEY(policy_id, version)
                 );
+                CREATE TABLE IF NOT EXISTS policy_events (
+                  id TEXT PRIMARY KEY,
+                  policy_id TEXT NOT NULL REFERENCES policies(id) ON DELETE CASCADE,
+                  actor TEXT NOT NULL,
+                  actor_name TEXT NOT NULL,
+                  actor_role TEXT NOT NULL,
+                  action TEXT NOT NULL,
+                  from_state TEXT,
+                  to_state TEXT NOT NULL,
+                  rationale TEXT NOT NULL,
+                  evidence_ids TEXT NOT NULL DEFAULT '[]',
+                  at INTEGER NOT NULL,
+                  correlation_id TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS policy_events_policy
+                  ON policy_events(policy_id,at,id);
                 CREATE TABLE IF NOT EXISTS exceptions (
                   id TEXT PRIMARY KEY,
                   policy_id TEXT NOT NULL,
+                  policy_version INTEGER NOT NULL DEFAULT 1,
+                  policy_digest TEXT,
                   scope TEXT NOT NULL,
                   rationale TEXT NOT NULL,
                   compensating_controls TEXT NOT NULL,
                   owner TEXT NOT NULL,
+                  owner_name TEXT,
+                  evidence_ids TEXT NOT NULL DEFAULT '[]',
+                  request_digest TEXT,
                   expires_at INTEGER NOT NULL,
                   status TEXT NOT NULL,
                   version INTEGER NOT NULL,
                   requested_by TEXT NOT NULL,
+                  requested_by_name TEXT,
                   approved_by TEXT,
+                  approved_by_name TEXT,
+                  decision_rationale TEXT,
+                  decided_at INTEGER,
+                  revoked_by TEXT,
+                  revoked_at INTEGER,
                   created_at INTEGER NOT NULL,
-                  updated_at INTEGER NOT NULL
+                  updated_at INTEGER NOT NULL,
+                  FOREIGN KEY(policy_id,policy_version)
+                    REFERENCES policy_versions(policy_id,version)
                 );
+                CREATE TABLE IF NOT EXISTS exception_events (
+                  id TEXT PRIMARY KEY,
+                  exception_id TEXT NOT NULL REFERENCES exceptions(id) ON DELETE CASCADE,
+                  actor TEXT NOT NULL,
+                  actor_name TEXT NOT NULL,
+                  actor_role TEXT NOT NULL,
+                  action TEXT NOT NULL,
+                  from_state TEXT,
+                  to_state TEXT NOT NULL,
+                  rationale TEXT NOT NULL,
+                  evidence_ids TEXT NOT NULL DEFAULT '[]',
+                  at INTEGER NOT NULL,
+                  correlation_id TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS exception_events_exception
+                  ON exception_events(exception_id,at,id);
                 CREATE TABLE IF NOT EXISTS approvals (
                   id TEXT PRIMARY KEY,
                   kind TEXT NOT NULL,
                   resource_id TEXT NOT NULL,
+                  resource_version INTEGER NOT NULL DEFAULT 1,
+                  request_digest TEXT,
+                  evidence_ids TEXT NOT NULL DEFAULT '[]',
                   requester TEXT NOT NULL,
                   requester_name TEXT NOT NULL,
                   status TEXT NOT NULL,
                   rationale TEXT NOT NULL,
                   approver TEXT,
+                  approver_name TEXT,
                   decision_rationale TEXT,
                   version INTEGER NOT NULL,
                   expires_at INTEGER NOT NULL,
@@ -374,6 +438,11 @@ class ControlPlane:
                 );
                 """
                 )
+                # All additive upgrades and deterministic backfills below commit
+                # together. Closing the connection after an exception rolls this
+                # transaction back, so a process stop cannot expose half a
+                # governance lifecycle migration.
+                conn.execute("BEGIN IMMEDIATE")
                 existing = {
                     str(row[1]) for row in conn.execute(
                         "PRAGMA table_info(review_requests)"
@@ -401,6 +470,226 @@ class ControlPlane:
                     "CREATE INDEX IF NOT EXISTS review_requests_assignment "
                     "ON review_requests(assignee,state,sla_due_at,updated_at DESC)"
                 )
+
+                def table_columns(table: str) -> set[str]:
+                    return {
+                        str(row[1]) for row in conn.execute(
+                            f"PRAGMA table_info({table})"
+                        ).fetchall()
+                    }
+
+                governance_upgrades: dict[str, tuple[tuple[str, str], ...]] = {
+                    "policies": (
+                        ("version", "ALTER TABLE policies ADD COLUMN version INTEGER NOT NULL DEFAULT 1"),
+                    ),
+                    "policy_versions": (
+                        ("state", "ALTER TABLE policy_versions ADD COLUMN state TEXT NOT NULL DEFAULT 'active'"),
+                        ("content_digest", "ALTER TABLE policy_versions ADD COLUMN content_digest TEXT"),
+                        ("effective_from", "ALTER TABLE policy_versions ADD COLUMN effective_from INTEGER"),
+                        ("effective_until", "ALTER TABLE policy_versions ADD COLUMN effective_until INTEGER"),
+                        ("created_by_name", "ALTER TABLE policy_versions ADD COLUMN created_by_name TEXT"),
+                    ),
+                    "exceptions": (
+                        ("policy_version", "ALTER TABLE exceptions ADD COLUMN policy_version INTEGER NOT NULL DEFAULT 1"),
+                        ("policy_digest", "ALTER TABLE exceptions ADD COLUMN policy_digest TEXT"),
+                        ("owner_name", "ALTER TABLE exceptions ADD COLUMN owner_name TEXT"),
+                        ("evidence_ids", "ALTER TABLE exceptions ADD COLUMN evidence_ids TEXT NOT NULL DEFAULT '[]'"),
+                        ("request_digest", "ALTER TABLE exceptions ADD COLUMN request_digest TEXT"),
+                        ("requested_by_name", "ALTER TABLE exceptions ADD COLUMN requested_by_name TEXT"),
+                        ("approved_by_name", "ALTER TABLE exceptions ADD COLUMN approved_by_name TEXT"),
+                        ("decision_rationale", "ALTER TABLE exceptions ADD COLUMN decision_rationale TEXT"),
+                        ("decided_at", "ALTER TABLE exceptions ADD COLUMN decided_at INTEGER"),
+                        ("revoked_by", "ALTER TABLE exceptions ADD COLUMN revoked_by TEXT"),
+                        ("revoked_at", "ALTER TABLE exceptions ADD COLUMN revoked_at INTEGER"),
+                    ),
+                    "approvals": (
+                        ("resource_version", "ALTER TABLE approvals ADD COLUMN resource_version INTEGER NOT NULL DEFAULT 1"),
+                        ("request_digest", "ALTER TABLE approvals ADD COLUMN request_digest TEXT"),
+                        ("evidence_ids", "ALTER TABLE approvals ADD COLUMN evidence_ids TEXT NOT NULL DEFAULT '[]'"),
+                        ("approver_name", "ALTER TABLE approvals ADD COLUMN approver_name TEXT"),
+                    ),
+                }
+                for table, upgrades in governance_upgrades.items():
+                    present = table_columns(table)
+                    for column, ddl in upgrades:
+                        if column not in present:
+                            conn.execute(ddl)
+
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS policy_versions_state "
+                    "ON policy_versions(policy_id,state,version DESC)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS exceptions_policy_status "
+                    "ON exceptions(policy_id,status,expires_at,updated_at DESC)"
+                )
+
+                legacy_policies = conn.execute("SELECT * FROM policies").fetchall()
+                for policy in legacy_policies:
+                    versions = conn.execute(
+                        "SELECT * FROM policy_versions WHERE policy_id=? ORDER BY version",
+                        (policy["id"],),
+                    ).fetchall()
+                    for version in versions:
+                        canonical = {
+                            "policy_id": policy["id"],
+                            "version": version["version"],
+                            "severity_threshold": version["severity_threshold"],
+                            "denied_licenses": _loads(version["denied_licenses"], []),
+                            "block_on_unknown": bool(version["block_on_unknown"]),
+                            "rationale": version["rationale"],
+                        }
+                        state = (
+                            "active" if version["version"] == policy["active_version"]
+                            else "superseded"
+                        )
+                        if not version["content_digest"]:
+                            conn.execute(
+                                """UPDATE policy_versions SET state=?,content_digest=?,
+                                effective_from=COALESCE(effective_from,created_at),
+                                effective_until=CASE WHEN ?='active' THEN NULL
+                                    ELSE COALESCE(effective_until,?) END,
+                                created_by_name=COALESCE(created_by_name,created_by)
+                                WHERE policy_id=? AND version=?""",
+                                (
+                                    state, _digest(canonical), state, policy["updated_at"],
+                                    policy["id"], version["version"],
+                                ),
+                            )
+                        elif not version["created_by_name"]:
+                            conn.execute(
+                                """UPDATE policy_versions SET created_by_name=created_by
+                                WHERE policy_id=? AND version=?""",
+                                (policy["id"], version["version"]),
+                            )
+                    has_policy_events = conn.execute(
+                        "SELECT 1 FROM policy_events WHERE policy_id=? LIMIT 1",
+                        (policy["id"],),
+                    ).fetchone()
+                    if has_policy_events is None:
+                        conn.execute(
+                            """INSERT INTO policy_events
+                            (id,policy_id,actor,actor_name,actor_role,action,from_state,
+                             to_state,rationale,evidence_ids,at,correlation_id)
+                            VALUES (?,?,?,?,?,'policy.created',NULL,?,?, '[]',?,?)""",
+                            (
+                                _stable_id("pev", policy["id"], "created"), policy["id"],
+                                policy["created_by"], policy["created_by"], "ciso",
+                                policy["status"], "Migrated durable policy baseline.",
+                                policy["created_at"], "migration:priority5a",
+                            ),
+                        )
+
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS policy_one_active_version "
+                    "ON policy_versions(policy_id) WHERE state='active'"
+                )
+
+                legacy_exceptions = conn.execute("SELECT * FROM exceptions").fetchall()
+                for exception in legacy_exceptions:
+                    policy_row = conn.execute(
+                        "SELECT active_version FROM policies WHERE id=?",
+                        (exception["policy_id"],),
+                    ).fetchone()
+                    if not exception["policy_digest"] and policy_row is not None:
+                        policy_version = int(policy_row["active_version"])
+                    else:
+                        policy_version = int(exception["policy_version"] or 1)
+                    version = conn.execute(
+                        "SELECT content_digest FROM policy_versions WHERE policy_id=? AND version=?",
+                        (exception["policy_id"], policy_version),
+                    ).fetchone()
+                    policy_digest = (
+                        str(version["content_digest"]) if version and version["content_digest"]
+                        else _digest({"policy_id": exception["policy_id"], "version": policy_version})
+                    )
+                    evidence_ids = _loads(exception["evidence_ids"], [])
+                    canonical = {
+                        "policy_id": exception["policy_id"],
+                        "policy_version": policy_version,
+                        "policy_digest": policy_digest,
+                        "scope": exception["scope"],
+                        "rationale": exception["rationale"],
+                        "compensating_controls": exception["compensating_controls"],
+                        "owner": exception["owner"],
+                        "expires_at": exception["expires_at"],
+                        "evidence_ids": evidence_ids,
+                    }
+                    request_digest = _digest(canonical)
+                    approval = conn.execute(
+                        "SELECT * FROM approvals WHERE kind='exception' AND resource_id=? "
+                        "ORDER BY created_at,id LIMIT 1", (exception["id"],),
+                    ).fetchone()
+                    approver = exception["approved_by"] or (
+                        approval["approver"] if approval is not None else None
+                    )
+                    decided_at = (
+                        approval["decided_at"] if approval is not None else None
+                    )
+                    decision_rationale = (
+                        approval["decision_rationale"] if approval is not None else None
+                    )
+                    conn.execute(
+                        """UPDATE exceptions SET policy_version=?,policy_digest=?,
+                        owner_name=COALESCE(owner_name,owner),request_digest=?,
+                        requested_by_name=COALESCE(requested_by_name,requested_by),
+                        approved_by_name=COALESCE(approved_by_name,?),
+                        decision_rationale=COALESCE(decision_rationale,?),
+                        decided_at=COALESCE(decided_at,?) WHERE id=?""",
+                        (
+                            policy_version, policy_digest, request_digest, approver,
+                            decision_rationale, decided_at, exception["id"],
+                        ),
+                    )
+                    requested_event = conn.execute(
+                        """SELECT 1 FROM exception_events
+                        WHERE exception_id=? AND action='exception.requested' LIMIT 1""",
+                        (exception["id"],),
+                    ).fetchone()
+                    if requested_event is None:
+                        conn.execute(
+                            """INSERT INTO exception_events
+                            (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                             to_state,rationale,evidence_ids,at,correlation_id)
+                            VALUES (?,?,?,?,?,'exception.requested',NULL,'pending',?,?,?,?)""",
+                            (
+                                _stable_id("eev", exception["id"], "requested"),
+                                exception["id"], exception["requested_by"],
+                                exception["requested_by_name"] or exception["requested_by"],
+                                "analyst", exception["rationale"], _json(evidence_ids),
+                                exception["created_at"], "migration:priority5a",
+                            ),
+                        )
+                    if exception["status"] != "pending":
+                        terminal_action = f"exception.{exception['status']}"
+                        terminal_event = conn.execute(
+                            """SELECT 1 FROM exception_events
+                            WHERE exception_id=? AND action=? LIMIT 1""",
+                            (exception["id"], terminal_action),
+                        ).fetchone()
+                        if terminal_event is None:
+                            conn.execute(
+                                """INSERT INTO exception_events
+                                (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                                 to_state,rationale,evidence_ids,at,correlation_id)
+                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                (
+                                    _stable_id("eev", exception["id"], exception["status"]),
+                                    exception["id"], approver or "migration",
+                                    approver or "Migration", "ciso", terminal_action,
+                                    "pending", exception["status"],
+                                    decision_rationale or exception["rationale"],
+                                    _json(evidence_ids), decided_at or exception["updated_at"],
+                                    "migration:priority5a",
+                                ),
+                            )
+                    if approval is not None:
+                        conn.execute(
+                            """UPDATE approvals SET resource_version=1,request_digest=?,
+                            evidence_ids=?,approver_name=COALESCE(approver_name,approver)
+                            WHERE id=?""",
+                            (request_digest, _json(evidence_ids), approval["id"]),
+                        )
                 legacy_reviews = conn.execute(
                     "SELECT * FROM review_requests WHERE evidence_digest IS NULL"
                 ).fetchall()
@@ -450,6 +739,7 @@ class ControlPlane:
                             (event["id"], review["id"], review["run_id"], canonical,
                              hashlib.sha256(canonical.encode()).hexdigest(), event["at"]),
                         )
+                conn.execute("COMMIT")
             finally:
                 conn.close()
 
@@ -628,19 +918,324 @@ class ControlPlane:
                 )
         return self.case(case_id)
 
+    @staticmethod
+    def _policy_version(row: sqlite3.Row) -> dict[str, Any]:
+        body = dict(row)
+        body["denied_licenses"] = _loads(body["denied_licenses"], [])
+        body["block_on_unknown"] = bool(body["block_on_unknown"])
+        return body
+
+    @staticmethod
+    def _governance_event(row: sqlite3.Row, resource_kind: str) -> dict[str, Any]:
+        body = dict(row)
+        body["resource_kind"] = resource_kind
+        body["resource_id"] = body.pop(f"{resource_kind}_id")
+        body["evidence_ids"] = _loads(body["evidence_ids"], [])
+        return body
+
     def create_policy(self, *, name: str, scope: str, severity_threshold: str,
                       denied_licenses: list[str], block_on_unknown: bool,
-                      rationale: str, actor: str) -> dict[str, Any]:
-        policy_id, now = _id("pol"), _now()
+                      rationale: str, actor: str, actor_name: str,
+                      actor_role: str, correlation_id: str) -> dict[str, Any]:
+        policy_id, event_id, now = _id("pol"), _id("pev"), _now()
+        licenses = list(dict.fromkeys(value.strip() for value in denied_licenses if value.strip()))
+        canonical = {
+            "policy_id": policy_id, "version": 1,
+            "severity_threshold": severity_threshold,
+            "denied_licenses": licenses,
+            "block_on_unknown": block_on_unknown,
+            "rationale": rationale,
+        }
+        digest = _digest(canonical)
         with self._write() as conn:
             conn.execute(
-                "INSERT INTO policies VALUES (?,?,?,'active',1,?,?,?)",
+                """INSERT INTO policies
+                (id,name,scope,status,active_version,version,created_at,updated_at,created_by)
+                VALUES (?,?,?,'active',1,1,?,?,?)""",
                 (policy_id, name, scope, now, now, actor),
             )
             conn.execute(
-                "INSERT INTO policy_versions VALUES (?,?,?,?,?,?,?,?)",
-                (policy_id, 1, severity_threshold, _json(denied_licenses),
-                 int(block_on_unknown), rationale, now, actor),
+                """INSERT INTO policy_versions
+                (policy_id,version,state,severity_threshold,denied_licenses,
+                 block_on_unknown,rationale,content_digest,effective_from,
+                 effective_until,created_at,created_by,created_by_name)
+                VALUES (?,1,'active',?,?,?,?,?, ?,NULL,?,?,?)""",
+                (
+                    policy_id, severity_threshold, _json(licenses),
+                    int(block_on_unknown), rationale, digest, now, now, actor,
+                    actor_name,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO policy_events
+                (id,policy_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'policy.created',NULL,'active',?,'[]',?,?)""",
+                (
+                    event_id, policy_id, actor, actor_name, actor_role,
+                    rationale, now, correlation_id,
+                ),
+            )
+        return self.policy(policy_id)
+
+    def create_policy_version(
+        self, policy_id: str, *, expected_version: int, severity_threshold: str,
+        denied_licenses: list[str], block_on_unknown: bool, rationale: str,
+        actor: str, actor_name: str, actor_role: str, correlation_id: str,
+    ) -> dict[str, Any]:
+        now = _now()
+        licenses = list(dict.fromkeys(value.strip() for value in denied_licenses if value.strip()))
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (policy_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown policy")
+            if current["version"] != expected_version:
+                raise VersionConflict("policy changed; reload before creating a version")
+            if current["status"] != "active":
+                raise StoreError("retired policies cannot receive new versions")
+            pending = conn.execute(
+                "SELECT 1 FROM policy_versions WHERE policy_id=? "
+                "AND state IN ('draft','in_review')", (policy_id,),
+            ).fetchone()
+            if pending is not None:
+                raise StoreError("policy already has an unfinished version")
+            next_version = int(conn.execute(
+                "SELECT COALESCE(MAX(version),0)+1 FROM policy_versions WHERE policy_id=?",
+                (policy_id,),
+            ).fetchone()[0])
+            canonical = {
+                "policy_id": policy_id, "version": next_version,
+                "severity_threshold": severity_threshold,
+                "denied_licenses": licenses,
+                "block_on_unknown": block_on_unknown,
+                "rationale": rationale,
+            }
+            conn.execute(
+                """INSERT INTO policy_versions
+                (policy_id,version,state,severity_threshold,denied_licenses,
+                 block_on_unknown,rationale,content_digest,effective_from,
+                 effective_until,created_at,created_by,created_by_name)
+                VALUES (?,?,'draft',?,?,?,?,?,NULL,NULL,?,?,?)""",
+                (
+                    policy_id, next_version, severity_threshold, _json(licenses),
+                    int(block_on_unknown), rationale, _digest(canonical), now,
+                    actor, actor_name,
+                ),
+            )
+            conn.execute(
+                "UPDATE policies SET version=version+1,updated_at=? WHERE id=?",
+                (now, policy_id),
+            )
+            conn.execute(
+                """INSERT INTO policy_events
+                (id,policy_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'policy.version_created','active','draft',?,'[]',?,?)""",
+                (
+                    _id("pev"), policy_id, actor, actor_name, actor_role,
+                    rationale, now, correlation_id,
+                ),
+            )
+        return self.policy(policy_id)
+
+    def submit_policy_version(
+        self, policy_id: str, version: int, *, expected_version: int,
+        rationale: str, actor: str, actor_name: str, actor_role: str,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        return self._transition_policy_version(
+            policy_id, version, expected_version=expected_version,
+            expected_state="draft", target_state="in_review",
+            action="policy.version_submitted", rationale=rationale,
+            actor=actor, actor_name=actor_name, actor_role=actor_role,
+            correlation_id=correlation_id,
+        )
+
+    def withdraw_policy_version(
+        self, policy_id: str, version: int, *, expected_version: int,
+        rationale: str, actor: str, actor_name: str, actor_role: str,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        now = _now()
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (policy_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown policy")
+            if current["version"] != expected_version:
+                raise VersionConflict("policy changed; reload before withdrawing a version")
+            if current["status"] != "active":
+                raise StoreError("retired policies cannot withdraw versions")
+            candidate = conn.execute(
+                "SELECT state FROM policy_versions WHERE policy_id=? AND version=?",
+                (policy_id, version),
+            ).fetchone()
+            if candidate is None:
+                raise Missing("unknown policy version")
+            if candidate["state"] not in ("draft", "in_review"):
+                raise StoreError("only a draft or in-review policy version can be withdrawn")
+            prior_state = str(candidate["state"])
+            conn.execute(
+                "UPDATE policy_versions SET state='withdrawn' "
+                "WHERE policy_id=? AND version=?",
+                (policy_id, version),
+            )
+            conn.execute(
+                "UPDATE policies SET version=version+1,updated_at=? WHERE id=?",
+                (now, policy_id),
+            )
+            conn.execute(
+                """INSERT INTO policy_events
+                (id,policy_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'policy.version_withdrawn',?,?,?,'[]',?,?)""",
+                (
+                    _id("pev"), policy_id, actor, actor_name, actor_role,
+                    f"v{version}:{prior_state}", f"v{version}:withdrawn",
+                    rationale, now, correlation_id,
+                ),
+            )
+        return self.policy(policy_id)
+
+    def activate_policy_version(
+        self, policy_id: str, version: int, *, expected_version: int,
+        rationale: str, actor: str, actor_name: str, actor_role: str,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        now = _now()
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (policy_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown policy")
+            if current["version"] != expected_version:
+                raise VersionConflict("policy changed; reload before activating a version")
+            if current["status"] != "active":
+                raise StoreError("retired policies cannot activate versions")
+            candidate = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND version=?",
+                (policy_id, version),
+            ).fetchone()
+            if candidate is None:
+                raise Missing("unknown policy version")
+            if candidate["state"] != "in_review":
+                raise StoreError("only a policy version in review can be activated")
+            previous = current["active_version"]
+            conn.execute(
+                """UPDATE policy_versions SET state='superseded',effective_until=?
+                WHERE policy_id=? AND version=? AND state='active'""",
+                (now, policy_id, previous),
+            )
+            conn.execute(
+                """UPDATE policy_versions SET state='active',effective_from=?,
+                effective_until=NULL WHERE policy_id=? AND version=?""",
+                (now, policy_id, version),
+            )
+            conn.execute(
+                """UPDATE policies SET active_version=?,version=version+1,
+                updated_at=? WHERE id=?""", (version, now, policy_id),
+            )
+            conn.execute(
+                """INSERT INTO policy_events
+                (id,policy_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'policy.version_activated',?,?,?,'[]',?,?)""",
+                (
+                    _id("pev"), policy_id, actor, actor_name, actor_role,
+                    f"v{previous}:active", f"v{version}:active", rationale,
+                    now, correlation_id,
+                ),
+            )
+        return self.policy(policy_id)
+
+    def _transition_policy_version(
+        self, policy_id: str, version: int, *, expected_version: int,
+        expected_state: str, target_state: str, action: str, rationale: str,
+        actor: str, actor_name: str, actor_role: str, correlation_id: str,
+    ) -> dict[str, Any]:
+        now = _now()
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (policy_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown policy")
+            if current["version"] != expected_version:
+                raise VersionConflict("policy changed; reload before updating its lifecycle")
+            candidate = conn.execute(
+                "SELECT state FROM policy_versions WHERE policy_id=? AND version=?",
+                (policy_id, version),
+            ).fetchone()
+            if candidate is None:
+                raise Missing("unknown policy version")
+            if candidate["state"] != expected_state:
+                raise StoreError(
+                    f"policy version must be {expected_state} before it can become {target_state}"
+                )
+            conn.execute(
+                "UPDATE policy_versions SET state=? WHERE policy_id=? AND version=?",
+                (target_state, policy_id, version),
+            )
+            conn.execute(
+                "UPDATE policies SET version=version+1,updated_at=? WHERE id=?",
+                (now, policy_id),
+            )
+            conn.execute(
+                """INSERT INTO policy_events
+                (id,policy_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,?,?,?,?,'[]',?,?)""",
+                (
+                    _id("pev"), policy_id, actor, actor_name, actor_role,
+                    action, expected_state, target_state, rationale, now,
+                    correlation_id,
+                ),
+            )
+        return self.policy(policy_id)
+
+    def retire_policy(
+        self, policy_id: str, *, expected_version: int, rationale: str,
+        actor: str, actor_name: str, actor_role: str, correlation_id: str,
+    ) -> dict[str, Any]:
+        now = _now()
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (policy_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown policy")
+            if current["version"] != expected_version:
+                raise VersionConflict("policy changed; reload before retiring it")
+            if current["status"] != "active":
+                raise StoreError("policy is already retired")
+            unfinished = conn.execute(
+                "SELECT 1 FROM policy_versions WHERE policy_id=? "
+                "AND state IN ('draft','in_review')", (policy_id,),
+            ).fetchone()
+            if unfinished is not None:
+                raise StoreError("finish or discard the pending policy version before retirement")
+            conn.execute(
+                """UPDATE policy_versions SET state='retired',effective_until=?
+                WHERE policy_id=? AND version=?""",
+                (now, policy_id, current["active_version"]),
+            )
+            conn.execute(
+                """UPDATE policies SET status='retired',version=version+1,
+                updated_at=? WHERE id=?""", (now, policy_id),
+            )
+            conn.execute(
+                """INSERT INTO policy_events
+                (id,policy_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'policy.retired','active','retired',?,'[]',?,?)""",
+                (
+                    _id("pev"), policy_id, actor, actor_name, actor_role,
+                    rationale, now, correlation_id,
+                ),
             )
         return self.policy(policy_id)
 
@@ -656,53 +1251,153 @@ class ControlPlane:
             row = conn.execute("SELECT * FROM policies WHERE id=?", (policy_id,)).fetchone()
             if row is None:
                 raise Missing("unknown policy")
-            version = conn.execute(
-                "SELECT * FROM policy_versions WHERE policy_id=? AND version=?",
-                (policy_id, row["active_version"]),
-            ).fetchone()
+            versions = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? ORDER BY version DESC",
+                (policy_id,),
+            ).fetchall()
+            events = conn.execute(
+                "SELECT * FROM policy_events WHERE policy_id=? ORDER BY at,id",
+                (policy_id,),
+            ).fetchall()
         body = dict(row)
-        assert version is not None
-        body["current"] = dict(version)
-        body["current"]["denied_licenses"] = _loads(version["denied_licenses"], [])
-        body["current"]["block_on_unknown"] = bool(version["block_on_unknown"])
+        values = [self._policy_version(value) for value in versions]
+        current = next(
+            (value for value in values if value["version"] == body["active_version"]),
+            None,
+        )
+        assert current is not None
+        body["current"] = current
+        body["versions"] = values
+        body["events"] = [self._governance_event(value, "policy") for value in events]
         return body
 
-    def create_exception(self, *, policy_id: str, scope: str, rationale: str,
-                         controls: str, owner: str, expires_at: int,
-                         actor: str, actor_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
-        if expires_at <= _now():
+    @staticmethod
+    def _exception(row: sqlite3.Row, events: list[sqlite3.Row] | None = None) -> dict[str, Any]:
+        body = dict(row)
+        body["evidence_ids"] = _loads(body["evidence_ids"], [])
+        body["expired"] = bool(
+            body["expires_at"] <= _now()
+            and body["status"] in ("pending", "approved")
+        )
+        if body["expired"]:
+            body["status"] = "expired"
+        body["events"] = [
+            ControlPlane._governance_event(value, "exception")
+            for value in (events or [])
+        ]
+        return body
+
+    @staticmethod
+    def _approval(row: sqlite3.Row) -> dict[str, Any]:
+        body = dict(row)
+        body["evidence_ids"] = _loads(body["evidence_ids"], [])
+        body["expired"] = bool(
+            body["expires_at"] <= _now() and body["status"] == "pending"
+        )
+        if body["expired"]:
+            body["status"] = "expired"
+        return body
+
+    def create_exception(
+        self, *, policy_id: str, policy_version: int | None, scope: str,
+        rationale: str, controls: str, owner: str, owner_name: str | None,
+        evidence_ids: list[str], expires_at: int, actor: str, actor_name: str,
+        actor_role: str, correlation_id: str,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        now = _now()
+        if expires_at <= now:
             raise StoreError("exception expiry must be in the future")
-        exception_id, approval_id, now = _id("exc"), _id("apr"), _now()
+        exception_id, approval_id, event_id = _id("exc"), _id("apr"), _id("eev")
+        evidence = list(dict.fromkeys(value.strip() for value in evidence_ids if value.strip()))
         with self._write() as conn:
-            if conn.execute("SELECT 1 FROM policies WHERE id=?", (policy_id,)).fetchone() is None:
+            policy = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (policy_id,),
+            ).fetchone()
+            if policy is None:
                 raise Missing("unknown policy")
+            if policy["status"] != "active":
+                raise StoreError("exceptions cannot target a retired policy")
+            bound_version = policy_version or policy["active_version"]
+            version = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND version=?",
+                (policy_id, bound_version),
+            ).fetchone()
+            if version is None:
+                raise Missing("unknown policy version")
+            if version["state"] != "active" or bound_version != policy["active_version"]:
+                raise StoreError("exceptions must target the active policy version")
+            duplicate = conn.execute(
+                """SELECT 1 FROM exceptions WHERE policy_id=? AND scope=?
+                AND status IN ('pending','approved') AND expires_at>?""",
+                (policy_id, scope, now),
+            ).fetchone()
+            if duplicate is not None:
+                raise StoreError("an active exception already exists for this policy scope")
+            policy_digest = str(version["content_digest"])
+            canonical = {
+                "policy_id": policy_id, "policy_version": bound_version,
+                "policy_digest": policy_digest, "scope": scope,
+                "rationale": rationale, "compensating_controls": controls,
+                "owner": owner, "expires_at": expires_at,
+                "evidence_ids": evidence,
+            }
+            request_digest = _digest(canonical)
+            resolved_owner_name = owner_name or owner
             conn.execute(
-                """INSERT INTO exceptions VALUES
-                (?,?,?,?,?,?,?,'pending',1,?,NULL,?,?)""",
-                (exception_id, policy_id, scope, rationale, controls, owner,
-                 expires_at, actor, now, now),
+                """INSERT INTO exceptions
+                (id,policy_id,policy_version,policy_digest,scope,rationale,
+                 compensating_controls,owner,owner_name,evidence_ids,request_digest,
+                 expires_at,status,version,requested_by,requested_by_name,
+                 approved_by,approved_by_name,decision_rationale,decided_at,
+                 revoked_by,revoked_at,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending',1,?,?,NULL,NULL,NULL,NULL,
+                        NULL,NULL,?,?)""",
+                (
+                    exception_id, policy_id, bound_version, policy_digest, scope,
+                    rationale, controls, owner, resolved_owner_name, _json(evidence),
+                    request_digest, expires_at, actor, actor_name, now, now,
+                ),
             )
             conn.execute(
-                """INSERT INTO approvals VALUES
-                (?,?,?, ?,?,'pending',?,NULL,NULL,1,?,?,NULL)""",
-                (approval_id, "exception", exception_id, actor, actor_name,
-                 rationale, min(expires_at, now + 604800), now),
+                """INSERT INTO approvals
+                (id,kind,resource_id,resource_version,request_digest,evidence_ids,
+                 requester,requester_name,status,rationale,approver,approver_name,
+                 decision_rationale,version,expires_at,created_at,decided_at)
+                VALUES (?,'exception',?,?,?, ?,?,?,'pending',?,NULL,NULL,NULL,1,?,?,NULL)""",
+                (
+                    approval_id, exception_id, 1, request_digest, _json(evidence),
+                    actor, actor_name, rationale, min(expires_at, now + 604800), now,
+                ),
+            )
+            conn.execute(
+                """INSERT INTO exception_events
+                (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,'exception.requested',NULL,'pending',?,?,?,?)""",
+                (
+                    event_id, exception_id, actor, actor_name, actor_role,
+                    rationale, _json(evidence), now, correlation_id,
+                ),
             )
         return self.exception(exception_id), self.approval(approval_id)
 
     def exceptions(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM exceptions ORDER BY updated_at DESC,id DESC"
-            ).fetchall()
-        return [dict(row) for row in rows]
+            ids = [row["id"] for row in conn.execute(
+                "SELECT id FROM exceptions ORDER BY updated_at DESC,id DESC"
+            ).fetchall()]
+        return [self.exception(exception_id) for exception_id in ids]
 
     def exception(self, exception_id: str) -> dict[str, Any]:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM exceptions WHERE id=?", (exception_id,)).fetchone()
-        if row is None:
-            raise Missing("unknown exception")
-        return dict(row)
+            if row is None:
+                raise Missing("unknown exception")
+            events = conn.execute(
+                "SELECT * FROM exception_events WHERE exception_id=? ORDER BY at,id",
+                (exception_id,),
+            ).fetchall()
+        return self._exception(row, events)
 
     def approvals(self, status: str | None = None) -> list[dict[str, Any]]:
         sql, args = "SELECT * FROM approvals", []
@@ -711,17 +1406,20 @@ class ControlPlane:
             args.append(status)
         sql += " ORDER BY created_at DESC,id DESC"
         with self._connect() as conn:
-            return [dict(row) for row in conn.execute(sql, args).fetchall()]
+            return [self._approval(row) for row in conn.execute(sql, args).fetchall()]
 
     def approval(self, approval_id: str) -> dict[str, Any]:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM approvals WHERE id=?", (approval_id,)).fetchone()
         if row is None:
             raise Missing("unknown approval")
-        return dict(row)
+        return self._approval(row)
 
-    def decide_approval(self, approval_id: str, *, expected_version: int,
-                        decision: str, rationale: str, actor: str) -> dict[str, Any]:
+    def decide_approval(
+        self, approval_id: str, *, expected_version: int, decision: str,
+        rationale: str, actor: str, actor_name: str, actor_role: str,
+        correlation_id: str,
+    ) -> dict[str, Any]:
         now = _now()
         with self._write() as conn:
             current = conn.execute("SELECT * FROM approvals WHERE id=?", (approval_id,)).fetchone()
@@ -734,18 +1432,48 @@ class ControlPlane:
             if current["requester"] == actor:
                 raise SeparationConflict("requesters cannot approve their own request")
             status = "approved" if decision == "approve" else "rejected"
+            if current["kind"] != "exception":
+                raise StoreError("unsupported approval kind")
+            exception = conn.execute(
+                "SELECT * FROM exceptions WHERE id=?", (current["resource_id"],),
+            ).fetchone()
+            if exception is None:
+                raise Missing("unknown exception")
+            if exception["version"] != current["resource_version"]:
+                raise VersionConflict("exception changed; reload before deciding")
+            if exception["status"] != "pending" or exception["expires_at"] <= now:
+                raise StoreError("exception is no longer pending")
+            if exception["request_digest"] != current["request_digest"]:
+                raise StoreError("approval no longer matches the exception request")
             conn.execute(
-                """UPDATE approvals SET status=?,approver=?,decision_rationale=?,
-                   version=?,decided_at=? WHERE id=?""",
-                (status, actor, rationale, expected_version + 1, now, approval_id),
+                """UPDATE approvals SET status=?,approver=?,approver_name=?,
+                decision_rationale=?,version=?,decided_at=? WHERE id=?""",
+                (
+                    status, actor, actor_name, rationale,
+                    expected_version + 1, now, approval_id,
+                ),
             )
-            if current["kind"] == "exception":
-                conn.execute(
-                    """UPDATE exceptions SET status=?,approved_by=?,version=version+1,
-                       updated_at=? WHERE id=?""",
-                    (status, actor if status == "approved" else None, now,
-                     current["resource_id"]),
-                )
+            conn.execute(
+                """UPDATE exceptions SET status=?,approved_by=?,approved_by_name=?,
+                decision_rationale=?,decided_at=?,version=version+1,updated_at=?
+                WHERE id=?""",
+                (
+                    status, actor if status == "approved" else None,
+                    actor_name if status == "approved" else None,
+                    rationale, now, now, current["resource_id"],
+                ),
+            )
+            conn.execute(
+                """INSERT INTO exception_events
+                (id,exception_id,actor,actor_name,actor_role,action,from_state,
+                 to_state,rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    _id("eev"), current["resource_id"], actor, actor_name,
+                    actor_role, f"exception.{status}", "pending", status,
+                    rationale, current["evidence_ids"], now, correlation_id,
+                ),
+            )
         return self.approval(approval_id)
 
     def create_remediation(self, *, case_id: str, title: str, owner: str,

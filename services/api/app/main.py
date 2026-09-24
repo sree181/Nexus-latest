@@ -98,11 +98,13 @@ from .workflow_models import (
     CreateCaseRequest,
     CreateExceptionRequest,
     CreatePolicyRequest,
+    CreatePolicyVersionRequest,
     CreateRemediationRequest,
     CreateReviewRequest,
     EscalateReviewRequest,
     ExceptionOut,
     OriginOut,
+    PolicyLifecycleRequest,
     PolicyOut,
     RemediationOut,
     ReportOut,
@@ -989,6 +991,7 @@ def policies(_: Principal = Depends(require_capability("policy.read"))) -> list[
 @app.post("/api/policies", response_model=PolicyOut, status_code=201)
 def create_policy(
     req: CreatePolicyRequest,
+    request: Request,
     who: Principal = Depends(require_capability("policy.write")),
 ) -> PolicyOut:
     note(
@@ -1003,8 +1006,123 @@ def create_policy(
         block_on_unknown=req.block_on_unknown,
         rationale=req.rationale,
         actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
     )
     return PolicyOut(**policy)
+
+
+@app.get("/api/policies/{policy_id}", response_model=PolicyOut)
+def get_policy(
+    policy_id: str,
+    _: Principal = Depends(require_capability("policy.read")),
+) -> PolicyOut:
+    return PolicyOut(**workflow_store.policy(policy_id))
+
+
+@app.post("/api/policies/{policy_id}/versions", response_model=PolicyOut, status_code=201)
+def create_policy_version(
+    policy_id: str,
+    req: CreatePolicyVersionRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("policy.write")),
+) -> PolicyOut:
+    note(who, "policy.version.create.request", policy_id, req.rationale, require_commit=True)
+    return PolicyOut(**workflow_store.create_policy_version(
+        policy_id,
+        expected_version=req.expected_version,
+        severity_threshold=req.severity_threshold,
+        denied_licenses=req.denied_licenses,
+        block_on_unknown=req.block_on_unknown,
+        rationale=req.rationale,
+        actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
+    ))
+
+
+@app.post("/api/policies/{policy_id}/versions/{version}/submit", response_model=PolicyOut)
+def submit_policy_version(
+    policy_id: str,
+    version: int,
+    req: PolicyLifecycleRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("policy.write")),
+) -> PolicyOut:
+    note(who, "policy.version.submit.request", policy_id, req.rationale, require_commit=True)
+    return PolicyOut(**workflow_store.submit_policy_version(
+        policy_id,
+        version,
+        expected_version=req.expected_version,
+        rationale=req.rationale,
+        actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
+    ))
+
+
+@app.post("/api/policies/{policy_id}/versions/{version}/activate", response_model=PolicyOut)
+def activate_policy_version(
+    policy_id: str,
+    version: int,
+    req: PolicyLifecycleRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("policy.write")),
+) -> PolicyOut:
+    note(who, "policy.version.activate.request", policy_id, req.rationale, require_commit=True)
+    return PolicyOut(**workflow_store.activate_policy_version(
+        policy_id,
+        version,
+        expected_version=req.expected_version,
+        rationale=req.rationale,
+        actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
+    ))
+
+
+@app.post("/api/policies/{policy_id}/versions/{version}/withdraw", response_model=PolicyOut)
+def withdraw_policy_version(
+    policy_id: str,
+    version: int,
+    req: PolicyLifecycleRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("policy.write")),
+) -> PolicyOut:
+    note(who, "policy.version.withdraw.request", policy_id, req.rationale, require_commit=True)
+    return PolicyOut(**workflow_store.withdraw_policy_version(
+        policy_id,
+        version,
+        expected_version=req.expected_version,
+        rationale=req.rationale,
+        actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
+    ))
+
+
+@app.post("/api/policies/{policy_id}/retire", response_model=PolicyOut)
+def retire_policy(
+    policy_id: str,
+    req: PolicyLifecycleRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("policy.write")),
+) -> PolicyOut:
+    note(who, "policy.retire.request", policy_id, req.rationale, require_commit=True)
+    return PolicyOut(**workflow_store.retire_policy(
+        policy_id,
+        expected_version=req.expected_version,
+        rationale=req.rationale,
+        actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
+    ))
 
 
 @app.get("/api/exceptions", response_model=list[ExceptionOut])
@@ -1017,6 +1135,7 @@ def exceptions(
 @app.post("/api/exceptions", response_model=ApprovalOut, status_code=201)
 def request_exception(
     req: CreateExceptionRequest,
+    request: Request,
     who: Principal = Depends(require_capability("exception.request")),
 ) -> ApprovalOut:
     note(
@@ -1025,15 +1144,28 @@ def request_exception(
     )
     exception, approval = workflow_store.create_exception(
         policy_id=req.policy_id,
+        policy_version=req.policy_version,
         scope=req.scope,
         rationale=req.rationale,
         controls=req.compensating_controls,
         owner=req.owner,
+        owner_name=req.owner_name,
+        evidence_ids=req.evidence_ids,
         expires_at=req.expires_at,
         actor=who.subject,
         actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
     )
     return ApprovalOut(**approval)
+
+
+@app.get("/api/exceptions/{exception_id}", response_model=ExceptionOut)
+def get_exception(
+    exception_id: str,
+    _: Principal = Depends(require_capability("exception.read")),
+) -> ExceptionOut:
+    return ExceptionOut(**workflow_store.exception(exception_id))
 
 
 @app.get("/api/approvals", response_model=list[ApprovalOut])
@@ -1044,10 +1176,19 @@ def approvals(
     return [ApprovalOut(**row) for row in workflow_store.approvals(status)]
 
 
+@app.get("/api/approvals/{approval_id}", response_model=ApprovalOut)
+def get_approval(
+    approval_id: str,
+    _: Principal = Depends(require_capability("exception.approve")),
+) -> ApprovalOut:
+    return ApprovalOut(**workflow_store.approval(approval_id))
+
+
 @app.post("/api/approvals/{approval_id}/decision", response_model=ApprovalOut)
 def decide_approval(
     approval_id: str,
     req: ApprovalDecisionRequest,
+    request: Request,
     who: Principal = Depends(require_capability("exception.approve")),
 ) -> ApprovalOut:
     note(
@@ -1060,6 +1201,9 @@ def decide_approval(
         decision=req.decision,
         rationale=req.rationale,
         actor=who.subject,
+        actor_name=who.name,
+        actor_role=who.role,
+        correlation_id=_correlation(request),
     )
     return ApprovalOut(**approval)
 
