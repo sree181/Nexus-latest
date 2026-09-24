@@ -32,6 +32,11 @@ import { Structure } from "./routes/Structure";
 import { Audit } from "./routes/Audit";
 import { Devices } from "./routes/Devices";
 import { Setup } from "./routes/Setup";
+import { StartTask } from "./routes/StartTask";
+import { DeveloperSessions } from "./routes/DeveloperSessions";
+import { DeveloperSessionLayout } from "./routes/DeveloperSessionLayout";
+import { DeveloperSessionActivity } from "./routes/DeveloperSessionActivity";
+import { DeveloperSessionSecurity } from "./routes/DeveloperSessionSecurity";
 
 /** The banner sits above the rail rather than inside a screen: what it reports
  *  is true of the whole deployment, and a developer who never opens the screen
@@ -60,6 +65,48 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   component: RoleLanding,
+});
+
+const developerSessionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/developer/sessions",
+  component: () => (
+    <RequiresCapability capability="run.own">
+      <DeveloperSessions />
+    </RequiresCapability>
+  ),
+});
+
+const developerStartRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/developer/start",
+  component: () => (
+    <RequiresCapability capability="run.create">
+      <StartTask />
+    </RequiresCapability>
+  ),
+});
+
+const developerSessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/developer/sessions/$sessionId",
+  component: () => (
+    <RequiresCapability capability="run.own">
+      <DeveloperSessionLayout />
+    </RequiresCapability>
+  ),
+});
+
+const developerSessionActivityRoute = createRoute({
+  getParentRoute: () => developerSessionRoute,
+  path: "/",
+  component: DeveloperSessionActivity,
+});
+
+const developerSessionSecurityRoute = createRoute({
+  getParentRoute: () => developerSessionRoute,
+  path: "security",
+  component: DeveloperSessionSecurity,
 });
 
 const analystQueueRoute = createRoute({
@@ -229,6 +276,12 @@ const runSupplyRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  developerSessionsRoute,
+  developerStartRoute,
+  developerSessionRoute.addChildren([
+    developerSessionActivityRoute,
+    developerSessionSecurityRoute,
+  ]),
   analystQueueRoute,
   analystCaseRoute,
   analystInvestigationRoute,

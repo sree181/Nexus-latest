@@ -20,3 +20,20 @@ export function timestamp(epochSeconds: number): string {
     .replace("T", " ")
     .slice(0, 19)} UTC`;
 }
+
+export function timestampMs(epochMilliseconds: number): string {
+  return `${new Date(epochMilliseconds)
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 19)} UTC`;
+}
+
+export function relativeTimeMs(epochMilliseconds: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.floor((now - epochMilliseconds) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}

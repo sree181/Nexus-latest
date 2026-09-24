@@ -51,6 +51,114 @@ export type MemoryStatus =
   | "QUARANTINED";
 export type RunStatus = "recording" | "complete" | "failed";
 
+// -- connected coding-agent sessions ----------------------------------------
+export type DeveloperAdapter = "cursor" | "claude-code";
+export type DeveloperSessionStatus =
+  | "starting"
+  | "active"
+  | "ending"
+  | "completed"
+  | "failed";
+export type ProjectionStatus =
+  | "pending"
+  | "projecting"
+  | "projected"
+  | "refused"
+  | "failed";
+export type ActivityType =
+  | "session.started"
+  | "prompt.submitted"
+  | "tool.started"
+  | "tool.completed"
+  | "tool.failed"
+  | "file.changed"
+  | "decision.recorded"
+  | "package.requested"
+  | "package.installed"
+  | "policy.evaluated"
+  | "response.completed"
+  | "session.ended";
+
+export interface RepositoryContext {
+  id: string;
+  name: string;
+  remote: string | null;
+  branch: string | null;
+  commit: string | null;
+}
+
+export interface DeveloperSession {
+  id: string;
+  owner_subject: string;
+  owner_name: string;
+  adapter: DeveloperAdapter;
+  adapter_version: string;
+  source_session_id: string;
+  repository: RepositoryContext;
+  task: string;
+  status: DeveloperSessionStatus;
+  started_at_ms: number;
+  last_seen_at_ms: number;
+  ended_at_ms: number | null;
+  next_sequence: number;
+  last_acked_sequence: number;
+  run_id: string | null;
+  device_id: string | null;
+  verified: boolean;
+  failure_reason: string | null;
+}
+
+export interface DeveloperSessionList {
+  sessions: DeveloperSession[];
+  total: number;
+}
+
+export interface ActivityEvent {
+  event_id: string;
+  source_event_id: string;
+  session_id: string;
+  sequence: number;
+  type: ActivityType;
+  occurred_at_ms: number;
+  received_at_ms: number;
+  payload: Record<string, unknown>;
+  payload_sha256: string;
+  projection_status: ProjectionStatus;
+  projection_attempts: number;
+  projection_last_attempt_at_ms: number | null;
+  projection_next_attempt_at_ms: number | null;
+  projected_at_ms: number | null;
+  projection_error: string | null;
+  run_id: string | null;
+}
+
+export interface ActivityList {
+  events: ActivityEvent[];
+  next_after_sequence: number | null;
+}
+
+export interface PolicyEvaluation {
+  id: string;
+  session_id: string;
+  activity_event_id: string;
+  package: string;
+  version: string;
+  verdict: "allow" | "warn" | "block" | "unknown";
+  reasons: string[];
+  advisories: Array<Record<string, unknown>>;
+  worst: "critical" | "high" | "medium" | "low" | "unknown" | null;
+  unavailable: string | null;
+  policy: string;
+  evaluated_at_ms: number;
+  owner_subject: string;
+  device_id: string | null;
+}
+
+export interface PolicyEvaluationList {
+  evaluations: PolicyEvaluation[];
+  total: number;
+}
+
 export interface RunSummary {
   id: string;
   task: string;
@@ -1016,6 +1124,32 @@ export const api = {
 
   runs: () => get<RunSummary[]>("/runs"),
   createRun: (task: string) => post<RunSummary>("/runs", { task }),
+
+  developerSessions: (limit = 100) =>
+    get<DeveloperSessionList>(
+      `/v1/developer/sessions?limit=${Math.max(1, Math.min(limit, 200))}`,
+    ),
+  developerSession: (sessionId: string) =>
+    get<DeveloperSession>(
+      `/v1/developer/sessions/${encodeURIComponent(sessionId)}`,
+    ),
+  developerActivity: (
+    sessionId: string,
+    options?: { afterSequence?: number; limit?: number },
+  ) => {
+    const query = new URLSearchParams();
+    if (options?.afterSequence) {
+      query.set("after_sequence", String(options.afterSequence));
+    }
+    query.set("limit", String(Math.max(1, Math.min(options?.limit ?? 200, 500))));
+    return get<ActivityList>(
+      `/v1/developer/sessions/${encodeURIComponent(sessionId)}/events?${query.toString()}`,
+    );
+  },
+  developerPolicyEvaluations: (sessionId: string, limit = 200) =>
+    get<PolicyEvaluationList>(
+      `/v1/developer/sessions/${encodeURIComponent(sessionId)}/policy-evaluations?limit=${Math.max(1, Math.min(limit, 500))}`,
+    ),
 
   runGraph: (runId: string) => get<GraphPayload>(`/runs/${runId}/graph`),
   runWhy: (runId: string, node: string) =>

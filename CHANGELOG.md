@@ -21,6 +21,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Durable owner-scoped Developer sessions with ordered activity events, projection state, package-policy history, strict sequencing, replay conflict detection, and startup reconciliation.
 - Versioned Cursor and Claude Code session adapters with collision-safe event identities, acknowledgement-based `.inflight` queues, bounded offline replay, and synchronous policy-result capture.
 - Lifespan-managed Developer activity projection reconciliation with durable retry timestamps and capped exponential backoff.
+- Developer-first Sessions, Activity, and Security screens backed by the owner-scoped connected-agent APIs, including live status refresh, ordered event evidence, package-policy history, projection-health diagnostics, deep links to governed runs, responsive states, and capability guards.
 
 ### Changed
 

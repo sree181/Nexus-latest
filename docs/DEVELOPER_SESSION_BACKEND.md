@@ -287,13 +287,11 @@ The automated tests cover session replay identity, owner isolation, accurate pag
 
 A final live Cursor adapter validation opened real engine-backed session `ses_8424dfb14d95dcd23acda2628607c422` for the task **“Validate the production Developer session backend.”** Run `1030` completed with six ordered events: session start, package-policy evaluation, shell completion, package installation, file change, and session end. Every event reached `projected` state. The `httpx@0.27.2` policy evaluation was linked to its source activity, and the resulting HyperMesh run contained the edited `app.py` module.
 
-## 10. Remaining product work
+## 10. Developer frontend integration
 
-The backend and editor transport are ready for the first production UI integration. The next frontend increment should replace the demo task runner as the Developer landing experience with three live surfaces:
+The production web application now uses this API as the Developer landing experience. **Sessions** lists the current developer's connected Cursor and Claude Code work, status, repository, last activity, sequence progress, and HyperMesh run linkage. **Activity** renders the server-accepted event order and shows each record's projection state, retry information, timestamps, payload digest, and governed run. **Security** presents package-policy evaluations separately from package request or installation observations and highlights unavailable advisory coverage or unresolved projection failures.
 
-1. **Sessions** lists connected Cursor and Claude Code work, status, repository, last activity, policy outcomes, and projection health.
-2. **Session activity** presents the ordered event stream, clearly separating observed activity from governed HyperMesh evidence.
-3. **Security** shows policy decisions, installed packages, findings, and unresolved projection failures for the selected session.
+The legacy task runner remains available as an explicitly secondary demo route. Developer navigation now starts with Sessions, Activity, and Security; Analyst and CISO routes remain capability guarded and unchanged. Active screens use bounded polling against the owner-scoped read APIs. A future increment may replace polling with a server stream and add server-side cursors for inventories beyond the current bounded pages.
 
 For large deployments, move this SQLite ledger behind the same single-writer service boundary or migrate it to PostgreSQL before horizontal API scaling. Multi-tenant partitioning, event-bus fan-out, cross-region replication, and organization-wide retention policy are not claimed by this single-tenant v1 implementation.
 

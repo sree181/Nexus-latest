@@ -3,10 +3,9 @@ import { useNavigate } from "@tanstack/react-router";
 
 import type { Me, Role } from "../lib/api";
 import { useIdentity } from "../lib/useIdentity";
-import { StartTask } from "./StartTask";
 
-export const roleDestination: Record<Role, "/" | "/analyst/queue" | "/ciso/overview"> = {
-  developer: "/",
+export const roleDestination: Record<Role, "/developer/sessions" | "/analyst/queue" | "/ciso/overview"> = {
+  developer: "/developer/sessions",
   analyst: "/analyst/queue",
   ciso: "/ciso/overview",
 };
@@ -24,8 +23,6 @@ export function RoleLanding() {
   useEffect(() => {
     if (destination) void navigate({ to: destination, replace: true });
   }, [destination, navigate]);
-
-  if (identity.me && destination === "/") return <StartTask />;
 
   if (identity.loading || destination) {
     return (

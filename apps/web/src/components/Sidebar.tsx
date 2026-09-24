@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { api, latestRun } from "../lib/api";
+import { api } from "../lib/api";
 import { useIdentity, type Me } from "../lib/useIdentity";
 import {
   oidcEnabled,
@@ -104,6 +104,8 @@ const icons = {
   fleet: "M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v6H4zM13 14h7v6h-7z",
   devices: "M4 5h16v10H4zM9 19h6M12 15v4",
   setup: "M8 6l-5 6 5 6M16 6l5 6-5 6",
+  sessions: "M4 5h16v5H4zM4 14h16v5H4zM7 7.5h.01M7 16.5h.01",
+  activity: "M3 12h4l2-6 4 12 2-6h6",
   queue: "M5 7h14M5 12h14M5 17h9",
   cases: "M5 5h14v15H5zM9 5V3h6v2",
   policy: "M6 3h9l3 3v15H6zM9 11h6M9 15h6",
@@ -113,84 +115,81 @@ const icons = {
 };
 
 function DeveloperNav({
+  sessionId,
   runId,
-  noRun,
-  runsFailed,
+  noSession,
+  sessionsFailed,
 }: {
+  sessionId: string | undefined;
   runId: string | undefined;
-  noRun: string;
-  runsFailed: boolean;
+  noSession: string;
+  sessionsFailed: boolean;
 }) {
-  const params = runId ? { runId } : undefined;
+  const sessionParams = sessionId ? { sessionId } : undefined;
+  const runParams = runId ? { runId } : undefined;
   return (
     <>
       <Group label="WORKSPACE">
-        <NavLink to="/" exact icon={<Icon d={icons.start} />}>
-          Start a task
+        <NavLink to="/developer/sessions" exact icon={<Icon d={icons.sessions} />}>
+          Sessions
+        </NavLink>
+        <NavLink to="/setup" icon={<Icon d={icons.setup} />}>
+          Connect editor
+        </NavLink>
+        <NavLink to="/developer/start" icon={<Icon d={icons.start} />}>
+          Demo task runner
         </NavLink>
       </Group>
-      <Group label={runId ? `RUN ${runId}` : "RUN"}>
-        {params ? (
+      <Group label={sessionId ? "CURRENT SESSION" : "SESSION"}>
+        {sessionParams ? (
           <>
             <NavLink
-              to="/runs/$runId"
-              params={params}
+              to="/developer/sessions/$sessionId"
+              params={sessionParams}
               exact
-              icon={<Icon d={icons.working} />}
+              icon={<Icon d={icons.activity} />}
             >
-              Working
+              Activity
             </NavLink>
             <NavLink
-              to="/runs/$runId/memory"
-              params={params}
-              icon={<Icon d={icons.provenance} />}
-            >
-              Provenance
-            </NavLink>
-            <NavLink
-              to="/runs/$runId/security"
-              params={params}
+              to="/developer/sessions/$sessionId/security"
+              params={sessionParams}
               icon={<Icon d={icons.security} />}
             >
               Security
             </NavLink>
-            <NavLink
-              to="/runs/$runId/supply"
-              params={params}
-              icon={<Icon d={icons.supply} />}
-            >
-              Supply chain
-            </NavLink>
           </>
         ) : (
           <>
-            <Unavailable icon={<Icon d={icons.working} />} why={noRun}>
-              Working
+            <Unavailable icon={<Icon d={icons.activity} />} why={noSession}>
+              Activity
             </Unavailable>
-            <Unavailable icon={<Icon d={icons.provenance} />} why={noRun}>
-              Provenance
-            </Unavailable>
-            <Unavailable icon={<Icon d={icons.security} />} why={noRun}>
+            <Unavailable icon={<Icon d={icons.security} />} why={noSession}>
               Security
-            </Unavailable>
-            <Unavailable icon={<Icon d={icons.supply} />} why={noRun}>
-              Supply chain
             </Unavailable>
           </>
         )}
-        {runsFailed ? (
+        {sessionsFailed ? (
           <p
             role="status"
             className="mx-3 mt-2 text-[11px] leading-snug text-rail-ink-faint"
           >
-            Run navigation is unavailable.
+            Session navigation is unavailable.
           </p>
         ) : null}
       </Group>
-      <Group label="THIS MACHINE">
-        <NavLink to="/setup" icon={<Icon d={icons.setup} />}>
-          Connect your editor
-        </NavLink>
+      <Group label="GOVERNED EVIDENCE">
+        {runParams ? (
+          <NavLink to="/runs/$runId/memory" params={runParams} icon={<Icon d={icons.provenance} />}>
+            HyperMesh memory
+          </NavLink>
+        ) : (
+          <Unavailable icon={<Icon d={icons.provenance} />} why="The latest session has not projected a run yet">
+            HyperMesh memory
+          </Unavailable>
+        )}
+      </Group>
+      <Group label="ACCOUNT">
         <NavLink to="/devices" icon={<Icon d={icons.devices} />}>
           Devices
         </NavLink>
@@ -267,20 +266,21 @@ function CisoNav() {
 
 export function Sidebar() {
   const { me, developer } = useIdentity();
-  const runs = useQuery({
-    queryKey: ["runs"],
-    queryFn: api.runs,
+  const sessions = useQuery({
+    queryKey: ["developer-sessions"],
+    queryFn: () => api.developerSessions(200),
     enabled: developer,
+    refetchInterval: developer ? 5_000 : false,
   });
-  const runId = latestRun(runs.data);
-  const noRun = runs.isPending
-    ? "Loading runs…"
-    : runs.isError
-      ? "Could not load runs"
-      : "No run has memory yet";
+  const latestSession = sessions.data?.sessions[0];
+  const noSession = sessions.isPending
+    ? "Loading sessions…"
+    : sessions.isError
+      ? "Could not load sessions"
+      : "No connected session yet";
 
   return (
-    <aside className="flex max-h-[46vh] w-full shrink-0 flex-col overflow-auto bg-rail px-3.5 py-3 md:h-full md:max-h-none md:w-[252px] md:py-5">
+    <aside className="flex max-h-[34vh] w-full shrink-0 flex-col overflow-auto bg-rail px-3.5 py-3 md:h-full md:max-h-none md:w-[252px] md:py-5">
       <Link
         to="/"
         className="flex items-center gap-3 rounded-lg px-2.5 pb-4 pt-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-bright"
@@ -309,7 +309,12 @@ export function Sidebar() {
       </Link>
       <nav aria-label="Main" className="flex flex-col md:min-w-[224px]">
         {me?.role === "developer" ? (
-          <DeveloperNav runId={runId} noRun={noRun} runsFailed={runs.isError} />
+          <DeveloperNav
+            sessionId={latestSession?.id}
+            runId={latestSession?.run_id ?? undefined}
+            noSession={noSession}
+            sessionsFailed={sessions.isError}
+          />
         ) : null}
         {me?.role === "analyst" ? <AnalystNav /> : null}
         {me?.role === "ciso" ? <CisoNav /> : null}
