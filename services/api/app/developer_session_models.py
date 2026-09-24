@@ -262,6 +262,8 @@ class ActivityEventOut(BaseModel):
     payload_sha256: str
     projection_status: ProjectionStatus
     projection_attempts: int
+    projection_last_attempt_at_ms: int | None = None
+    projection_next_attempt_at_ms: int | None = None
     projected_at_ms: int | None = None
     projection_error: str | None = None
     run_id: str | None = None

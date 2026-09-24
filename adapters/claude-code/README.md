@@ -126,6 +126,8 @@ until the API acknowledges them, including across a hook-process crash. The
 oldest undelivered causal prefix is retained, including the session opener. If
 the queue is full, a new observation is not retained until the backlog advances;
 the unused sequence reservation is rolled back so replay remains contiguous.
+`meshagent status` and `meshagent doctor` expose the backpressure count so a
+recording omission is never silent.
 Inspect or replay it without printing secrets:
 
 ```bash

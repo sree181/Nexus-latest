@@ -156,8 +156,11 @@ def _queue_item(
                 state["opening_request"] = body
             reserved["opening_request"] = dict(body)
         else:
+            # Read the next sequence here, but do not advance it until the
+            # complete normalized item is durably present in the queue. If the
+            # process dies between those writes, queue replay remains the
+            # source of truth and the server acknowledgement repairs state.
             reserved["first_sequence"] = int(state["next_sequence"])
-            state["next_sequence"] = int(state["next_sequence"]) + len(events)
         return state
 
     state = local_state.update_session(
@@ -273,6 +276,9 @@ def send(
                 or state.get("last_server_sequence", 0)
             )
             state["last_server_sequence"] = acknowledged
+            state["next_sequence"] = max(
+                int(state.get("next_sequence", 2)), acknowledged + 1,
+            )
             if acknowledged >= 1 and isinstance(state.get("opening_request"), dict):
                 state["opened"] = True
                 state["opening_acknowledged"] = True
@@ -317,16 +323,9 @@ def send(
             item, repository=repository, editor=agent, session_id=native_session,
         )
         if not retained:
-            first = (
-                int(item["body"]["events"][0]["sequence"])
-                if item["kind"] == "events" else None
-            )
             count = len(item["body"].get("events") or [item["body"]])
 
             def release(state: dict) -> dict:
-                if first is not None:
-                    if int(state.get("next_sequence", first + count)) == first + count:
-                        state["next_sequence"] = first
                 state["queue_rejected_events"] = int(
                     state.get("queue_rejected_events", 0)
                 ) + count
@@ -341,6 +340,26 @@ def send(
                 native_session, release, repository=repository, editor=agent,
             )
             return None
+        if item["kind"] == "events":
+            first = int(item["body"]["events"][0]["sequence"])
+            count = len(item["body"]["events"])
+
+            def reserve(state: dict) -> dict:
+                state["next_sequence"] = max(
+                    int(state.get("next_sequence", first)), first + count,
+                )
+                return state
+
+            local_state.update_session(
+                native_session, reserve, repository=repository, editor=agent,
+            )
+        else:
+            local_state.update_session(
+                native_session,
+                lambda state: {**state, "opening_enqueued": True},
+                repository=repository,
+                editor=agent,
+            )
         if not available:
             return None
         delivered, current = deliver()

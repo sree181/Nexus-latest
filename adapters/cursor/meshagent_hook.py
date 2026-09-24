@@ -429,10 +429,12 @@ def main() -> int:
 
     receipt = send(session_id, events, cwd)
     state = read_session(session_id, cwd)
-    if any(e["type"] == "session" and not e.get("ends") for e in events):
+    if (
+        state.get("opening_enqueued")
+        and any(e["type"] == "session" and not e.get("ends") for e in events)
+    ):
         state["opened"] = True
-        state["task"] = next(e["task"] for e in events
-                             if e["type"] == "session")
+        state["task"] = (state.get("opening_request") or {}).get("task", "")
     if receipt:
         state["run_id"] = receipt.get("run_id")
         state["last_ok"] = int(time.time())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import sqlite3
 import time
 
 import pytest
@@ -215,12 +216,248 @@ def test_activity_batch_rejects_more_than_two_mebibytes():
         ActivityBatchRequest.model_validate({"events": events})
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["/home/maya/secret.py", "../secret.py", "src/../secret.py",
+     "C:/Users/Maya/secret.py", r"src\secret.py", "src//secret.py"],
+)
+def test_file_activity_requires_canonical_repository_relative_path(path):
+    event = {
+        "event_id": "evt_pathvalidation000001",
+        "source_event_id": "source-path",
+        "sequence": 2,
+        "occurred_at_ms": int(time.time() * 1000),
+        "type": "file.changed",
+        "payload": {"path": path, "operation": "update", "code": "x = 1\n"},
+    }
+    with pytest.raises(ValidationError, match="repository-relative POSIX path"):
+        ActivityBatchRequest.model_validate({"events": [event]})
+
+
+def test_session_list_total_is_not_truncated_by_limit(store):
+    for index in range(3):
+        body = start_body(f"ses_totalcount{index:016d}")
+        body["source_session_id"] = f"source-total-{index}"
+        body["source_event_id"] = f"source-total-start-{index}"
+        store.create(SessionStartRequest.model_validate(body), MAYA)
+    result = store.list(MAYA, limit=1)
+    assert len(result.sessions) == 1
+    assert result.total == 3
+
+
+def test_engine_run_correlation_uses_opaque_session_id_across_repositories(
+    store, tmp_path, monkeypatch,
+):
+    monkeypatch.setenv("MESHAGENT_DB_DIR", str(tmp_path / "engine-correlation"))
+    gateway = engine_gateway.EngineGateway()
+    run_ids: list[str] = []
+    for index in range(2):
+        body = start_body(f"ses_correlation{index:016d}")
+        body["repository"] = {
+            "id": f"repo-correlation-{index}",
+            "name": f"repository-{index}",
+        }
+        session, _ = store.create(SessionStartRequest.model_validate(body), MAYA)
+        main.session_projection.project_pending(store, gateway, session, MAYA)
+        projected = store.get(session.id, MAYA)
+        assert projected.run_id is not None
+        run_ids.append(projected.run_id)
+    assert len(set(run_ids)) == 2
+
+
+def test_projection_retry_migration_preserves_existing_run_correlation(tmp_path):
+    base = tmp_path / "legacy-ledger"
+    base.mkdir()
+    database = base / developer_sessions.DATABASE
+    with sqlite3.connect(database) as conn:
+        conn.executescript(
+            (developer_sessions.MIGRATIONS / "001_developer_sessions.sql").read_text()
+        )
+        conn.execute(
+            "INSERT INTO schema_migrations(version, applied_at_ms) VALUES (1, 1)"
+        )
+        conn.execute(
+            """INSERT INTO developer_sessions (
+                id, owner_subject, owner_name, adapter, adapter_version,
+                source_session_id, repository_id, repository_name, task, status,
+                started_at_ms, last_seen_at_ms, next_sequence,
+                last_acked_sequence, run_id, verified, created_at_ms, updated_at_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "ses_legacyupgrade000001", MAYA.subject, MAYA.name, "cursor", "1",
+                "legacy-native-session", "repo-legacy", "legacy", "upgrade",
+                "active", 1, 1, 2, 1, "legacy-run", 1, 1, 1,
+            ),
+        )
+        conn.execute(
+            """INSERT INTO developer_sessions (
+                id, owner_subject, owner_name, adapter, adapter_version,
+                source_session_id, repository_id, repository_name, task, status,
+                started_at_ms, last_seen_at_ms, next_sequence,
+                last_acked_sequence, verified, created_at_ms, updated_at_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "ses_legacyattempt000001", MAYA.subject, MAYA.name, "cursor", "1",
+                "legacy-attempt-session", "repo-legacy-attempt", "legacy-attempt",
+                "upgrade attempt", "starting", 1, 1, 2, 1, 1, 1, 1,
+            ),
+        )
+        conn.execute(
+            """INSERT INTO activity_events (
+                event_id, source_event_id, session_id, sequence, event_type,
+                occurred_at_ms, received_at_ms, payload_json, payload_sha256,
+                projection_status, projection_attempts, created_at_ms
+            ) VALUES (?, ?, ?, 1, 'session.started', 1, 1, '{}', 'legacy-sha',
+                      'failed', 1, 1)""",
+            (
+                "evt_legacyattempt000001", "legacy-attempt-start",
+                "ses_legacyattempt000001",
+            ),
+        )
+
+    migrated = developer_sessions.Store(str(base))
+    assert migrated.projection_session_key("ses_legacyupgrade000001") == (
+        "legacy-native-session"
+    )
+    assert migrated.projection_session_key("ses_legacyattempt000001") == (
+        "legacy-attempt-session"
+    )
+    with sqlite3.connect(database) as conn:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(activity_events)")
+        }
+    assert "projection_last_attempt_at_ms" in columns
+    assert "projection_next_attempt_at_ms" in columns
+
+
+def test_lifespan_retries_transient_projection_without_another_editor_event(
+    tmp_path, monkeypatch,
+):
+    ledger = developer_sessions.Store(str(tmp_path / "retry-ledger"))
+    monkeypatch.setenv("MESHAGENT_DB_DIR", str(tmp_path / "retry-engine"))
+    monkeypatch.setenv("MESHAGENT_PROJECTION_RETRY_SECONDS", "0.05")
+    monkeypatch.setenv("MESHAGENT_PROJECTION_RETRY_BASE_SECONDS", "0.05")
+    gateway = engine_gateway.EngineGateway()
+    original = gateway.record_events
+    attempts = 0
+
+    def transient(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("temporary engine outage")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(gateway, "record_events", transient)
+    monkeypatch.setattr(main, "developer_session_store", ledger)
+    monkeypatch.setattr(main, "gateway", gateway)
+
+    with TestClient(main.app) as http:
+        opened = http.post(
+            "/api/v1/developer/sessions",
+            json=start_body("ses_retryworker00000001"), headers=HEADERS,
+        )
+        assert opened.status_code == 201, opened.text
+        assert opened.json()["run_id"] is None
+
+        deadline = time.monotonic() + 3
+        event = None
+        while time.monotonic() < deadline:
+            history = http.get(
+                "/api/v1/developer/sessions/ses_retryworker00000001/events",
+                headers=HEADERS,
+            )
+            event = history.json()["events"][0]
+            if event["projection_status"] == "projected":
+                break
+            time.sleep(0.05)
+
+        assert event is not None
+        assert event["projection_status"] == "projected"
+        assert event["projection_attempts"] == 2
+        assert event["projection_last_attempt_at_ms"] is not None
+        assert event["projection_next_attempt_at_ms"] is None
+        session = http.get(
+            "/api/v1/developer/sessions/ses_retryworker00000001",
+            headers=HEADERS,
+        ).json()
+        assert session["run_id"] is not None
+        assert attempts == 2
+
+
+def test_lifespan_retries_terminal_projection_to_completed_run(
+    tmp_path, monkeypatch,
+):
+    ledger = developer_sessions.Store(str(tmp_path / "terminal-retry-ledger"))
+    monkeypatch.setenv("MESHAGENT_DB_DIR", str(tmp_path / "terminal-retry-engine"))
+    monkeypatch.setenv("MESHAGENT_PROJECTION_RETRY_SECONDS", "0.05")
+    monkeypatch.setenv("MESHAGENT_PROJECTION_RETRY_BASE_SECONDS", "0.05")
+    gateway = engine_gateway.EngineGateway()
+    original = gateway.record_events
+    terminal_attempts = 0
+
+    def transient_terminal(batch, *args, **kwargs):
+        nonlocal terminal_attempts
+        event = batch.events[0]
+        if event.type == "session" and event.ends:
+            terminal_attempts += 1
+            if terminal_attempts == 1:
+                raise RuntimeError("temporary terminal projection outage")
+        return original(batch, *args, **kwargs)
+
+    monkeypatch.setattr(gateway, "record_events", transient_terminal)
+    monkeypatch.setattr(main, "developer_session_store", ledger)
+    monkeypatch.setattr(main, "gateway", gateway)
+
+    session_id = "ses_terminalretry000001"
+    with TestClient(main.app) as http:
+        opened = http.post(
+            "/api/v1/developer/sessions",
+            json=start_body(session_id), headers=HEADERS,
+        )
+        assert opened.status_code == 201, opened.text
+        run_id = opened.json()["run_id"]
+        assert run_id is not None
+
+        recorded = http.post(
+            f"/api/v1/developer/sessions/{session_id}/events",
+            json=activity_batch(include_end=True), headers=HEADERS,
+        )
+        assert recorded.status_code == 200, recorded.text
+        assert recorded.json()["session"]["status"] == "ending"
+
+        deadline = time.monotonic() + 3
+        session = recorded.json()["session"]
+        while time.monotonic() < deadline:
+            session = http.get(
+                f"/api/v1/developer/sessions/{session_id}", headers=HEADERS,
+            ).json()
+            if session["status"] == "completed":
+                break
+            time.sleep(0.05)
+
+        assert session["status"] == "completed"
+        history = http.get(
+            f"/api/v1/developer/sessions/{session_id}/events", headers=HEADERS,
+        ).json()["events"]
+        terminal = history[-1]
+        assert terminal["type"] == "session.ended"
+        assert terminal["projection_status"] == "projected"
+        assert terminal["projection_attempts"] == 2
+        assert terminal["projection_next_attempt_at_ms"] is None
+        run = http.get(f"/api/runs/{run_id}", headers=HEADERS)
+        assert run.status_code == 200
+        assert run.json()["status"] == "complete"
+        assert terminal_attempts == 2
+
+
 def test_api_projects_ordered_activity_and_exposes_policy_history(client):
     http, _ = client
     opened = http.post("/api/v1/developer/sessions", json=start_body(), headers=HEADERS)
     assert opened.status_code == 201, opened.text
     session_id = opened.json()["id"]
-    assert opened.json()["run_id"]
+    run_id = opened.json()["run_id"]
+    assert run_id
 
     batch = activity_batch(include_end=True)
     recorded = http.post(
@@ -257,6 +494,10 @@ def test_api_projects_ordered_activity_and_exposes_policy_history(client):
     assert policies.status_code == 200
     assert policies.json()["total"] == 1
 
+    run = http.get(f"/api/runs/{run_id}", headers=HEADERS)
+    assert run.status_code == 200
+    assert run.json()["id"] == run_id
+
     hidden = http.get(
         f"/api/v1/developer/sessions/{session_id}",
         headers={
@@ -265,6 +506,14 @@ def test_api_projects_ordered_activity_and_exposes_policy_history(client):
         },
     )
     assert hidden.status_code == 404
+    hidden_run = http.get(
+        f"/api/runs/{run_id}",
+        headers={
+            "X-MeshAgent-User": OTHER.subject,
+            "X-MeshAgent-Role": "developer",
+        },
+    )
+    assert hidden_run.status_code == 404
 
 
 def test_api_returns_expected_sequence_on_a_gap(client):

@@ -100,8 +100,9 @@ or ambiguous network response from deleting an unacknowledged record. The
 oldest undelivered causal prefix is retained, including the session opener. If
 the configured queue limit is full, new observations are not retained until the
 backlog can advance; unused sequence reservations are rolled back so recovery
-cannot create a permanent server gap. Operators can inspect and force replay without exposing
-credentials:
+cannot create a permanent server gap. `meshagent status` and `meshagent doctor`
+report the resulting backpressure counter so the omission is not silent.
+Operators can inspect and force replay without exposing credentials:
 
 ```bash
 meshagent status

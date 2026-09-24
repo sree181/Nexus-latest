@@ -17,9 +17,9 @@ A production session follows this sequence:
 1. The first editor prompt opens a MeshAgent Developer session. The adapter creates one opaque `ses_...` identifier and persists it locally.
 2. The API authenticates the developer or paired device. It binds the session to that identity, adapter, source conversation, and repository identifier.
 3. Each editor hook reserves the next monotonically increasing sequence number before attempting the network call.
-4. The adapter appends the outbound record to a private local queue. It sends the oldest unacknowledged record first.
+4. The adapter appends the outbound record to a private local queue. It sends the oldest unacknowledged record first. If the queue is full, it preserves the complete accepted prefix, rejects the new observation locally, rolls back its sequence reservation, and exposes the backpressure through `meshagent status` and `meshagent doctor`.
 5. The API commits the batch to SQLite in one transaction. Unique constraints make exact retries safe and reject divergent reuse.
-6. The API projects committed events into HyperMesh in sequence. Projection state is visible independently from delivery state.
+6. The API projects committed events into HyperMesh in sequence. Projection state is visible independently from delivery state, and a lifespan worker retries transient failures with capped exponential backoff.
 7. A package pre-tool hook calls the synchronous package gate. The resulting `allow`, `warn`, `block`, or `unknown` decision is immediately recorded as a `policy.evaluated` activity event.
 8. A session-end hook records the terminal event. The API refuses new late events, but exact retries remain idempotent.
 
@@ -41,7 +41,7 @@ All session reads are owner scoped. Looking up another developer's session retur
 
 ## 4. Exact database schema
 
-The schema below is the applied migration, not a conceptual model.[6]
+The schema below is the effective schema after migrations `001` and `002`, not a conceptual model.[6] [8]
 
 ```sql
 PRAGMA foreign_keys = ON;
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS developer_sessions (
     adapter TEXT NOT NULL CHECK (adapter IN ('cursor', 'claude-code')),
     adapter_version TEXT NOT NULL,
     source_session_id TEXT NOT NULL,
+    projection_session_key TEXT,
     repository_id TEXT NOT NULL,
     repository_name TEXT NOT NULL,
     repository_remote TEXT,
@@ -86,6 +87,8 @@ CREATE INDEX IF NOT EXISTS ix_developer_sessions_repository
     ON developer_sessions(repository_id, updated_at_ms DESC);
 CREATE INDEX IF NOT EXISTS ix_developer_sessions_status
     ON developer_sessions(status, updated_at_ms DESC);
+CREATE INDEX IF NOT EXISTS ix_developer_sessions_projection_key
+    ON developer_sessions(owner_subject, projection_session_key);
 
 CREATE TABLE IF NOT EXISTS activity_events (
     event_id TEXT PRIMARY KEY,
@@ -105,6 +108,8 @@ CREATE TABLE IF NOT EXISTS activity_events (
         'pending', 'projecting', 'projected', 'refused', 'failed'
     )),
     projection_attempts INTEGER NOT NULL DEFAULT 0,
+    projection_last_attempt_at_ms INTEGER,
+    projection_next_attempt_at_ms INTEGER,
     projected_at_ms INTEGER,
     projection_error TEXT,
     run_id TEXT,
@@ -117,6 +122,8 @@ CREATE INDEX IF NOT EXISTS ix_activity_events_session_sequence
     ON activity_events(session_id, sequence);
 CREATE INDEX IF NOT EXISTS ix_activity_events_projection
     ON activity_events(projection_status, received_at_ms);
+CREATE INDEX IF NOT EXISTS ix_activity_events_projection_retry
+    ON activity_events(projection_status, projection_next_attempt_at_ms, received_at_ms);
 CREATE INDEX IF NOT EXISTS ix_activity_events_type
     ON activity_events(event_type, received_at_ms DESC);
 
@@ -148,7 +155,9 @@ CREATE INDEX IF NOT EXISTS ix_policy_evaluations_verdict_time
 
 `developer_sessions` is the current session summary and ownership boundary. `activity_events` is the ordered, replay-safe operational ledger. `policy_evaluations` is a query-optimized projection of policy events; its foreign key ensures every policy decision still has an exact activity-event source.
 
-The `activity_events` row is committed before HyperMesh projection. Delivery and projection therefore have separate states. An event can be safely received even if the engine is temporarily unavailable. A later adapter replay or API startup reconciliation retries pending and interrupted projections.[1] [2]
+The `activity_events` row is committed before HyperMesh projection. Delivery and projection therefore have separate states. An event can be safely received even if the engine is temporarily unavailable. The API retries failed work automatically with capped exponential backoff and resets interrupted `projecting` work on startup.[1] [2]
+
+New sessions use their opaque ledger ID as `projection_session_key`, so native editor identifiers cannot merge runs across repositories or adapters. Migration `002` preserves the legacy source-session key only for an existing row already bound to a HyperMesh run; this prevents an upgrade from splitting previously recorded evidence.[8]
 
 ## 5. Exact wire models
 
@@ -235,7 +244,7 @@ The accepted activity discriminators and payloads are:
 }
 ```
 
-The complete Pydantic request and response classes are defined in `developer_session_models.py`. Unknown fields are rejected on write models, activity payload size is bounded, and event batches are limited to 100 events and 2 MiB of encoded event data.[5]
+The complete Pydantic request and response classes are defined in `developer_session_models.py`. Unknown fields are rejected on write models, file changes require canonical repository-relative POSIX paths, activity payload size is bounded, and event batches are limited to 100 events and 2 MiB of encoded event data. Activity responses expose projection attempts plus last- and next-attempt timestamps for operational diagnosis.[5]
 
 ## 6. Ordering and replay rules
 
@@ -243,13 +252,13 @@ The complete Pydantic request and response classes are defined in `developer_ses
 
 **The client reserves before sending.** The adapter stores its next sequence and outbound queue under `~/.meshagent`. A process lock serializes hooks for one session.
 
-**Exact replay is safe.** The server accepts the same `event_id`, sequence, event type, and payload hash as a duplicate. It rejects the same identity with different content.
+**Exact replay is safe.** The server accepts only the same `event_id`, `source_event_id`, sequence, occurrence time, event type, and payload hash as a duplicate. It rejects reuse of either identity with different immutable content.
 
 **Repeated observations remain distinct.** A new editor occurrence gets a random `evt_...` identifier even when its payload is textually identical to an earlier save. Retries reuse the queued event identifier.
 
 **Acknowledgement follows commit.** The adapter removes a queue record only after it receives a valid server response. It uses a recoverable `.inflight` file while sending. A process crash leaves the claimed records available for the next hook invocation.[3]
 
-**Bounded storage never creates a server sequence gap.** The queue retains the oldest undelivered causal prefix, including the session opener, rather than newer activity that the server cannot yet accept. When the configured count or byte limit is full, a new observation is not retained until earlier records can be delivered; the hook remains non-blocking and rolls back that unused sequence reservation. The next successful callback resumes at the next contiguous sequence.
+**Bounded storage never creates a server sequence gap.** Queue limits are admission control, not permission to truncate accepted records. The adapter preserves the complete oldest undelivered prefix, including the immutable session opener. When the count or byte limit is full, a new observation is not retained; the hook remains non-blocking, rolls back the unused sequence reservation, and records an operator-visible backpressure counter. The next successful callback resumes at the next contiguous sequence.
 
 **Terminal sessions reject new events but accept exact retries.** This closes a common ambiguity when the session-end response is lost after the server commits it.
 
@@ -268,15 +277,15 @@ Keeping both events avoids claiming that an allowed package was installed, or th
 
 A paired adapter uses a recording-only device token. That credential may open sessions, append activity, and call the package gate. It cannot read other sessions, inspect the fleet, make CISO decisions, or delete governed memory. In local development only, `MESHAGENT_USER` may assert an unverified identity; the server records `verified=false` rather than presenting it as proven identity.[1] [3]
 
-A repository must opt in through `.meshagent.json`. File patterns are enforced before content enters the local queue. Absolute workstation paths are not sent as repository identifiers. Operators should still treat transmitted source, tool commands, task prompts, and package names as sensitive customer data and set retention accordingly.
+A repository must opt in through `.meshagent.json`. File patterns are enforced before content enters the local queue. The API independently rejects absolute, traversal, drive-qualified, backslash, and non-canonical file paths before persistence. Absolute workstation paths are not sent as repository identifiers. Operators should still treat transmitted source, tool commands, task prompts, and package names as sensitive customer data and set retention accordingly.
 
 SQLite uses write serialization, WAL journaling, foreign keys, a 30-second busy timeout, and `synchronous=FULL`. Production deployments must keep `developer-sessions.sqlite3` in the same protected and backed-up `MESHAGENT_DB_DIR` as the run registry, control plane, audit log, and HyperMesh stores.[1] [6]
 
 ## 9. Implemented validation
 
-The automated tests cover session replay, owner isolation, sequence gaps, divergent replay, terminal replay, terminal late-write rejection, aggregate batch limits, policy history, real-engine projection, identical repeated file saves, offline ordering, bounded queue retention, and recovery of a process-crash `.inflight` queue.[7]
+The automated tests cover session replay identity, owner isolation, accurate pagination totals, sequence gaps, terminal replay, terminal late-write rejection, aggregate batch limits, repository-relative file paths, policy history, collision-safe run correlation, automatic transient projection recovery, migration compatibility, identical repeated file saves, contiguous queue backpressure recovery, immutable opener reuse, and recovery of a process-crash `.inflight` queue.[7]
 
-A final live Cursor adapter validation opened real engine-backed session `ses_de3d5ac125b402ee1ae743af51e1e8cc` for the task **“Validate the production Developer session backend.”** Run `e69a` completed with six ordered events: session start, package-policy evaluation, shell completion, package installation, file change, and session end. Every event reached `projected` state. The `httpx@0.27.2` policy evaluation was linked to its source activity, and the resulting HyperMesh run contained the edited `app.py` module.
+A final live Cursor adapter validation opened real engine-backed session `ses_8424dfb14d95dcd23acda2628607c422` for the task **“Validate the production Developer session backend.”** Run `1030` completed with six ordered events: session start, package-policy evaluation, shell completion, package installation, file change, and session end. Every event reached `projected` state. The `httpx@0.27.2` policy evaluation was linked to its source activity, and the resulting HyperMesh run contained the edited `app.py` module.
 
 ## 10. Remaining product work
 
@@ -297,3 +306,4 @@ For large deployments, move this SQLite ledger behind the same single-writer ser
 [5]: ../services/api/app/developer_session_models.py "Developer session API wire models"
 [6]: ../services/api/app/migrations/001_developer_sessions.sql "Developer session SQLite migration"
 [7]: ../services/api/tests/test_developer_sessions.py "Developer session integration tests"
+[8]: ../services/api/app/migrations/002_projection_retry.sql "Projection retry and correlation upgrade migration"

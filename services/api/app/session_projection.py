@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from .auth import Principal
 from .developer_session_models import ActivityEventOut, DeveloperSessionOut
 from .developer_sessions import Store
 from .gateway import Gateway
 from .models import RecorderBatch, RecorderReceipt
+
+logger = logging.getLogger(__name__)
 
 
 def _legacy_event(event: ActivityEventOut, session: DeveloperSessionOut) -> dict | None:
@@ -70,6 +74,7 @@ def project_pending(
     projected = 0
     refused: list[str] = []
     run_id = session.run_id
+    projection_session = store.projection_session_key(session.id)
     with store.projecting():
         while True:
             pending = store.projectable(session.id)
@@ -86,24 +91,33 @@ def project_pending(
                     receipt: RecorderReceipt = gateway.record_events(
                         RecorderBatch(
                             agent=session.adapter,
-                            # The ledger ID is globally unique for this
-                            # deployment. Native editor IDs are only unique in
-                            # their adapter/repository namespace and therefore
-                            # cannot safely identify a governed engine run.
-                            session=session.id,
+                            # New sessions use the globally unique ledger ID.
+                            # Migrated rows already bound to a run retain their
+                            # legacy key so an upgrade cannot split that run.
+                            session=projection_session,
                             events=[legacy],
                         ),
                         owner=who.subject,
                         owner_name=who.name,
                         attributed=who.verified,
                     )
+                    store.bind_run(session.id, receipt.run_id)
+                    refusal = "; ".join(receipt.refused) if receipt.refused else None
+                    store.mark_projected(
+                        event.event_id, run_id=receipt.run_id, refused=refusal,
+                    )
                 except Exception as exc:
                     store.mark_projection_failed(event.event_id, str(exc))
+                    logger.warning(
+                        "developer session event projection failed",
+                        exc_info=True,
+                        extra={
+                            "developer_session_id": session.id,
+                            "developer_event_id": event.event_id,
+                        },
+                    )
                     return projected, refused, run_id
                 run_id = receipt.run_id
-                store.bind_run(session.id, run_id)
-                refusal = "; ".join(receipt.refused) if receipt.refused else None
-                store.mark_projected(event.event_id, run_id=run_id, refused=refusal)
                 projected += 1
                 refused.extend(receipt.refused)
     return projected, refused, run_id

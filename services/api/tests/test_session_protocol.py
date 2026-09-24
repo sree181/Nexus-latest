@@ -247,6 +247,57 @@ def test_full_offline_queue_resumes_without_a_sequence_gap(repo, monkeypatch):
     assert state.diagnostic()["queue_rejected_events"] == 1
 
 
+def test_queue_write_before_sequence_state_crash_recovers_without_reuse(
+    repo, monkeypatch,
+):
+    assert protocol.send(
+        agent="cursor", native_session="native-reservation-crash",
+        events=[{"type": "session", "task": "survive state crash"}],
+        repository=repo, headers={}, timeout=0.1,
+        post_fn=lambda item: reply(item),
+    ) is not None
+
+    original_update = state.update_session
+    updates = 0
+
+    def fail_after_queue(*args, **kwargs):
+        nonlocal updates
+        updates += 1
+        if updates == 2:
+            raise OSError("state write failed after queue admission")
+        return original_update(*args, **kwargs)
+
+    monkeypatch.setattr(state, "update_session", fail_after_queue)
+    with pytest.raises(OSError, match="after queue admission"):
+        protocol.send(
+            agent="cursor", native_session="native-reservation-crash",
+            events=[{"type": "code", "module": "queued.py", "code": "x = 1\n"}],
+            repository=repo, headers={}, timeout=0.1,
+            post_fn=lambda item: reply(item),
+        )
+
+    persisted = state.read_session(
+        "native-reservation-crash", repository=repo, editor="cursor",
+    )
+    assert persisted["next_sequence"] == 2
+    monkeypatch.setattr(state, "update_session", original_update)
+
+    posted: list[dict] = []
+    result = protocol.send(
+        agent="cursor", native_session="native-reservation-crash",
+        events=[{"type": "code", "module": "next.py", "code": "x = 2\n"}],
+        repository=repo, headers={}, timeout=0.1,
+        post_fn=lambda item: posted.append(item) or reply(item),
+    )
+
+    assert result is not None
+    event_items = [item for item in posted if item["kind"] == "events"]
+    assert [item["body"]["events"][0]["sequence"] for item in event_items] == [2, 3]
+    assert [item["body"]["events"][0]["payload"]["path"] for item in event_items] == [
+        "queued.py", "next.py",
+    ]
+
+
 def test_session_start_reuses_immutable_body_after_post_ack_crash(repo):
     posted: list[dict] = []
     first = protocol.send(

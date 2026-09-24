@@ -36,8 +36,8 @@ The release was validated from locked dependencies and rebuilt native code. Both
 | Frontend deterministic lint            | Passed                                                                                                                                                                                                                                       |
 | Frontend Vitest                        | **7 files, 17 tests passed**                                                                                                                                                                                                                 |
 | Frontend production build              | Passed; largest generated chunk approximately **479 kB** before gzip                                                                                                                                                                         |
-| Complete Python/API suite | **468 passed, 1 skipped** |
-| Focused Developer session suites       | **86 passed** across the ledger, projection, shared protocol, Cursor adapter, Claude Code adapter, and recorder                                                                                                                              |
+| Complete Python/API suite | **486 passed, 1 skipped** |
+| Focused Developer session suites       | **102 passed** across the ledger, projection, shared protocol, Cursor adapter, Claude Code adapter, and recorder                                                                                                                             |
 | Native HyperMesh suites                | **20 + 119 + 28 + 37 + WAL recovery + 18** checks passed                                                                                                                                                                                     |
 | JavaScript production dependency audit | **No known vulnerabilities found**                                                                                                                                                                                                           |
 | Python locked dependency audit         | **No known vulnerabilities found** after upgrading FastAPI and PyJWT                                                                                                                                                                         |
@@ -48,12 +48,12 @@ The release was validated from locked dependencies and rebuilt native code. Both
 | Browser identity boundary              | OIDC-configured image showed the company sign-in gate and no local identity picker                                                                                                                                                           |
 | Live model execution                   | `gpt-5-mini` completed “Build a small language model training pipeline in Python” as run `e639`: 250-line `main.py`, 4 classes, 9 governed memories, resolved `torch@2.14.0`, and 0 scanner findings.                                        |
 | Model failure handling                 | Empty or unsupported provider responses are rejected explicitly; the failed state and redacted reason persist across reloads and render as an actionable run banner.                                                                         |
-| Live Cursor adapter                    | Final hosted lifecycle opened session `ses_de3d5ac125b402ee1ae743af51e1e8cc`, committed and projected six ordered activities, persisted an `httpx@0.27.2` policy evaluation, completed run `e69a`, and projected the edited `app.py` module into HyperMesh. |
-| Developer session API image smoke      | Rebuilt API image ran as `meshagent:meshagent`, opened real-engine run `73ac`, accepted ordered sequence 2, acknowledged through 2, persisted `developer-sessions.sqlite3`, and reported the event projected.                                |
+| Live Cursor adapter                    | Final hosted lifecycle opened session `ses_8424dfb14d95dcd23acda2628607c422`, committed and projected six ordered activities, persisted an `httpx@0.27.2` policy evaluation, completed run `1030`, and projected the edited `app.py` module into HyperMesh. |
+| Developer session API image smoke      | Rebuilt API image ran as `meshagent:meshagent`, opened real-engine run `1cdb`, accepted ordered sequence 2, acknowledged through 2, and exposed final retry metadata with projected state.                                                     |
 
 Validated local image identifiers:
 
-- `meshagent-api:developer-sessions`: `sha256:2bcd230ca78420aa88b6f16139021f81ee516e822dd04f6fe7601d8f5afdd2bb`
+- `meshagent-api:developer-sessions`: `sha256:52c3d15bcd2ea05bfa1fa82c4679aa9ec3b56590cb2d6ef2a37319aff79641c7`
 - `meshagent-web:developer-sessions`: `sha256:32ac69fc514e7086fb901abfb572b59aa4ac426ec072cc6e8a38c20078a9c0aa`
 
 These local identifiers are build evidence, not registry release references. CI or the deployment pipeline must record immutable registry digests for the promoted images.

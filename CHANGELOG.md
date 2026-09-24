@@ -20,6 +20,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - API-owned Authorization Code + PKCE, opaque HttpOnly browser sessions, one-time login state, bounded expiry and revocation, exact-origin CSRF checks, and terminal WebSocket session handling.
 - Durable owner-scoped Developer sessions with ordered activity events, projection state, package-policy history, strict sequencing, replay conflict detection, and startup reconciliation.
 - Versioned Cursor and Claude Code session adapters with collision-safe event identities, acknowledgement-based `.inflight` queues, bounded offline replay, and synchronous policy-result capture.
+- Lifespan-managed Developer activity projection reconciliation with durable retry timestamps and capped exponential backoff.
 
 ### Changed
 
@@ -31,6 +32,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Browser requests now use same-origin opaque sessions; OIDC access tokens no longer enter JavaScript or browser storage. Verified Bearer access remains supported for documented non-browser clients.
 - Production startup now requires distinct Analyst and CISO groups plus the public OIDC client ID used by the API-owned code flow.
 - Model-backed runs now default to the supported `gpt-5-mini` model, accept both standard OpenAI base-URL environment names, and receive optional model settings through local and production Compose.
+- Offline adapter queue limits now apply backpressure to new observations without truncating accepted ordered records; CLI diagnostics expose any rejected observation count.
 
 ### Fixed
 
@@ -38,6 +40,7 @@ All notable production-v1 operational and repository changes should be recorded 
 - Corrected production container path discovery, native-library placement, health checks, OIDC web-build configuration, and Nginx security-header inheritance.
 - Corrected MCP session discovery and module claims to use the locked namespaced state store.
 - Corrected unsupported or malformed model responses so the run persists a redacted failure reason and the UI shows an actionable error instead of stopping after the task statement.
+- Corrected session-opener crash replay, cross-repository engine correlation, replay identity checks, repository-relative path validation, and paginated session totals.
 
 ## [0.1.0] — production v1 baseline
 

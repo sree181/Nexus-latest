@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import secrets
 import tempfile
@@ -102,6 +103,8 @@ from .workflow_models import (
     TransitionCaseRequest,
 )
 
+logger = logging.getLogger(__name__)
+
 def validate_startup() -> None:
     """Reject incomplete production configuration before serving traffic."""
     environment = auth.environment()  # validates the closed MESHAGENT_ENV set
@@ -166,7 +169,17 @@ def validate_startup() -> None:
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     validate_startup()
-    yield
+    developer_session_store.reset_interrupted_projections()
+    await asyncio.to_thread(_reconcile_developer_session_projections)
+    projection_task = asyncio.create_task(
+        _projection_reconciler(), name="developer-session-projection-reconciler"
+    )
+    try:
+        yield
+    finally:
+        projection_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await projection_task
 
 
 app = FastAPI(title="MeshAgent API", version=__version__, lifespan=_lifespan)
@@ -427,19 +440,44 @@ workflow_store = control_plane.load(paths.base_dir())
 # Connected coding-agent sessions are operational state, not beliefs. Activity
 # is committed here before ordered projection into governed HyperMesh memory.
 developer_session_store = developer_sessions.load(paths.base_dir())
-developer_session_store.reset_interrupted_projections()
-for _session in developer_session_store.recoverable_sessions():
-    _principal = Principal(
-        subject=_session.owner_subject,
-        name=_session.owner_name,
-        email=_session.owner_subject,
-        role="developer",
-        verified=_session.verified,
-        device=_session.device_id,
-    )
-    session_projection.project_pending(
-        developer_session_store, gateway, _session, _principal,
-    )
+
+
+def _reconcile_developer_session_projections() -> None:
+    """Retry durable projection work without requiring another editor event."""
+    for session in developer_session_store.recoverable_sessions():
+        principal = Principal(
+            subject=session.owner_subject,
+            name=session.owner_name,
+            email=session.owner_subject,
+            role="developer",
+            verified=session.verified,
+            device=session.device_id,
+        )
+        try:
+            session_projection.project_pending(
+                developer_session_store, gateway, session, principal,
+            )
+        except Exception:
+            logger.exception(
+                "developer session projection reconciliation failed",
+                extra={"developer_session_id": session.id},
+            )
+
+
+async def _projection_reconciler() -> None:
+    try:
+        interval = float(os.environ.get(
+            "MESHAGENT_PROJECTION_RETRY_SECONDS", "5.0"
+        ))
+    except ValueError:
+        interval = 5.0
+    interval = min(max(interval, 0.05), 300.0)
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await asyncio.to_thread(_reconcile_developer_session_projections)
+        except Exception:
+            logger.exception("developer session projection scan failed")
 
 # OIDC transactions and browser sessions are server-owned. Only hashes of the
 # opaque cookie values are retained; access tokens never enter browser storage.
@@ -1089,6 +1127,13 @@ def run_graph(run_id: str, who: Principal = Depends(caller)) -> GraphPayload:
 def runs(who: Principal = Depends(caller)) -> list[RunSummary]:
     """Oldest first. A developer's own runs; every run for the analyst."""
     return gateway.runs(owner=None if who.analyst else who.subject)
+
+
+@app.get("/api/runs/{run_id}", response_model=RunSummary)
+def run_summary(run_id: str, who: Principal = Depends(caller)) -> RunSummary:
+    """Return one run without weakening the existing owner boundary."""
+    _may_read(run_id, who)
+    return gateway.run(run_id)
 
 
 @app.post("/api/runs", response_model=RunSummary, status_code=201)

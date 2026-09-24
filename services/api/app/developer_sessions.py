@@ -62,6 +62,10 @@ class LifecycleConflict(SessionStoreError):
     pass
 
 
+class ProjectionConflict(SessionStoreError):
+    pass
+
+
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
@@ -81,6 +85,17 @@ def _start_event_id(req: SessionStartRequest) -> str:
 
 def _policy_id(event_id: str) -> str:
     return "pol_" + hashlib.sha256(event_id.encode()).hexdigest()[:32]
+
+
+def _projection_retry_delay_ms(attempts: int) -> int:
+    try:
+        base_seconds = float(os.environ.get(
+            "MESHAGENT_PROJECTION_RETRY_BASE_SECONDS", "1.0"
+        ))
+    except ValueError:
+        base_seconds = 1.0
+    base_ms = int(min(max(base_seconds, 0.05), 60.0) * 1000)
+    return min(base_ms * (2 ** max(0, min(attempts - 1, 8))), 300_000)
 
 
 class Store:
@@ -197,6 +212,8 @@ class Store:
             payload_sha256=row["payload_sha256"],
             projection_status=row["projection_status"],
             projection_attempts=row["projection_attempts"],
+            projection_last_attempt_at_ms=row["projection_last_attempt_at_ms"],
+            projection_next_attempt_at_ms=row["projection_next_attempt_at_ms"],
             projected_at_ms=row["projected_at_ms"],
             projection_error=row["projection_error"], run_id=row["run_id"],
         )
@@ -260,17 +277,18 @@ class Store:
             conn.execute(
                 """INSERT INTO developer_sessions (
                     id, owner_subject, owner_name, adapter, adapter_version,
-                    source_session_id, repository_id, repository_name,
+                    source_session_id, projection_session_key, repository_id, repository_name,
                     repository_remote, repository_branch, repository_commit,
                     task, status, started_at_ms, last_seen_at_ms, next_sequence,
                     last_acked_sequence, device_id, verified, created_at_ms,
                     updated_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'starting', ?, ?, 2, 1, ?, ?, ?, ?)""",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'starting', ?, ?, 2, 1, ?, ?, ?, ?)""",
                 (
                     req.id, who.subject, who.name, req.adapter, req.adapter_version,
-                    req.source_session_id, req.repository.id, req.repository.name,
-                    req.repository.remote, req.repository.branch,
-                    req.repository.commit, req.task, req.started_at_ms, now,
+                    req.source_session_id, req.id, req.repository.id,
+                    req.repository.name, req.repository.remote,
+                    req.repository.branch, req.repository.commit, req.task,
+                    req.started_at_ms, now,
                     who.device, int(who.verified), now, now,
                 ),
             )
@@ -406,6 +424,16 @@ class Store:
         with self._read() as conn:
             return self._session(self._owned(conn, session_id, who))
 
+    def projection_session_key(self, session_id: str) -> str:
+        with self._read() as conn:
+            row = conn.execute(
+                "SELECT projection_session_key FROM developer_sessions WHERE id=?",
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            raise MissingSession(f"unknown developer session {session_id}")
+        return str(row["projection_session_key"] or session_id)
+
     def list(self, who: Principal, *, limit: int = 100) -> SessionListOut:
         with self._read() as conn:
             total = int(conn.execute(
@@ -449,21 +477,30 @@ class Store:
         return [self._event(row) for row in rows]
 
     def projectable(self, session_id: str, *, limit: int = 100) -> list[ActivityEventOut]:
+        now = _now_ms()
         with self._read() as conn:
             rows = conn.execute(
                 "SELECT * FROM activity_events WHERE session_id = ? AND "
                 "projection_status IN ('pending', 'failed') "
                 "ORDER BY sequence ASC LIMIT ?", (session_id, limit),
             ).fetchall()
-        return [self._event(row) for row in rows]
+        ready: list[sqlite3.Row] = []
+        for row in rows:
+            retry_at = row["projection_next_attempt_at_ms"]
+            if retry_at is not None and int(retry_at) > now:
+                break
+            ready.append(row)
+        return [self._event(row) for row in ready]
 
     def mark_projecting(self, event_id: str) -> None:
+        now = _now_ms()
         with self._write() as conn:
             conn.execute(
                 "UPDATE activity_events SET projection_status='projecting', "
-                "projection_attempts=projection_attempts+1, projection_error=NULL "
+                "projection_attempts=projection_attempts+1, projection_error=NULL, "
+                "projection_last_attempt_at_ms=?, projection_next_attempt_at_ms=NULL "
                 "WHERE event_id=? AND projection_status IN ('pending','failed')",
-                (event_id,),
+                (now, event_id),
             )
 
     def mark_projected(
@@ -480,7 +517,8 @@ class Store:
                 raise MissingSession(f"unknown activity event {event_id}")
             conn.execute(
                 "UPDATE activity_events SET projection_status=?, projected_at_ms=?, "
-                "projection_error=?, run_id=? WHERE event_id=?",
+                "projection_error=?, run_id=?, projection_next_attempt_at_ms=NULL "
+                "WHERE event_id=?",
                 (status, now, refused, run_id, event_id),
             )
             end_status = "completed" if event["event_type"] == "session.ended" else "active"
@@ -493,16 +531,39 @@ class Store:
 
     def mark_projection_failed(self, event_id: str, error: str) -> None:
         with self._write() as conn:
+            event = conn.execute(
+                "SELECT projection_attempts FROM activity_events WHERE event_id=?",
+                (event_id,),
+            ).fetchone()
+            attempts = int(event["projection_attempts"]) if event is not None else 1
+            retry_at = _now_ms() + _projection_retry_delay_ms(attempts)
             conn.execute(
                 "UPDATE activity_events SET projection_status='failed', "
-                "projection_error=? WHERE event_id=?",
-                (error[:512], event_id),
+                "projection_error=?, projection_next_attempt_at_ms=? WHERE event_id=?",
+                (error[:512], retry_at, event_id),
             )
 
     def bind_run(self, session_id: str, run_id: str) -> None:
         with self._write() as conn:
+            row = conn.execute(
+                "SELECT run_id FROM developer_sessions WHERE id=?", (session_id,),
+            ).fetchone()
+            if row is None:
+                raise MissingSession(f"unknown developer session {session_id}")
+            if row["run_id"] is not None and row["run_id"] != run_id:
+                raise ProjectionConflict(
+                    f"developer session {session_id} is already bound to another run"
+                )
+            collision = conn.execute(
+                "SELECT id FROM developer_sessions WHERE run_id=? AND id<>?",
+                (run_id, session_id),
+            ).fetchone()
+            if collision is not None:
+                raise ProjectionConflict(
+                    f"run {run_id} is already bound to another developer session"
+                )
             conn.execute(
-                "UPDATE developer_sessions SET run_id=COALESCE(run_id, ?), "
+                "UPDATE developer_sessions SET run_id=?, "
                 "updated_at_ms=? WHERE id=?", (run_id, _now_ms(), session_id),
             )
 
@@ -510,7 +571,8 @@ class Store:
         with self._write() as conn:
             result = conn.execute(
                 "UPDATE activity_events SET projection_status='pending', "
-                "projection_error='projection interrupted before acknowledgement' "
+                "projection_error='projection interrupted before acknowledgement', "
+                "projection_next_attempt_at_ms=NULL "
                 "WHERE projection_status='projecting'"
             )
             return int(result.rowcount)
@@ -521,8 +583,10 @@ class Store:
             rows = conn.execute(
                 "SELECT DISTINCT s.* FROM developer_sessions s "
                 "JOIN activity_events e ON e.session_id=s.id "
-                "WHERE e.projection_status IN ('pending','failed') "
-                "ORDER BY s.started_at_ms ASC LIMIT ?", (limit,),
+                "WHERE e.projection_status IN ('pending','failed') AND "
+                "(e.projection_next_attempt_at_ms IS NULL OR "
+                "e.projection_next_attempt_at_ms <= ?) "
+                "ORDER BY s.started_at_ms ASC LIMIT ?", (_now_ms(), limit),
             ).fetchall()
         return [self._session(row) for row in rows]
 
