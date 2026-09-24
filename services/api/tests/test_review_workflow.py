@@ -219,6 +219,20 @@ def test_developer_attention_to_analyst_review_to_verified_fix(clients, monkeypa
                      if relation["kind"] == "review_event"]
     assert len(review_events) == 3
 
+    terminal_escalation = analyst.post(
+        f"/api/reviews/{request['id']}/escalate",
+        json={
+            "expected_version": verified["version_counter"],
+            "title": "Terminal review must stay closed",
+            "rationale": "A verified review cannot be reopened by a direct API call.",
+        },
+    )
+    assert terminal_escalation.status_code == 409
+    assert terminal_escalation.json()["detail"] == (
+        "terminal review requests cannot be escalated"
+    )
+    assert analyst.get("/api/cases").json()["cases"] == []
+
 
 def test_developer_cannot_decide_own_request(clients):
     developer, _, _, _ = clients
@@ -301,3 +315,139 @@ def test_review_projection_retries_without_duplicate_native_events(clients, monk
     after = [relation["id"] for relation in graph["relations"]
              if relation["kind"] == "review_event"]
     assert after == before
+
+
+def test_priority_four_analyst_operations_lifecycle(clients):
+    developer, analyst, ciso, _ = clients
+    session_id, evaluation_id = create_attention(developer)
+    created = developer.post("/api/v1/developer/review-requests", json={
+        "session_id": session_id,
+        "policy_evaluation_id": evaluation_id,
+        "kind": "safe_version",
+        "rationale": "Confirm the replacement version before release.",
+    }).json()
+
+    queue = analyst.get("/api/operations/work")
+    assert queue.status_code == 200, queue.text
+    assert queue.json()["items"][0]["id"] == created["id"]
+    assert queue.json()["counts"]["unassigned"] == 1
+    assert developer.get("/api/operations/work").status_code == 403
+    assert ciso.get("/api/operations/work").status_code == 200
+
+    due = int(time.time()) + 3_600
+    assigned = analyst.post(f"/api/reviews/{created['id']}/assign", json={
+        "expected_version": created["version_counter"],
+        "assignee": "priya@example.com",
+        "assignee_name": "Priya Shah",
+        "sla_due_at": due,
+    })
+    assert assigned.status_code == 200, assigned.text
+    review = assigned.json()
+    assert review["assignee"] == "priya@example.com"
+    assert review["sla_due_at"] == due
+    assert review["events"][-1]["action"] == "review.assigned"
+    stale = analyst.post(f"/api/reviews/{created['id']}/assign", json={
+        "expected_version": created["version_counter"],
+        "assignee": "other@example.com",
+        "assignee_name": "Other Analyst",
+    })
+    assert stale.status_code == 412
+
+    note = analyst.post(
+        f"/api/operations/review/{created['id']}/comments",
+        json={"message": "Please confirm whether the service follows redirects.",
+              "mentions": ["alex@example.com"]},
+    )
+    assert note.status_code == 201, note.text
+    assert analyst.get(
+        f"/api/operations/review/{created['id']}/comments"
+    ).json()[0]["message"].startswith("Please confirm")
+    assert ciso.get(
+        f"/api/operations/review/{created['id']}/comments"
+    ).status_code == 200
+    assert developer.get(
+        f"/api/operations/review/{created['id']}/comments"
+    ).status_code == 403
+    assert analyst.get(
+        "/api/operations/review/rev_missing/comments"
+    ).status_code == 404
+    activity = analyst.get("/api/operations/activity?q=follows%20redirects").json()
+    assert activity["total"] == 1
+    assert activity["items"][0]["action"] == "work.comment"
+
+    saved = analyst.post("/api/operations/views", json={
+        "name": "My urgent reviews",
+        "filters": {"kind": "review", "assignee": "priya@example.com"},
+    })
+    assert saved.status_code == 201, saved.text
+    assert analyst.get("/api/operations/views").json()[0]["filters"]["kind"] == "review"
+    assert ciso.get("/api/operations/views").json() == []
+
+    notifications = analyst.get("/api/notifications").json()
+    assert notifications["unread"] >= 2
+    assignment_notice = next(
+        item for item in notifications["notifications"]
+        if item["kind"] == "work.assigned"
+    )
+    assert analyst.post(
+        f"/api/notifications/{assignment_notice['id']}/read"
+    ).status_code == 200
+    assert analyst.get("/api/notifications").json()["unread"] == notifications["unread"] - 1
+    assert ciso.get("/api/notifications").json()["unread"] >= 1
+
+    escalated = analyst.post(f"/api/reviews/{created['id']}/escalate", json={
+        "expected_version": review["version_counter"],
+        "title": "Unsafe httpx version in payments API",
+        "rationale": "The vulnerable call is reachable and needs coordinated remediation.",
+        "assignee": "priya@example.com",
+        "assignee_name": "Priya Shah",
+        "sla_due_at": due,
+    })
+    assert escalated.status_code == 201, escalated.text
+    case = escalated.json()
+    assert case["finding_id"] == f"review:{created['id']}"
+    assert created["id"] in case["events"][0]["evidence_ids"]
+    final_review = analyst.get(f"/api/reviews/{created['id']}").json()
+    assert final_review["state"] == "escalated"
+    assert final_review["escalated_case_id"] == case["id"]
+    combined = analyst.get("/api/operations/work?q=Unsafe%20httpx").json()
+    assert combined["items"][0]["kind"] == "case"
+
+    latest_review = analyst.get(f"/api/reviews/{created['id']}").json()
+    latest_case = analyst.get(f"/api/cases/{case['id']}").json()
+    bulk = analyst.post("/api/operations/work/bulk-assign", json={
+        "items": [
+            {"kind": "review", "id": created["id"],
+             "expected_version": latest_review["version_counter"]},
+            {"kind": "case", "id": case["id"],
+             "expected_version": latest_case["version"]},
+        ],
+        "assignee": "alex@example.com",
+        "assignee_name": "Alex Morgan",
+        "sla_due_at": due,
+    })
+    assert bulk.status_code == 200, bulk.text
+    assert bulk.json()["succeeded"] == 2
+    assert bulk.json()["failed"] == 0
+
+    current_case = analyst.get(f"/api/cases/{case['id']}").json()
+    partial = analyst.post("/api/operations/work/bulk-assign", json={
+        "items": [
+            {"kind": "case", "id": case["id"],
+             "expected_version": current_case["version"]},
+            {"kind": "review", "id": "rev_missing",
+             "expected_version": 1},
+        ],
+        "assignee": "priya@example.com",
+        "assignee_name": "Priya Shah",
+        "sla_due_at": due,
+    })
+    assert partial.status_code == 200, partial.text
+    assert partial.json()["succeeded"] == 1
+    assert partial.json()["failed"] == 1
+    assert partial.json()["results"] == [
+        {"kind": "case", "id": case["id"], "ok": True, "error": None},
+        {"kind": "review", "id": "rev_missing", "ok": False,
+         "error": "unknown review request"},
+    ]
+    assert analyst.get(f"/api/cases/{case['id']}").json()["assignee"] == "priya@example.com"

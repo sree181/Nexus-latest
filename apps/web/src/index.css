@@ -439,3 +439,14 @@ button.dev-session-row { width: 100%; border-top: 0; border-right: 0; border-lef
   .review-graph-node { max-width: 96px; padding-right: 6px; font-size: 9px; }
   .review-graph-icon { width: 21px; height: 21px; flex-basis: 21px; }
 }
+
+
+/* Priority 4 Analyst operations */
+.review-graph-node { cursor: pointer; text-align: left; }
+.review-graph-node:hover,
+.review-graph-node:focus-visible { z-index: 3; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent), var(--shadow); outline: none; }
+.review-graph-node-selected { z-index: 4; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 42%, transparent), var(--shadow); }
+@media (max-width: 767px) {
+  .responsive-table-wrap { overflow-x: auto; }
+  .responsive-table-wrap table { min-width: 760px; }
+}

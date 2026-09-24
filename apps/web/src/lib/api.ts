@@ -249,6 +249,11 @@ export interface ReviewRequest {
   state: ReviewState;
   analyst_subject: string | null;
   analyst_name: string | null;
+  assignee: string | null;
+  assignee_name: string | null;
+  sla_due_at: number | null;
+  overdue: boolean;
+  escalated_case_id: string | null;
   decision_rationale: string | null;
   recommended_version: string | null;
   exception_expires_at: number | null;
@@ -481,6 +486,98 @@ export interface CaseList {
   cases: CaseRecord[];
   total: number;
   origin: OriginMetadata;
+}
+
+export type WorkKind = "review" | "case";
+
+export interface WorkItem {
+  id: string;
+  kind: WorkKind;
+  title: string;
+  subtitle: string;
+  severity: WorkflowSeverity;
+  state: string;
+  priority: number;
+  priority_reasons: string[];
+  version: number;
+  assignee: string | null;
+  assignee_name: string | null;
+  sla_due_at: number | null;
+  overdue: boolean;
+  repository_name: string | null;
+  developer_name: string | null;
+  route: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface WorkQueue {
+  items: WorkItem[];
+  total: number;
+  counts: Record<string, number>;
+}
+
+export interface BulkWorkReceipt {
+  results: Array<{ kind: WorkKind; id: string; ok: boolean; error: string | null }>;
+  succeeded: number;
+  failed: number;
+}
+
+export interface WorkComment {
+  id: string;
+  resource_kind: WorkKind;
+  resource_id: string;
+  actor: string;
+  actor_name: string;
+  actor_role: string;
+  message: string;
+  mentions: string[];
+  created_at: number;
+}
+
+export interface WorkActivity {
+  id: string;
+  resource_kind: WorkKind;
+  resource_id: string;
+  actor: string;
+  actor_name: string;
+  action: string;
+  message: string;
+  at: number;
+  route: string;
+}
+
+export interface WorkActivityList {
+  items: WorkActivity[];
+  total: number;
+}
+
+export interface SavedWorkView {
+  id: string;
+  owner_subject: string;
+  name: string;
+  filters: Record<string, string>;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface WorkNotification {
+  id: string;
+  kind: string;
+  title: string;
+  message: string;
+  resource_kind: WorkKind;
+  resource_id: string;
+  route: string;
+  created_at: number;
+  not_before: number;
+  read: boolean;
+}
+
+export interface NotificationList {
+  notifications: WorkNotification[];
+  total: number;
+  unread: number;
 }
 
 export interface CreateCaseInput {
@@ -1216,6 +1313,51 @@ export const api = {
   applyRecommendation: (id: string) =>
     post<ApplyReceipt>(`/recommendations/${encodeURIComponent(id)}/apply`, {}),
 
+  workQueue: (filters?: {
+    kind?: WorkKind;
+    state?: string;
+    assignee?: string;
+    repository?: string;
+    severity?: WorkflowSeverity;
+    q?: string;
+  }) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters ?? {})) {
+      if (value) query.set(key, value);
+    }
+    const suffix = query.size ? `?${query.toString()}` : "";
+    return get<WorkQueue>(`/operations/work${suffix}`);
+  },
+  bulkAssignWork: (input: {
+    items: Array<{ kind: WorkKind; id: string; expected_version: number }>;
+    assignee: string;
+    assignee_name: string;
+    sla_due_at: number | null;
+  }) => post<BulkWorkReceipt>("/operations/work/bulk-assign", input),
+  workActivity: (filters?: { q?: string; actor?: string; action?: string }) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters ?? {})) {
+      if (value) query.set(key, value);
+    }
+    const suffix = query.size ? `?${query.toString()}` : "";
+    return get<WorkActivityList>(`/operations/activity${suffix}`);
+  },
+  workComments: (kind: WorkKind, id: string) =>
+    get<WorkComment[]>(`/operations/${kind}/${encodeURIComponent(id)}/comments`),
+  addWorkComment: (
+    kind: WorkKind,
+    id: string,
+    input: { message: string; mentions: string[] },
+  ) => post<WorkComment>(`/operations/${kind}/${encodeURIComponent(id)}/comments`, input),
+  savedWorkViews: () => get<SavedWorkView[]>("/operations/views"),
+  saveWorkView: (input: { name: string; filters: Record<string, string> }) =>
+    post<SavedWorkView>("/operations/views", input),
+  deleteWorkView: (id: string) =>
+    del<{ deleted: boolean }>(`/operations/views/${encodeURIComponent(id)}`),
+  notifications: () => get<NotificationList>("/notifications"),
+  readNotification: (id: string) =>
+    post<{ read: boolean }>(`/notifications/${encodeURIComponent(id)}/read`, {}),
+
   cases: (filters?: { state?: CaseState; assignee?: string }) => {
     const query = new URLSearchParams();
     if (filters?.state) query.set("state", filters.state);
@@ -1311,6 +1453,20 @@ export const api = {
     get<ReviewRequest>(`/reviews/${encodeURIComponent(requestId)}`),
   reviewGraph: (requestId: string) =>
     get<ReviewGraph>(`/reviews/${encodeURIComponent(requestId)}/graph`),
+  assignReview: (requestId: string, input: {
+    expected_version: number;
+    assignee: string;
+    assignee_name: string;
+    sla_due_at: number | null;
+  }) => post<ReviewRequest>(`/reviews/${encodeURIComponent(requestId)}/assign`, input),
+  escalateReview: (requestId: string, input: {
+    expected_version: number;
+    title: string;
+    rationale: string;
+    assignee?: string | null;
+    assignee_name?: string | null;
+    sla_due_at?: number | null;
+  }) => post<CaseRecord>(`/reviews/${encodeURIComponent(requestId)}/escalate`, input),
   decideReview: (requestId: string, input: {
     expected_version: number;
     decision: "request_changes" | "approve_exception" | "reject" | "false_positive" | "escalate";

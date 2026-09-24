@@ -325,6 +325,11 @@ class ReviewRequestOut(BaseModel):
     state: ReviewState
     analyst_subject: str | None = None
     analyst_name: str | None = None
+    assignee: str | None = None
+    assignee_name: str | None = None
+    sla_due_at: int | None = None
+    overdue: bool = False
+    escalated_case_id: str | None = None
     decision_rationale: str | None = None
     recommended_version: str | None = None
     exception_expires_at: int | None = None
@@ -352,3 +357,144 @@ class ReviewGraphOut(BaseModel):
     evidence_digest: str | None = None
     graph: GraphPayload
     note: str
+
+
+# -- Priority 4: Analyst operations ------------------------------------------
+
+WorkKind = Literal["review", "case"]
+
+
+class AssignReviewRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    assignee: str = Field(min_length=1, max_length=256)
+    assignee_name: str = Field(min_length=1, max_length=256)
+    sla_due_at: int | None = None
+
+
+class EscalateReviewRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=512)
+    rationale: str = Field(min_length=1, max_length=4_096)
+    assignee: str | None = Field(default=None, max_length=256)
+    assignee_name: str | None = Field(default=None, max_length=256)
+    sla_due_at: int | None = None
+
+
+class WorkItemOut(BaseModel):
+    id: str
+    kind: WorkKind
+    title: str
+    subtitle: str
+    severity: Severity
+    state: str
+    priority: int
+    priority_reasons: list[str] = Field(default_factory=list)
+    version: int = Field(ge=1)
+    assignee: str | None = None
+    assignee_name: str | None = None
+    sla_due_at: int | None = None
+    overdue: bool = False
+    repository_name: str | None = None
+    developer_name: str | None = None
+    route: str
+    created_at: int
+    updated_at: int
+
+
+class WorkQueueOut(BaseModel):
+    items: list[WorkItemOut] = Field(default_factory=list)
+    total: int
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
+class BulkWorkRef(BaseModel):
+    kind: WorkKind
+    id: str = Field(min_length=1, max_length=128)
+    expected_version: int = Field(ge=1)
+
+
+class BulkAssignRequest(BaseModel):
+    items: list[BulkWorkRef] = Field(min_length=1, max_length=100)
+    assignee: str = Field(min_length=1, max_length=256)
+    assignee_name: str = Field(min_length=1, max_length=256)
+    sla_due_at: int | None = None
+
+
+class BulkWorkResult(BaseModel):
+    kind: WorkKind
+    id: str
+    ok: bool
+    error: str | None = None
+
+
+class BulkWorkReceipt(BaseModel):
+    results: list[BulkWorkResult]
+    succeeded: int
+    failed: int
+
+
+class WorkCommentRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4_096)
+    mentions: list[str] = Field(default_factory=list, max_length=20)
+
+
+class WorkCommentOut(BaseModel):
+    id: str
+    resource_kind: WorkKind
+    resource_id: str
+    actor: str
+    actor_name: str
+    actor_role: str
+    message: str
+    mentions: list[str] = Field(default_factory=list)
+    created_at: int
+
+
+class WorkActivityOut(BaseModel):
+    id: str
+    resource_kind: WorkKind
+    resource_id: str
+    actor: str
+    actor_name: str
+    action: str
+    message: str
+    at: int
+    route: str
+
+
+class WorkActivityListOut(BaseModel):
+    items: list[WorkActivityOut] = Field(default_factory=list)
+    total: int
+
+
+class SavedViewRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    filters: dict[str, str] = Field(default_factory=dict)
+
+
+class SavedViewOut(BaseModel):
+    id: str
+    owner_subject: str
+    name: str
+    filters: dict[str, str]
+    created_at: int
+    updated_at: int
+
+
+class NotificationOut(BaseModel):
+    id: str
+    kind: str
+    title: str
+    message: str
+    resource_kind: WorkKind
+    resource_id: str
+    route: str
+    created_at: int
+    not_before: int
+    read: bool = False
+
+
+class NotificationListOut(BaseModel):
+    notifications: list[NotificationOut] = Field(default_factory=list)
+    total: int
+    unread: int

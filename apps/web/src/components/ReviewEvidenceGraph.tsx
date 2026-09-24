@@ -56,7 +56,12 @@ function nodeTone(node: GraphNode): string {
   return "review-node-neutral";
 }
 
-export function ReviewEvidenceGraph({ graph, label }: { graph: GraphPayload; label: string }) {
+export function ReviewEvidenceGraph({ graph, label, selectedId, onSelect }: {
+  graph: GraphPayload;
+  label: string;
+  selectedId?: string | null;
+  onSelect?: (node: GraphNode) => void;
+}) {
   const visibleNodes = graph.nodes.slice(0, 28);
   const visibleIds = new Set(visibleNodes.map((node) => node.id));
   const positions = layout(visibleNodes);
@@ -78,17 +83,19 @@ export function ReviewEvidenceGraph({ graph, label }: { graph: GraphPayload; lab
           const point = positions.get(node.id) ?? { x: 50, y: 50 };
           const detail = `${node.kind}. ${node.severity ? `${node.severity} severity. ` : ""}${node.label}`;
           return (
-            <span
+            <button
+              type="button"
               key={node.id}
-              className={`review-graph-node ${nodeTone(node)}`}
+              className={`review-graph-node ${nodeTone(node)} ${selectedId === node.id ? "review-graph-node-selected" : ""}`}
               style={{ left: `${point.x}%`, top: `${point.y}%` }}
-              tabIndex={0}
               aria-label={detail}
+              aria-pressed={selectedId === node.id}
               title={detail}
+              onClick={() => onSelect?.(node)}
             >
               <span className="review-graph-icon"><DevIcon name={kindIcon[node.kind] ?? "evidence"} size={16} /></span>
               <span>{node.label}</span>
-            </span>
+            </button>
           );
         })}
       </div>

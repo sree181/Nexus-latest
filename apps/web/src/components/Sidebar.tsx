@@ -202,14 +202,11 @@ function AnalystNav() {
   return (
     <>
       <Group label="INVESTIGATION">
-        <NavLink to="/analyst/reviews" exact icon={<Icon d={icons.security} />}>
-          Developer reviews
-        </NavLink>
         <NavLink to="/analyst/queue" exact icon={<Icon d={icons.queue} />}>
-          Priority queue
+          Security operations
         </NavLink>
-        <NavLink to="/analyst/queue" icon={<Icon d={icons.cases} />}>
-          Investigations / cases
+        <NavLink to="/analyst/activity" icon={<Icon d={icons.audit} />}>
+          Work history
         </NavLink>
       </Group>
       <Group label="EVIDENCE">
@@ -236,8 +233,8 @@ function CisoNav() {
   return (
     <>
       <Group label="GOVERNANCE">
-        <NavLink to="/analyst/reviews" icon={<Icon d={icons.security} />}>
-          Developer reviews
+        <NavLink to="/analyst/queue" icon={<Icon d={icons.security} />}>
+          Security operations
         </NavLink>
         <NavLink to="/ciso/overview" exact icon={<Icon d={icons.report} />}>
           Executive overview

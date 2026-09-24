@@ -13,7 +13,8 @@ import { RequiresCapability } from "./components/RequiresCapability";
 import { RouteError, RouteNotFound } from "./components/RouteBoundary";
 import { Sidebar } from "./components/Sidebar";
 import { RoleLanding } from "./routes/RoleLanding";
-import { AnalystQueue } from "./routes/AnalystQueue";
+import { AnalystOperations } from "./routes/AnalystOperations";
+import { AnalystActivity } from "./routes/AnalystActivity";
 import { AnalystCaseDetail } from "./routes/AnalystCaseDetail";
 import { AnalystInvestigation } from "./routes/AnalystInvestigation";
 import { CisoOverview } from "./routes/CisoOverview";
@@ -48,7 +49,6 @@ import { DeveloperConnectionsOverview } from "./routes/DeveloperConnectionsOverv
 import { DeveloperConnectionsEditors } from "./routes/DeveloperConnectionsEditors";
 import { DeveloperConnectionsRepositories } from "./routes/DeveloperConnectionsRepositories";
 import { DeveloperConnectionsDevices } from "./routes/DeveloperConnectionsDevices";
-import { AnalystReviews } from "./routes/AnalystReviews";
 import { AnalystReviewDetail } from "./routes/AnalystReviewDetail";
 import { useIdentity } from "./lib/useIdentity";
 
@@ -206,13 +206,19 @@ const developerConnectionsDevicesRoute = createRoute({
 const analystQueueRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/analyst/queue",
-  component: () => <RequiresCapability capability="case.read"><AnalystQueue /></RequiresCapability>,
+  component: () => <RequiresCapability capability="case.read"><AnalystOperations /></RequiresCapability>,
+});
+
+const analystActivityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/analyst/activity",
+  component: () => <RequiresCapability capability="case.read"><AnalystActivity /></RequiresCapability>,
 });
 
 const analystReviewsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/analyst/reviews",
-  component: () => <RequiresCapability capability="review.read"><AnalystReviews /></RequiresCapability>,
+  component: () => <RequiresCapability capability="review.read"><Navigate to="/analyst/queue" /></RequiresCapability>,
 });
 
 const analystReviewRoute = createRoute({
@@ -399,6 +405,7 @@ const routeTree = rootRoute.addChildren([
     developerConnectionsDevicesRoute,
   ]),
   analystQueueRoute,
+  analystActivityRoute,
   analystReviewsRoute,
   analystReviewRoute,
   analystCaseRoute,

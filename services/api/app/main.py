@@ -88,6 +88,9 @@ from .workflow_models import (
     ApprovalDecisionRequest,
     ApprovalOut,
     AssignCaseRequest,
+    AssignReviewRequest,
+    BulkAssignRequest,
+    BulkWorkReceipt,
     AttentionListOut,
     CaseListOut,
     CaseOut,
@@ -97,6 +100,7 @@ from .workflow_models import (
     CreatePolicyRequest,
     CreateRemediationRequest,
     CreateReviewRequest,
+    EscalateReviewRequest,
     ExceptionOut,
     OriginOut,
     PolicyOut,
@@ -107,7 +111,15 @@ from .workflow_models import (
     ReviewGraphOut,
     ReviewRequestListOut,
     ReviewRequestOut,
+    NotificationListOut,
+    NotificationOut,
+    SavedViewOut,
+    SavedViewRequest,
     TransitionCaseRequest,
+    WorkActivityListOut,
+    WorkCommentOut,
+    WorkCommentRequest,
+    WorkQueueOut,
 )
 
 logger = logging.getLogger(__name__)
@@ -1411,6 +1423,205 @@ def analyst_review_request(
     _: Principal = Depends(require_capability("review.read")),
 ) -> ReviewRequestOut:
     return ReviewRequestOut.model_validate(workflow_store.review_request(request_id))
+
+
+@app.post("/api/reviews/{request_id}/assign", response_model=ReviewRequestOut)
+def assign_review_request(
+    request_id: str,
+    req: AssignReviewRequest,
+    who: Principal = Depends(require_capability("review.write")),
+) -> ReviewRequestOut:
+    note(who, "review.assign", request_id, req.assignee, require_commit=True)
+    value = workflow_store.assign_review_request(
+        request_id, expected_version=req.expected_version,
+        assignee=req.assignee, assignee_name=req.assignee_name,
+        sla_due_at=req.sla_due_at, actor=who.subject,
+        actor_name=who.name, actor_role=who.role,
+    )
+    _reconcile_review_projections()
+    return ReviewRequestOut.model_validate(value)
+
+
+@app.post("/api/reviews/{request_id}/escalate", response_model=CaseOut, status_code=201)
+def escalate_review_request(
+    request_id: str,
+    req: EscalateReviewRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("case.write")),
+) -> CaseOut:
+    note(who, "review.escalate", request_id, req.title, require_commit=True)
+    _, case = workflow_store.escalate_review_to_case(
+        request_id, expected_version=req.expected_version,
+        title=req.title, rationale=req.rationale, assignee=req.assignee,
+        assignee_name=req.assignee_name, sla_due_at=req.sla_due_at,
+        actor=who.subject, actor_name=who.name, actor_role=who.role,
+        correlation_id=_correlation(request),
+    )
+    _reconcile_review_projections()
+    return CaseOut(**workflow_store.case(case["id"]))
+
+
+@app.get("/api/operations/work", response_model=WorkQueueOut)
+def operations_work_queue(
+    kind: str | None = None,
+    state: str | None = None,
+    assignee: str | None = None,
+    repository: str | None = None,
+    severity: str | None = None,
+    q: str | None = None,
+    limit: int = 200,
+    _: Principal = Depends(analyst),
+) -> WorkQueueOut:
+    return WorkQueueOut.model_validate(workflow_store.work_queue(
+        kind=kind, state=state, assignee=assignee, repository=repository,
+        severity=severity, query=q, limit=limit,
+    ))
+
+
+@app.post("/api/operations/work/bulk-assign", response_model=BulkWorkReceipt)
+def bulk_assign_operations_work(
+    req: BulkAssignRequest,
+    request: Request,
+    who: Principal = Depends(analyst),
+) -> BulkWorkReceipt:
+    results: list[dict[str, Any]] = []
+    for item in req.items:
+        try:
+            if item.kind == "review":
+                workflow_store.assign_review_request(
+                    item.id, expected_version=item.expected_version,
+                    assignee=req.assignee, assignee_name=req.assignee_name,
+                    sla_due_at=req.sla_due_at, actor=who.subject,
+                    actor_name=who.name, actor_role=who.role,
+                )
+            else:
+                workflow_store.assign_case(
+                    item.id, expected_version=item.expected_version,
+                    assignee=req.assignee, assignee_name=req.assignee_name,
+                    sla_due_at=req.sla_due_at, actor=who.subject,
+                    actor_name=who.name, correlation_id=_correlation(request),
+                )
+            results.append({"kind": item.kind, "id": item.id, "ok": True})
+        except control_plane.StoreError as error:
+            results.append({
+                "kind": item.kind, "id": item.id, "ok": False,
+                "error": str(error),
+            })
+    _reconcile_review_projections()
+    note(
+        who, "work.bulk_assign", req.assignee,
+        f"{sum(item['ok'] for item in results)} of {len(results)} assigned",
+        require_commit=True,
+    )
+    return BulkWorkReceipt(
+        results=results,
+        succeeded=sum(item["ok"] for item in results),
+        failed=sum(not item["ok"] for item in results),
+    )
+
+
+@app.get("/api/operations/activity", response_model=WorkActivityListOut)
+def operations_activity(
+    q: str | None = None,
+    actor: str | None = None,
+    action: str | None = None,
+    limit: int = 200,
+    _: Principal = Depends(analyst),
+) -> WorkActivityListOut:
+    values = workflow_store.work_activity(
+        query=q, actor=actor, action=action, limit=limit,
+    )
+    return WorkActivityListOut(items=values, total=len(values))
+
+
+@app.get(
+    "/api/operations/{resource_kind}/{resource_id}/comments",
+    response_model=list[WorkCommentOut],
+)
+def operations_comments(
+    resource_kind: str,
+    resource_id: str,
+    _: Principal = Depends(analyst),
+) -> list[WorkCommentOut]:
+    if resource_kind not in ("review", "case"):
+        raise HTTPException(status_code=404, detail="unknown work item")
+    return [WorkCommentOut.model_validate(value) for value in workflow_store.work_comments(
+        resource_kind=resource_kind, resource_id=resource_id,
+    )]
+
+
+@app.post(
+    "/api/operations/{resource_kind}/{resource_id}/comments",
+    response_model=WorkCommentOut,
+    status_code=201,
+)
+def create_operations_comment(
+    resource_kind: str,
+    resource_id: str,
+    req: WorkCommentRequest,
+    who: Principal = Depends(analyst),
+) -> WorkCommentOut:
+    if resource_kind not in ("review", "case"):
+        raise HTTPException(status_code=404, detail="unknown work item")
+    note(who, "work.comment", f"{resource_kind}:{resource_id}", req.message)
+    return WorkCommentOut.model_validate(workflow_store.add_work_comment(
+        resource_kind=resource_kind, resource_id=resource_id,
+        message=req.message, mentions=req.mentions, actor=who.subject,
+        actor_name=who.name, actor_role=who.role,
+    ))
+
+
+@app.get("/api/operations/views", response_model=list[SavedViewOut])
+def operations_views(
+    who: Principal = Depends(analyst),
+) -> list[SavedViewOut]:
+    return [SavedViewOut.model_validate(value) for value in workflow_store.work_views(
+        owner_subject=who.subject,
+    )]
+
+
+@app.post("/api/operations/views", response_model=SavedViewOut, status_code=201)
+def save_operations_view(
+    req: SavedViewRequest,
+    who: Principal = Depends(analyst),
+) -> SavedViewOut:
+    return SavedViewOut.model_validate(workflow_store.save_work_view(
+        owner_subject=who.subject, name=req.name, filters=req.filters,
+    ))
+
+
+@app.delete("/api/operations/views/{view_id}")
+def delete_operations_view(
+    view_id: str,
+    who: Principal = Depends(analyst),
+) -> dict[str, bool]:
+    workflow_store.delete_work_view(view_id, owner_subject=who.subject)
+    return {"deleted": True}
+
+
+@app.get("/api/notifications", response_model=NotificationListOut)
+def list_notifications(
+    limit: int = 100,
+    who: Principal = Depends(caller),
+) -> NotificationListOut:
+    values = workflow_store.notifications(
+        subject=who.subject, role=who.role, limit=limit,
+    )
+    return NotificationListOut(
+        notifications=[NotificationOut.model_validate(value) for value in values],
+        total=len(values), unread=sum(not value["read"] for value in values),
+    )
+
+
+@app.post("/api/notifications/{notification_id}/read")
+def read_notification(
+    notification_id: str,
+    who: Principal = Depends(caller),
+) -> dict[str, bool]:
+    workflow_store.read_notification(
+        notification_id, subject=who.subject, role=who.role,
+    )
+    return {"read": True}
 
 
 @app.post("/api/reviews/{request_id}/decision", response_model=ReviewRequestOut)

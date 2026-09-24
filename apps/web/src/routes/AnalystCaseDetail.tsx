@@ -5,6 +5,7 @@ import { Button } from "@meshagent/ui";
 
 import { Async } from "../components/Async";
 import { PageHeader } from "../components/PageHeader";
+import { WorkCollaboration } from "../components/WorkCollaboration";
 import { Field, MutationMessage, Select, SeverityBadge, StatusBadge, TextArea, TextInput, dateInputToEpoch, epochToDateInput } from "../components/WorkflowUI";
 import { api, type AssignCaseInput, type CaseRecord, type CaseTransition, type CreateExceptionInput, type TransitionCaseInput } from "../lib/api";
 import { timestamp } from "../lib/format";
@@ -158,6 +159,7 @@ export function AnalystCaseDetail() {
             </section>
             <div className="grid gap-5 xl:grid-cols-2"><Assignment item={item} /><Transition item={item} /></div>
             <ExceptionRequest item={item} />
+            <WorkCollaboration kind="case" id={item.id} />
             <section className="rounded-2xl border border-line bg-surface p-5">
               <h2 className="font-serif text-lg font-semibold text-ink">Case history</h2>
               {item.events.length === 0 ? <p className="mt-3 text-sm text-slate">No case events were returned.</p> : (
