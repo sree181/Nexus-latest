@@ -96,6 +96,14 @@ docker compose up --build
 
 It publishes the web application at `http://localhost:8080` and the API at `http://localhost:8000`, with a named Docker volume mounted at `/var/lib/meshagent`. Before treating a container deployment as production, add the external TLS ingress, OIDC configuration, persistent storage controls, backup hooks, retention, monitoring, and change control described in the operations runbook. Do not expose the provided local ports directly to untrusted networks.
 
+For a real Cursor and GitHub client demonstration, start with [DEMO_README.md](DEMO_README.md), follow the [Mac setup guide](docs/demo/MAC_LIVE_DEMO_SETUP.md), and run the read-only preflight:
+
+```bash
+scripts/demo/verify-live-demo.sh http://localhost:8080
+```
+
+The recommended demo creates a new Cursor session in an approved local Git clone. GitHub contributes real remote, branch, commit, and normal push context; v1 does not claim pull-request or issue webhook ingestion.
+
 ## Production baseline
 
 1. Set `MESHAGENT_ENGINE=1` and mount a dedicated persistent `MESHAGENT_DB_DIR`.
@@ -159,7 +167,10 @@ The following documents control production v1 operations and policy:
 - [docs/PRIORITY5B_GOVERNANCE_ENFORCEMENT.md](docs/PRIORITY5B_GOVERNANCE_ENFORCEMENT.md): maker-checker activation, exception renewal/revocation, materialized expiry, reconciler operations, and notification rules.
 - [docs/PRIORITY5C_NATIVE_GOVERNANCE_EVIDENCE.md](docs/PRIORITY5C_NATIVE_GOVERNANCE_EVIDENCE.md): transactional governance projection, native relation vocabulary, digest verification, scoped retrieval, and recovery behavior.
 - [docs/PRIORITY5D_CISO_OPERATING_WORKSPACE.md](docs/PRIORITY5D_CISO_OPERATING_WORKSPACE.md): CISO information architecture, decision context, exception actions, remediation lifecycle, native evidence presentation, and responsive validation.
+- [docs/PRIORITY5E_RELEASE_QUALIFICATION.md](docs/PRIORITY5E_RELEASE_QUALIFICATION.md): final regression, image, recovery, role-isolation, and demo-package qualification.
 - [docs/PRIORITY5_PROJECT_PLAN.md](docs/PRIORITY5_PROJECT_PLAN.md): staged Priority 5A–5E scope, dependencies, acceptance criteria, and timeline.
+- [DEMO_README.md](DEMO_README.md): entry point for the real Cursor and GitHub demonstration package.
+- [docs/demo/LIVE_CLIENT_DEMO_RUNBOOK.md](docs/demo/LIVE_CLIENT_DEMO_RUNBOOK.md): timed Developer → Analyst → CISO demonstration script and contingency path.
 - [SECURITY.md](SECURITY.md): private security disclosure process.
 - [SUPPORT.md](SUPPORT.md): support boundary and issue-routing guidance.
 - [CHANGELOG.md](CHANGELOG.md): release checklist and change record.

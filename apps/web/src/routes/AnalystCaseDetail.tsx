@@ -120,6 +120,7 @@ function ExceptionRequest({ item }: { item: CaseRecord }) {
             rationale: String(form.get("rationale") ?? "").trim(),
             compensating_controls: String(form.get("controls") ?? "").trim(),
             owner: String(form.get("owner") ?? "").trim(),
+            evidence_ids: [`case:${item.id}`],
             expires_at: dateInputToEpoch(form.get("expires_at")),
           });
         }}>

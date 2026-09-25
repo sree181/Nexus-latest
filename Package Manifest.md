@@ -1,56 +1,45 @@
-# Package Manifest
+# MeshAgent Production v1 Package Manifest
 
-This repository archive contains the complete portable **MeshAgent Security Workbench source code**, the dependency lockfile, build configuration, Cursor project rule, runtime contracts, production HTTP adapter, OpenAPI contract, and backend integration documentation.
+This archive contains the complete portable source for the customer-operated MeshAgent v1 control plane and its Developer, Analyst, and CISO workflows. It is produced from a Git commit, not from a working-directory copy.
 
-## Included
+## Included source
 
-The archive includes:
-
-- All application source under `client/`, `server/`, and `shared/`
-- React, TypeScript, Vite, and Tailwind configuration
-- `package.json` and `pnpm-lock.yaml`
-- The Wouter compatibility patch under `patches/`
-- `README.md`
-- `CURSOR_BACKEND_INTEGRATION.md`
-- `CURSOR_HANDOFF_PROMPT.md`
-- `API_CONTRACT.openapi.yaml`
-- `INTEGRATION_GUIDE.md`
-- `HYPERGRAPH_EXPLORER_INTEGRATION.md`
-- `env.template.txt`
-- `.cursor/rules/meshagent-backend-integration.mdc`
+| Path | Contents |
+| --- | --- |
+| `apps/web/` | React, TypeScript, Vite, TanStack Query/Router, role workspaces, responsive design, and Nginx production image |
+| `services/api/` | FastAPI control plane, identity boundary, durable workflows, migrations, adapters, projection workers, and tests |
+| `services/engine/` | MeshAgent engine bindings, native HyperMesh core, tests, and native evidence writers |
+| `packages/` | Shared graph and UI contracts |
+| `adapters/` | Cursor, Claude Code, and Model Context Protocol integration assets |
+| `cli/` and `pyproject.toml` | Installable MeshAgent recorder CLI and shared protocol/state modules |
+| `scripts/ops/` | Backup, verification, restore, retention, recovery drill, upgrade preflight, and rollback tools |
+| `scripts/release/` | Authoritative release validation |
+| `scripts/demo/` | Read-only live-demo preflight |
+| `docs/` | Architecture, workflow, production, Priority 5, and client-demo guides |
+| Root release files | README, demo entry point, changelog, security/support policies, license, notices, Compose files, lockfiles, package manifest, and validation report |
 
 ## Deliberately excluded
 
-The archive excludes generated and machine-specific content:
+The archive excludes Git metadata, dependency directories, build output, caches, Python bytecode, local environment files, credentials, tokens, browser state, logs, Docker volumes, HyperMesh runtime state, SQLite databases, backups, screenshots containing local data, and other machine-specific content.
 
-- `node_modules/`
-- `dist/`
-- `.git/`
-- `.manus-logs/`
-- `.webdev/`
-- `.project-config.json`
-- Manus browser-debug files under `client/public/__manus__/`
-- Real `.env` files and secrets
+## Restore and build
 
-Dependencies are reproducibly restored with `pnpm install`. Production output is regenerated with `pnpm build`.
+The source archive preserves executable bits and file paths from the release commit. Dependencies are restored from `pnpm-lock.yaml` and `services/api/requirements.lock`. The simplest local demonstration build is:
 
-## Portability
+```bash
+docker compose up --build -d
+scripts/demo/verify-live-demo.sh http://localhost:8080
+```
 
-The packaged source does not depend on Manus-hosted visual assets. The application’s ambient surface is implemented with CSS gradients. Google Fonts are loaded from their public stylesheet; teams that require fully offline operation can self-host the specified IBM Plex and JetBrains Mono families.
+For non-container development, follow `README.md`. For a real Cursor and GitHub demonstration, start with `DEMO_README.md` and follow `docs/demo/MAC_LIVE_DEMO_SETUP.md` plus `docs/demo/LIVE_CLIENT_DEMO_RUNBOOK.md`.
 
 ## Verification
 
-Before packaging, the project was checked with:
-
-```bash
-pnpm check
-pnpm build
-```
-
-The OpenAPI YAML was parsed through Prettier’s YAML parser. The ZIP was then listed and checked to confirm that excluded directories, generated output, and environment files were absent.
+The matching `.sha256` file verifies the archive. The release report records frontend, API, native engine, dependency, Compose, production-image, migration, recovery, browser, and role-isolation evidence. A client deployment must still complete its own identity, storage, backup, network, and acceptance gates.
 
 ## References
 
-[1]: https://pnpm.io/cli/install "pnpm install"
-[2]: https://vite.dev/guide/build.html "Vite Production Build"
-[3]: https://spec.openapis.org/oas/latest.html "OpenAPI Specification"
+[1]: ./README.md "MeshAgent production v1 architecture"
+[2]: ./DEMO_README.md "End-to-end client demo package"
+[3]: ./RELEASE_VALIDATION_REPORT.md "MeshAgent release validation report"
+[4]: ./docs/PRODUCTION_OPERATIONS.md "Production operations runbook"

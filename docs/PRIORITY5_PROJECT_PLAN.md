@@ -4,7 +4,7 @@
 **Planning horizon:** 12 working days
 **Author:** Manus AI
 
-**Progress:** Stages 5A through 5D completed on 24 September 2026; Stage 5E release qualification remains in ordered delivery.
+**Progress:** Stages 5A through 5E completed in order on 24 September 2026.
 
 ## 1. Delivery objective
 
@@ -22,7 +22,7 @@ The following is an engineering forecast, not a production deployment commitment
 | **5B — Governance enforcement** | 3 | 28–30 September | **Completed 24 September** | Maker-checker separation, renewal/revocation, materialized expiry, deterministic reconciliation, notification rules |
 | **5C — HyperMesh evidence integration** | 2 | 1–2 October | **Completed 24 September** | Transactional projection outbox, native policy/exception relations, review/case linkage, scoped retrieval |
 | **5D — CISO operating experience** | 3 | 5–7 October | **Completed 24 September** | Policy studio, approval workspace, exception register, remediation portfolio, executive drill-down |
-| **5E — Release qualification** | 2 | 8–9 October | Planned | Full regression, migration/recovery and role tests, container build, live walkthrough, commit and package |
+| **5E — Release qualification** | 2 | 8–9 October | **Completed 24 September** | Full regression, migration/recovery and role tests, fresh non-root images, live walkthrough, commit and package |
 
 The nominal total is **12 working days**. A two-day contingency should be reserved for identity-provider testing, container capacity, migration rehearsal, or user-requested CISO workflow changes. With contingency, the planning range is **12–14 working days**.
 
@@ -60,9 +60,9 @@ Completion included desktop browser validation across all CISO workspaces, 390 �
 
 ### 3.5 Stage 5E — Release qualification
 
-Stage 5E validates the combined product. It includes the complete API, frontend, native engine, dependency, source-hygiene, migration, backup, restore, role-isolation, and public-proxy gates. It must build production containers as non-root, scan them under the existing release policy, and run an OIDC configuration smoke in a production-mode environment.
+Stage 5E validated the combined product across the complete API, frontend, native engine, dependency, source-hygiene, migration, backup, restore, role-isolation, browser, and proxy gates. Fresh API and web images ran as non-root, EngineGateway state remained durable, a clean restore reached application health, and the real Cursor/GitHub demo package was rehearsed.
 
-The release rehearsal will begin from a Stage 4 database backup, migrate forward, exercise policy creation through exception decision and remediation verification, restart the services, and prove the history and native evidence remain intact. The release will then be committed, published to the authorized repository, packaged with a checksum, and accompanied by a validation report and operating guide.
+The release rehearsal began from preserved collaborative state for the 5C/5D migrations and from a fresh qualified container volume for the final recovery drill. It exercised policy and exception evidence, remediation verification, restart idempotency, backup verification, clean restore, and health from restored state. The release is published on a dedicated branch, packaged from its commit with a checksum, and accompanied by validation, operating, installation, demo, and presentation material.[8]
 
 ## 4. Dependencies and decision points
 
@@ -102,3 +102,4 @@ A change that alters role authority, evidence visibility, lifecycle states, or p
 [5]: ../RELEASE_VALIDATION_REPORT.md "MeshAgent release validation report"
 [6]: ./PRIORITY5C_NATIVE_GOVERNANCE_EVIDENCE.md "Priority 5C native HyperMesh governance evidence design"
 [7]: ./PRIORITY5D_CISO_OPERATING_WORKSPACE.md "Priority 5D CISO operating workspace"
+[8]: ./PRIORITY5E_RELEASE_QUALIFICATION.md "Priority 5E release qualification and demo packaging"
