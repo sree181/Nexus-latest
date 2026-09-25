@@ -86,7 +86,7 @@ Back in the approved test branch, replace the old dependency with the displayed 
 
 ## 6. Contingency path
 
-If Cursor cannot reach MeshAgent, do not create a second conflicting session. Show `meshagent doctor`, preserve the local queue, restore service, and run `meshagent retry`. If the advisory feed is unavailable, explain the recorded fail-open decision and continue with previously recorded evidence only if the client agrees. If any role route or API health check fails, stop the live mutation flow and use the validated screenshots in the deck; do not represent a broken interaction as successful.
+If Cursor cannot reach MeshAgent, do not create a second conflicting session. Show `meshagent doctor`, preserve the local queue, restore service, and run `meshagent replay`. If the advisory feed is unavailable, explain the recorded fail-open decision and continue with previously recorded evidence only if the client agrees. If any role route or API health check fails, stop the live mutation flow and use the validated screenshots in the deck; do not represent a broken interaction as successful.
 
 ## 7. Reset after the meeting
 

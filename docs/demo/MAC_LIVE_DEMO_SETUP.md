@@ -80,12 +80,23 @@ cd YOUR_DEMO_REPOSITORY
 git switch -c meshagent-live-demo
 ```
 
-Copy the installed hook script into the demonstration repository. `MESHAGENT_HOME` is the local MeshAgent clone from section 3.
+Copy the installed hook script into the demonstration repository. `MESHAGENT_HOME` is the local MeshAgent clone from section 3. Use the wrapper below so Cursor always runs the hook with the dedicated MeshAgent virtual environment, even when Cursor is launched from Finder and does not inherit an activated Terminal environment.
 
 ```bash
 export MESHAGENT_HOME="$HOME/path/to/meshagent"
 mkdir -p .meshagent .cursor
 cp "$MESHAGENT_HOME/adapters/cursor/meshagent_hook.py" .meshagent/cursor_hook.py
+cat > .meshagent/run_cursor_hook.sh <<'SH'
+#!/bin/sh
+set -eu
+PYTHON="${MESHAGENT_PYTHON:-$HOME/.venvs/meshagent/bin/python}"
+test -x "$PYTHON" || {
+  echo "MeshAgent Python not found: $PYTHON" >&2
+  exit 1
+}
+exec "$PYTHON" "$(dirname "$0")/cursor_hook.py"
+SH
+chmod 700 .meshagent/run_cursor_hook.sh
 cat > .meshagent.json <<'JSON'
 {
   "record": true,
@@ -101,16 +112,26 @@ Create or merge `.cursor/hooks.json`. Keep any existing Cursor hooks and add the
 {
   "version": 1,
   "hooks": {
-    "beforeSubmitPrompt": [{"type":"command","command":"python3 ./.meshagent/cursor_hook.py","timeout":5}],
-    "afterFileEdit": [{"type":"command","command":"python3 ./.meshagent/cursor_hook.py","timeout":5}],
-    "beforeShellExecution": [{"type":"command","command":"python3 ./.meshagent/cursor_hook.py","timeout":6,"failClosed":false}],
-    "afterShellExecution": [{"type":"command","command":"python3 ./.meshagent/cursor_hook.py","timeout":5}],
-    "sessionEnd": [{"type":"command","command":"python3 ./.meshagent/cursor_hook.py","timeout":10}]
+    "beforeSubmitPrompt": [{"type":"command","command":"./.meshagent/run_cursor_hook.sh","timeout":5}],
+    "afterFileEdit": [{"type":"command","command":"./.meshagent/run_cursor_hook.sh","timeout":5}],
+    "beforeShellExecution": [{"type":"command","command":"./.meshagent/run_cursor_hook.sh","timeout":10,"failClosed":false}],
+    "afterShellExecution": [{"type":"command","command":"./.meshagent/run_cursor_hook.sh","timeout":5}],
+    "sessionEnd": [{"type":"command","command":"./.meshagent/run_cursor_hook.sh","timeout":10}]
   }
 }
 ```
 
-Open this repository folder in Cursor and restart Cursor after changing hooks.
+Before opening Cursor, validate the interpreter, configuration, and wrapper from the demonstration repository:
+
+```bash
+test -x "$HOME/.venvs/meshagent/bin/python"
+"$HOME/.venvs/meshagent/bin/python" -c 'import meshagent_cli; print("MeshAgent hook runtime OK")'
+python3 -m json.tool .meshagent.json >/dev/null
+python3 -m json.tool .cursor/hooks.json >/dev/null
+test -x .meshagent/run_cursor_hook.sh
+```
+
+Open this repository folder in Cursor and fully restart Cursor after changing hooks. Do not merely close the project tab.
 
 ## 6. Generate real evidence
 
