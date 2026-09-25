@@ -233,31 +233,31 @@ function CisoNav() {
   return (
     <>
       <Group label="GOVERNANCE">
-        <NavLink to="/analyst/queue" icon={<Icon d={icons.security} />}>
-          Security operations
-        </NavLink>
         <NavLink to="/ciso/overview" exact icon={<Icon d={icons.report} />}>
-          Executive overview
+          Command center
         </NavLink>
         <NavLink to="/ciso/policies" icon={<Icon d={icons.policy} />}>
-          Policies & exceptions
+          Policy control
         </NavLink>
         <NavLink to="/ciso/approvals" icon={<Icon d={icons.approval} />}>
-          Approvals
+          Decision desk
         </NavLink>
         <NavLink to="/ciso/remediation" icon={<Icon d={icons.remediation} />}>
-          Remediation
+          Remediation portfolio
         </NavLink>
         <NavLink to="/ciso/reports" icon={<Icon d={icons.report} />}>
-          Reports
+          Assurance reports
         </NavLink>
       </Group>
       <Group label="ASSURANCE">
+        <NavLink to="/analyst/queue" icon={<Icon d={icons.security} />}>
+          Security work
+        </NavLink>
         <NavLink to="/fleet/overview" icon={<Icon d={icons.fleet} />}>
-          Fleet intelligence
+          Fleet evidence
         </NavLink>
         <NavLink to="/audit" icon={<Icon d={icons.audit} />}>
-          Action log
+          Action history
         </NavLink>
         <NavLink to="/devices" icon={<Icon d={icons.devices} />}>
           Fleet devices

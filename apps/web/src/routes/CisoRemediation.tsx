@@ -1,49 +1,52 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@meshagent/ui";
+import { Badge, Button } from "@meshagent/ui";
 
 import { ErrorState, Loading } from "../components/Async";
 import { PageHeader } from "../components/PageHeader";
-import { Field, MutationMessage, StatusBadge, TextInput, dateInputToEpoch, epochToDateInput } from "../components/WorkflowUI";
-import { api, type CreateRemediationInput } from "../lib/api";
+import { Field, MutationMessage, Select, StatusBadge, TextArea, TextInput, dateInputToEpoch, epochToDateInput } from "../components/WorkflowUI";
+import { api, type CreateRemediationInput, type Remediation, type TransitionRemediationInput } from "../lib/api";
 import { timestamp } from "../lib/format";
+
+function RemediationActions({ item }: { item: Remediation }) {
+  const client = useQueryClient();
+  const [mode, setMode] = useState<TransitionRemediationInput["to_state"] | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const transition = useMutation({
+    mutationFn: (input: TransitionRemediationInput) => api.transitionRemediation(item.id, input),
+    onSuccess: (updated) => {
+      setSuccess(`Remediation marked ${updated.status.replace(/_/g, " ")}.`);
+      setMode(null);
+      void client.invalidateQueries({ queryKey: ["remediations"] });
+      void client.invalidateQueries({ queryKey: ["governanceOverview"] });
+    },
+  });
+  const terminal = ["verified_remediated", "failed", "exception_covered"].includes(item.status);
+  if (terminal) return null;
+  return <div className="mt-4 border-t border-line pt-4">{mode ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); transition.mutate({ expected_version: item.version, to_state: mode, rationale: String(form.get("rationale") ?? "").trim(), evidence_ids: String(form.get("evidence_ids") ?? "").split(",").map((value) => value.trim()).filter(Boolean) }); }}><Field label="Outcome rationale"><TextArea name="rationale" required /></Field>{mode === "verified_remediated" || mode === "exception_covered" ? <Field label="Evidence IDs" hint="Required; comma separated"><TextInput name="evidence_ids" required /></Field> : <Field label="Evidence IDs" hint="Optional; comma separated"><TextInput name="evidence_ids" /></Field>}<div className="flex flex-wrap gap-2"><Button type="submit" variant={mode === "failed" ? "danger" : undefined} disabled={transition.isPending}>{transition.isPending ? "Recording…" : "Confirm outcome"}</Button><Button type="button" variant="ghost" onClick={() => setMode(null)}>Cancel</Button></div></form> : <div className="flex flex-wrap gap-2">{item.status !== "in_progress" ? <Button type="button" variant="ghost" onClick={() => setMode("in_progress")}>Start work</Button> : null}<Button type="button" onClick={() => setMode("verified_remediated")}>Verify fixed</Button><Button type="button" variant="ghost" onClick={() => setMode("exception_covered")}>Covered by exception</Button><Button type="button" variant="danger" onClick={() => setMode("failed")}>Mark failed</Button></div>}<MutationMessage error={transition.error} success={success} /></div>;
+}
 
 export function CisoRemediation() {
   const remediation = useQuery({ queryKey: ["remediations"], queryFn: api.remediations });
   const cases = useQuery({ queryKey: ["cases"], queryFn: () => api.cases() });
   const client = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [filter, setFilter] = useState("open");
   const [success, setSuccess] = useState<string | null>(null);
-  const create = useMutation({ mutationFn: (input: CreateRemediationInput) => api.createRemediation(input), onSuccess: (created) => { setSuccess(`Remediation ${created.id} accepted.`); void client.invalidateQueries({ queryKey: ["remediations"] }); void client.invalidateQueries({ queryKey: ["governanceOverview"] }); } });
+  const create = useMutation({ mutationFn: (input: CreateRemediationInput) => api.createRemediation(input), onSuccess: (created) => { setSuccess(`${created.title} added to the portfolio.`); setShowCreate(false); void client.invalidateQueries({ queryKey: ["remediations"] }); void client.invalidateQueries({ queryKey: ["governanceOverview"] }); } });
   const nextWeek = Math.floor(Date.now() / 1000) + 7 * 86400;
+  const rows = remediation.data ?? [];
+  const visible = useMemo(() => rows.filter((item) => {
+    if (filter === "all") return true;
+    if (filter === "open") return !["verified_remediated", "failed", "exception_covered"].includes(item.status);
+    return item.status === filter;
+  }), [rows, filter]);
+  const counts = { overdue: rows.filter((item) => item.status === "overdue").length, active: rows.filter((item) => ["accepted", "in_progress"].includes(item.status)).length, verified: rows.filter((item) => item.status === "verified_remediated").length };
 
-  return (
-    <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      <PageHeader section="CISO" title="Remediation" meta={<span>accepted control-plane work</span>} />
-      <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
-        <section className="rounded-2xl border border-line bg-surface p-5">
-          <h2 className="font-serif text-lg font-semibold text-ink">Create remediation</h2>
-          <p className="mt-1 text-sm text-slate">Remediation work must reference an existing case and have an accountable owner and future due date.</p>
-          {cases.isPending ? <Loading label="Loading cases…" /> : cases.isError ? <ErrorState error={cases.error} retry={() => void cases.refetch()} /> : cases.data.cases.length === 0 ? <p className="mt-4 rounded-xl border border-line-2 bg-surface-2 px-4 py-4 text-sm text-slate">No case exists to remediate. Analysts create cases from recorded findings.</p> : (
-            <form className="mt-4 grid gap-4 lg:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); create.mutate({ case_id: String(form.get("case_id")), title: String(form.get("title") ?? "").trim(), owner: String(form.get("owner") ?? "").trim(), due_at: dateInputToEpoch(form.get("due_at")), target_revision: String(form.get("target_revision") ?? "").trim() || null }); }}>
-              <Field label="Case"><select name="case_id" required className="w-full rounded-lg border border-line-2 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft">{cases.data.cases.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.id}</option>)}</select></Field>
-              <Field label="Work title"><TextInput name="title" required maxLength={512} /></Field>
-              <Field label="Owner"><TextInput name="owner" required maxLength={256} placeholder="team or accountable person" /></Field>
-              <Field label="Due date"><TextInput name="due_at" type="date" required min={epochToDateInput(Math.floor(Date.now() / 1000) + 86400)} defaultValue={epochToDateInput(nextWeek)} /></Field>
-              <div className="lg:col-span-2"><Field label="Target revision" hint="Optional commit, release, image, or deployment identifier."><TextInput name="target_revision" maxLength={256} /></Field></div>
-              <div className="lg:col-span-2"><Button type="submit" disabled={create.isPending}>{create.isPending ? "Creating remediation…" : "Create remediation"}</Button></div>
-              <div className="lg:col-span-2"><MutationMessage error={create.error} success={success} /></div>
-            </form>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-line bg-surface p-5">
-          <h2 className="font-serif text-lg font-semibold text-ink">Remediation register</h2>
-          {remediation.isPending ? <Loading label="Loading remediation work…" /> : remediation.isError ? <ErrorState error={remediation.error} retry={() => void remediation.refetch()} /> : remediation.data.length === 0 ? <p className="mt-4 text-sm text-slate">No remediation work has been created.</p> : (
-            <div className="responsive-table-wrap mt-4"><table className="w-full border-collapse text-left"><thead><tr className="border-b border-line">{["Work", "Case", "Owner", "Target", "Due", "Status"].map((heading) => <th key={heading} className="pb-2 pr-4 font-mono text-[10.5px] font-normal tracking-widest text-slate">{heading.toUpperCase()}</th>)}</tr></thead><tbody>{remediation.data.map((item) => <tr key={item.id} className="border-b border-line align-top"><td className="py-3 pr-4"><p className="font-medium text-ink">{item.title}</p><p className="font-mono text-[11px] text-slate">{item.id}</p></td><td className="py-3 pr-4"><Link to="/analyst/cases/$caseId" params={{ caseId: item.case_id }} className="font-mono text-xs text-accent hover:underline">{item.case_id}</Link></td><td className="py-3 pr-4 text-sm text-ink">{item.owner}</td><td className="py-3 pr-4 font-mono text-xs text-slate">{item.target_revision ?? "Not set"}</td><td className="py-3 pr-4 font-mono text-xs text-slate">{timestamp(item.due_at)}</td><td className="py-3"><StatusBadge status={item.status} /></td></tr>)}</tbody></table></div>
-          )}
-        </section>
-      </div>
-    </main>
-  );
+  return <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden"><PageHeader section="CISO" title="Remediation portfolio" meta={<span>owned work and verified outcomes</span>} /><div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
+    <section className="grid gap-3 sm:grid-cols-3"><button type="button" onClick={() => setFilter("open")} className="rounded-2xl border border-line bg-surface p-4 text-left"><p className="font-mono text-[10px] tracking-widest text-slate">ACTIVE</p><p className="mt-1 font-serif text-3xl font-semibold text-ink">{counts.active}</p></button><button type="button" onClick={() => setFilter("overdue")} className="rounded-2xl border border-risk bg-risk-soft p-4 text-left"><p className="font-mono text-[10px] tracking-widest text-slate">OVERDUE</p><p className="mt-1 font-serif text-3xl font-semibold text-ink">{counts.overdue}</p></button><button type="button" onClick={() => setFilter("verified_remediated")} className="rounded-2xl border border-ok bg-ok-soft p-4 text-left"><p className="font-mono text-[10px] tracking-widest text-slate">VERIFIED FIXED</p><p className="mt-1 font-serif text-3xl font-semibold text-ink">{counts.verified}</p></button></section>
+    <section className="rounded-2xl border border-line bg-surface p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-serif text-lg font-semibold text-ink">Add owned work</h2><p className="mt-1 text-sm text-slate">Connect a security case to an owner, due date, and target revision.</p></div><Button type="button" onClick={() => setShowCreate((value) => !value)}>{showCreate ? "Close" : "Create remediation"}</Button></div>{showCreate ? cases.isPending ? <Loading label="Loading cases…" /> : cases.isError ? <ErrorState error={cases.error} retry={() => void cases.refetch()} /> : cases.data.cases.length === 0 ? <p className="mt-4 rounded-xl border border-line-2 bg-surface-2 px-4 py-4 text-sm text-slate">No case exists to remediate. Start from Security operations.</p> : <form className="mt-5 grid gap-4 lg:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); create.mutate({ case_id: String(form.get("case_id")), title: String(form.get("title") ?? "").trim(), owner: String(form.get("owner") ?? "").trim(), due_at: dateInputToEpoch(form.get("due_at")), target_revision: String(form.get("target_revision") ?? "").trim() || null }); }}><Field label="Case"><Select name="case_id" required>{cases.data.cases.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></Field><Field label="Work title"><TextInput name="title" required /></Field><Field label="Owner"><TextInput name="owner" required placeholder="team or accountable person" /></Field><Field label="Due date"><TextInput name="due_at" type="date" required min={epochToDateInput(Math.floor(Date.now() / 1000) + 86400)} defaultValue={epochToDateInput(nextWeek)} /></Field><div className="lg:col-span-2"><Field label="Target revision" hint="Commit, release, image, or deployment identifier"><TextInput name="target_revision" /></Field></div><div className="lg:col-span-2"><Button type="submit" disabled={create.isPending}>{create.isPending ? "Creating…" : "Add to portfolio"}</Button></div></form> : null}<MutationMessage error={create.error} success={success} /></section>
+    <section className="rounded-2xl border border-line bg-surface p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-serif text-lg font-semibold text-ink">Portfolio</h2><p className="mt-1 text-sm text-slate">A verified outcome requires evidence IDs.</p></div><Select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter remediation" className="w-auto"><option value="open">Open work</option><option value="overdue">Overdue</option><option value="in_progress">In progress</option><option value="verified_remediated">Verified fixed</option><option value="exception_covered">Exception covered</option><option value="failed">Failed</option><option value="all">All</option></Select></div>{remediation.isPending ? <Loading label="Loading remediation work…" /> : remediation.isError ? <ErrorState error={remediation.error} retry={() => void remediation.refetch()} /> : visible.length === 0 ? <p className="mt-5 rounded-xl border border-dashed border-line-2 p-6 text-center text-sm text-slate">No remediation work matches this view.</p> : <ul className="mt-5 grid gap-4 xl:grid-cols-2">{visible.map((item) => <li key={item.id} className="rounded-xl border border-line-2 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><StatusBadge status={item.status} /><h3 className="mt-2 font-medium text-ink">{item.title}</h3><Link to="/analyst/cases/$caseId" params={{ caseId: item.case_id }} className="mt-1 inline-block font-mono text-[11px] text-accent hover:underline">Case {item.case_id}</Link></div><Badge tone={item.status === "overdue" ? "risk" : "neutral"}>{timestamp(item.due_at)}</Badge></div><div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-surface-2 p-3"><div><p className="font-mono text-[10px] tracking-widest text-slate">OWNER</p><p className="mt-1 text-sm text-ink">{item.owner}</p></div><div><p className="font-mono text-[10px] tracking-widest text-slate">TARGET</p><p className="mt-1 break-all font-mono text-[11px] text-ink">{item.target_revision ?? "Not set"}</p></div></div>{item.evidence_ids.length ? <div className="mt-3 flex flex-wrap gap-1.5">{item.evidence_ids.map((evidence) => <span key={evidence} className="rounded-md border border-ok bg-ok-soft px-2 py-1 font-mono text-[10px] text-ok">{evidence}</span>)}</div> : null}<details className="mt-3"><summary className="cursor-pointer text-xs font-medium text-slate">{item.events.length} recorded action{item.events.length === 1 ? "" : "s"}</summary><ol className="mt-2 space-y-2 border-l border-line pl-3">{[...item.events].reverse().map((event) => <li key={event.id}><p className="text-xs font-medium text-ink">{event.action.replace(/^remediation\./, "").replace(/_/g, " ")}</p><p className="text-[11px] text-slate">{event.actor_name} · {timestamp(event.at)} · {event.rationale}</p></li>)}</ol></details><RemediationActions item={item} /></li>)}</ul>}</section>
+  </div></main>;
 }

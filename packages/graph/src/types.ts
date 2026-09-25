@@ -21,6 +21,9 @@ export type NodeKind =
   | "policy"
   | "review"
   | "review_event"
+  | "policy_version"
+  | "governance_event"
+  | "exception"
   | "session"
   | "repository"
   | "other";

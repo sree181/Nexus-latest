@@ -4,7 +4,7 @@
 **Planning horizon:** 12 working days
 **Author:** Manus AI
 
-**Progress:** Stages 5A, 5B, and 5C completed on 24 September 2026; Stages 5D and 5E remain in ordered delivery.
+**Progress:** Stages 5A through 5D completed on 24 September 2026; Stage 5E release qualification remains in ordered delivery.
 
 ## 1. Delivery objective
 
@@ -21,7 +21,7 @@ The following is an engineering forecast, not a production deployment commitment
 | **5A — Durable contracts** | 2 | 24–25 September | **Completed 24 September** | Versioned policy and exception aggregates, immutable events, migrations, APIs, tests, documentation, release commit |
 | **5B — Governance enforcement** | 3 | 28–30 September | **Completed 24 September** | Maker-checker separation, renewal/revocation, materialized expiry, deterministic reconciliation, notification rules |
 | **5C — HyperMesh evidence integration** | 2 | 1–2 October | **Completed 24 September** | Transactional projection outbox, native policy/exception relations, review/case linkage, scoped retrieval |
-| **5D — CISO operating experience** | 3 | 5–7 October | Planned | Policy studio, approval workspace, exception register, remediation portfolio, executive drill-down |
+| **5D — CISO operating experience** | 3 | 5–7 October | **Completed 24 September** | Policy studio, approval workspace, exception register, remediation portfolio, executive drill-down |
 | **5E — Release qualification** | 2 | 8–9 October | Planned | Full regression, migration/recovery and role tests, container build, live walkthrough, commit and package |
 
 The nominal total is **12 working days**. A two-day contingency should be reserved for identity-provider testing, container capacity, migration rehearsal, or user-requested CISO workflow changes. With contingency, the planning range is **12–14 working days**.
@@ -52,11 +52,11 @@ Completion included retry and startup reconciliation tests, native-only scoped g
 
 ### 3.4 Stage 5D — CISO operating experience
 
-Stage 5D will replace the current create-and-list governance pages with a cohesive CISO workspace. The policy view will show active, draft, in-review, superseded, and retired versions with effective dates and plain-language differences. The approval view will present the exact policy version, submitted evidence, owner, expiry, controls, and separation-of-duties state before a decision is possible.
+Stage 5D replaced the create-and-list governance pages with a cohesive CISO workspace. The policy view shows active, draft, in-review, superseded, withdrawn, and retired versions with effective dates and plain-language differences. The decision view presents the exact policy version, submitted evidence, owner, expiry, controls, and separation-of-duties state before a decision is possible.
 
-The exception register will support active, expiring, expired, revoked, and rejected views. The remediation portfolio will connect governance decisions to owned work and verification evidence. Executive metrics will drill down to the underlying records and will label coverage gaps rather than claiming unsupported compliance.
+The exception register supports pending, active, expiring, expired, revoked, rejected, and superseded views. The remediation portfolio connects cases to owned work, due dates, target revisions, terminal outcomes, verification evidence, and immutable history. Executive metrics drill down to the underlying records and label coverage gaps rather than claiming unsupported compliance.
 
-Completion requires desktop and mobile accessibility checks, keyboard and screen-reader review of decision forms, loading and stale-state recovery, Analyst-to-CISO and CISO-to-Analyst return paths, and browser validation with both Analyst and CISO identities.
+Completion included desktop browser validation across all CISO workspaces, 390 × 844 responsive checks with no horizontal page overflow, semantic native controls, loading/error paths, API stale-state rejection, Analyst/CISO return paths, and a clean application console. The detailed shipped design is documented separately.[7]
 
 ### 3.5 Stage 5E — Release qualification
 
@@ -101,3 +101,4 @@ A change that alters role authority, evidence visibility, lifecycle states, or p
 [4]: ./PRODUCTION_OPERATIONS.md "MeshAgent production operations and recovery guide"
 [5]: ../RELEASE_VALIDATION_REPORT.md "MeshAgent release validation report"
 [6]: ./PRIORITY5C_NATIVE_GOVERNANCE_EVIDENCE.md "Priority 5C native HyperMesh governance evidence design"
+[7]: ./PRIORITY5D_CISO_OPERATING_WORKSPACE.md "Priority 5D CISO operating workspace"

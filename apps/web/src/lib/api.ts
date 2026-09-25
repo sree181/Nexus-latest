@@ -783,10 +783,19 @@ export interface Approval {
 }
 
 export interface GovernanceLifecycleStatus {
-  last_started_at: number | null;
-  last_completed_at: number | null;
-  last_error: string | null;
-  last_counts: Record<string, number>;
+    last_started_at: number | null;
+    last_completed_at: number | null;
+    last_error: string | null;
+    last_counts: Record<string, number>;
+}
+
+export interface GovernanceEvidence {
+  resource_kind: "policy" | "exception";
+  resource_id: string;
+  projection_count: number;
+  native_ulids: string[];
+  payload_sha256: string[];
+  graph: GraphPayload;
 }
 
 export interface ApprovalDecisionInput {
@@ -801,13 +810,32 @@ export interface Remediation {
   title: string;
   owner: string;
   due_at: number;
-  status: string;
+  status:
+    | "accepted"
+    | "in_progress"
+    | "overdue"
+    | "verified_remediated"
+    | "failed"
+    | "exception_covered";
   target_revision: string | null;
   evidence_ids: string[];
   version: number;
   created_by: string;
   created_at: number;
   updated_at: number;
+  events: Array<{
+    id: string;
+    remediation_id: string;
+    actor: string;
+    actor_name: string;
+    action: string;
+    from_state: string | null;
+    to_state: Remediation["status"];
+    rationale: string;
+    evidence_ids: string[];
+    at: number;
+    correlation_id: string;
+  }>;
 }
 
 export interface CreateRemediationInput {
@@ -816,6 +844,13 @@ export interface CreateRemediationInput {
   owner: string;
   due_at: number;
   target_revision?: string | null;
+}
+
+export interface TransitionRemediationInput {
+  expected_version: number;
+  to_state: "in_progress" | "verified_remediated" | "failed" | "exception_covered";
+  rationale: string;
+  evidence_ids: string[];
 }
 
 export interface ReportManifest {
@@ -1489,6 +1524,8 @@ export const api = {
   createPolicy: (input: CreatePolicyInput) => post<Policy>("/policies", input),
   policy: (policyId: string) =>
     get<Policy>(`/policies/${encodeURIComponent(policyId)}`),
+  policyEvidence: (policyId: string) =>
+    get<GovernanceEvidence>(`/policies/${encodeURIComponent(policyId)}/evidence`),
   createPolicyVersion: (policyId: string, input: CreatePolicyVersionInput) =>
     post<Policy>(`/policies/${encodeURIComponent(policyId)}/versions`, input),
   submitPolicyVersion: (policyId: string, version: number, input: PolicyLifecycleInput) =>
@@ -1511,6 +1548,10 @@ export const api = {
   exceptions: () => get<PolicyException[]>("/exceptions"),
   exception: (exceptionId: string) =>
     get<PolicyException>(`/exceptions/${encodeURIComponent(exceptionId)}`),
+  exceptionEvidence: (exceptionId: string) =>
+    get<GovernanceEvidence>(
+      `/exceptions/${encodeURIComponent(exceptionId)}/evidence`,
+    ),
   requestException: (input: CreateExceptionInput) =>
     post<Approval>("/exceptions", input),
   renewException: (exceptionId: string, input: RenewExceptionInput) =>
@@ -1536,8 +1577,17 @@ export const api = {
   reconcileGovernanceLifecycle: () =>
     post<GovernanceLifecycleStatus>("/governance/lifecycle/reconcile", {}),
   remediations: () => get<Remediation[]>("/remediations"),
+  remediation: (remediationId: string) =>
+    get<Remediation>(`/remediations/${encodeURIComponent(remediationId)}`),
   createRemediation: (input: CreateRemediationInput) =>
     post<Remediation>("/remediations", input),
+  transitionRemediation: (
+    remediationId: string,
+    input: TransitionRemediationInput,
+  ) => post<Remediation>(
+    `/remediations/${encodeURIComponent(remediationId)}/transition`,
+    input,
+  ),
   reports: () => get<GovernanceReport[]>("/reports"),
   createReport: (input: CreateReportInput) =>
     post<GovernanceReport>("/reports", input),

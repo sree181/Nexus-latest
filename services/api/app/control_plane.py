@@ -312,6 +312,22 @@ class ControlPlane:
                   created_at INTEGER NOT NULL,
                   updated_at INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS remediation_events (
+                  id TEXT PRIMARY KEY,
+                  remediation_id TEXT NOT NULL REFERENCES remediations(id)
+                    ON DELETE CASCADE,
+                  actor TEXT NOT NULL,
+                  actor_name TEXT NOT NULL,
+                  action TEXT NOT NULL,
+                  from_state TEXT,
+                  to_state TEXT NOT NULL,
+                  rationale TEXT NOT NULL,
+                  evidence_ids TEXT NOT NULL,
+                  at INTEGER NOT NULL,
+                  correlation_id TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS remediation_events_resource
+                  ON remediation_events(remediation_id,at,id);
                 CREATE TABLE IF NOT EXISTS reports (
                   id TEXT PRIMARY KEY,
                   title TEXT NOT NULL,
@@ -2049,7 +2065,8 @@ class ControlPlane:
 
     def create_remediation(self, *, case_id: str, title: str, owner: str,
                            due_at: int, target_revision: str | None,
-                           actor: str) -> dict[str, Any]:
+                           actor: str, actor_name: str,
+                           correlation_id: str) -> dict[str, Any]:
         if due_at <= _now():
             raise StoreError("remediation due date must be in the future")
         remediation_id, now = _id("rem"), _now()
@@ -2062,6 +2079,17 @@ class ControlPlane:
                 (remediation_id, case_id, title, owner, due_at,
                  target_revision, actor, now, now),
             )
+            conn.execute(
+                """INSERT INTO remediation_events
+                (id,remediation_id,actor,actor_name,action,from_state,to_state,
+                 rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,? ,NULL,'accepted',?,'[]',?,?)""",
+                (
+                    _id("rme"), remediation_id, actor, actor_name,
+                    "remediation.created", "Remediation accepted for tracked work.",
+                    now, correlation_id,
+                ),
+            )
         return self.remediation(remediation_id)
 
     def remediations(self) -> list[dict[str, Any]]:
@@ -2069,23 +2097,91 @@ class ControlPlane:
             rows = conn.execute(
                 "SELECT * FROM remediations ORDER BY updated_at DESC,id DESC"
             ).fetchall()
-        return [self._remediation(row) for row in rows]
+            events = {
+                row["id"]: conn.execute(
+                    "SELECT * FROM remediation_events WHERE remediation_id=? "
+                    "ORDER BY at,id", (row["id"],),
+                ).fetchall()
+                for row in rows
+            }
+        return [self._remediation(row, events[row["id"]]) for row in rows]
 
     def remediation(self, remediation_id: str) -> dict[str, Any]:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM remediations WHERE id=?", (remediation_id,)).fetchone()
+            events = conn.execute(
+                "SELECT * FROM remediation_events WHERE remediation_id=? "
+                "ORDER BY at,id", (remediation_id,),
+            ).fetchall()
         if row is None:
             raise Missing("unknown remediation")
-        return self._remediation(row)
+        return self._remediation(row, events)
+
+    def transition_remediation(
+        self, remediation_id: str, *, expected_version: int,
+        to_state: str, rationale: str, evidence_ids: list[str],
+        actor: str, actor_name: str, correlation_id: str,
+    ) -> dict[str, Any]:
+        allowed = {
+            "accepted": {"in_progress", "verified_remediated", "failed", "exception_covered"},
+            "in_progress": {"verified_remediated", "failed", "exception_covered"},
+        }
+        if to_state not in {
+            "in_progress", "verified_remediated", "failed", "exception_covered",
+        }:
+            raise StoreError("unsupported remediation state")
+        evidence = list(dict.fromkeys(evidence_ids))
+        if to_state in {"verified_remediated", "exception_covered"} and not evidence:
+            raise StoreError("verification evidence is required for this outcome")
+        now, event_id = _now(), _id("rme")
+        with self._write() as conn:
+            current = conn.execute(
+                "SELECT * FROM remediations WHERE id=?", (remediation_id,),
+            ).fetchone()
+            if current is None:
+                raise Missing("unknown remediation")
+            if int(current["version"]) != expected_version:
+                raise VersionConflict("remediation changed; reload before continuing")
+            if to_state not in allowed.get(str(current["status"]), set()):
+                raise StoreError(
+                    f"remediation cannot move from {current['status']} to {to_state}"
+                )
+            merged = list(dict.fromkeys([
+                *_loads(current["evidence_ids"], []), *evidence,
+            ]))
+            conn.execute(
+                "UPDATE remediations SET status=?,evidence_ids=?,version=version+1,"
+                "updated_at=? WHERE id=?",
+                (to_state, _json(merged), now, remediation_id),
+            )
+            conn.execute(
+                """INSERT INTO remediation_events
+                (id,remediation_id,actor,actor_name,action,from_state,to_state,
+                 rationale,evidence_ids,at,correlation_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    event_id, remediation_id, actor, actor_name,
+                    f"remediation.{to_state}", current["status"], to_state,
+                    rationale, _json(evidence), now, correlation_id,
+                ),
+            )
+        return self.remediation(remediation_id)
 
     @staticmethod
-    def _remediation(row: sqlite3.Row) -> dict[str, Any]:
+    def _remediation(
+        row: sqlite3.Row, events: list[sqlite3.Row] | None = None,
+    ) -> dict[str, Any]:
         body = dict(row)
         if body["due_at"] < _now() and body["status"] not in (
             "verified_remediated", "failed", "exception_covered"
         ):
             body["status"] = "overdue"
         body["evidence_ids"] = _loads(body["evidence_ids"], [])
+        body["events"] = []
+        for event in events or []:
+            item = dict(event)
+            item["evidence_ids"] = _loads(item["evidence_ids"], [])
+            body["events"].append(item)
         return body
 
     @staticmethod
@@ -3622,7 +3718,8 @@ class ControlPlane:
                 (_now(),),
             ).fetchone()[0]
             remediation = conn.execute(
-                "SELECT COUNT(*) FROM remediations WHERE status NOT IN ('verified_remediated','failed')"
+                "SELECT COUNT(*) FROM remediations WHERE status NOT IN "
+                "('verified_remediated','failed','exception_covered')"
             ).fetchone()[0]
         return {
             "open_cases": int(open_cases),

@@ -19,6 +19,8 @@ import { AnalystCaseDetail } from "./routes/AnalystCaseDetail";
 import { AnalystInvestigation } from "./routes/AnalystInvestigation";
 import { CisoOverview } from "./routes/CisoOverview";
 import { CisoPolicies } from "./routes/CisoPolicies";
+import { CisoPolicyDetail } from "./routes/CisoPolicyDetail";
+import { CisoExceptionDetail } from "./routes/CisoExceptionDetail";
 import { CisoApprovals } from "./routes/CisoApprovals";
 import { CisoRemediation } from "./routes/CisoRemediation";
 import { CisoReports } from "./routes/CisoReports";
@@ -251,6 +253,18 @@ const cisoPoliciesRoute = createRoute({
   component: () => <RequiresCapability capability="policy.write"><CisoPolicies /></RequiresCapability>,
 });
 
+const cisoPolicyDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ciso/policies/$policyId",
+  component: () => <RequiresCapability capability="policy.write"><CisoPolicyDetail /></RequiresCapability>,
+});
+
+const cisoExceptionDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ciso/exceptions/$exceptionId",
+  component: () => <RequiresCapability capability="exception.approve"><CisoExceptionDetail /></RequiresCapability>,
+});
+
 const cisoApprovalsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/ciso/approvals",
@@ -412,6 +426,8 @@ const routeTree = rootRoute.addChildren([
   analystInvestigationRoute,
   cisoOverviewRoute,
   cisoPoliciesRoute,
+  cisoPolicyDetailRoute,
+  cisoExceptionDetailRoute,
   cisoApprovalsRoute,
   cisoRemediationRoute,
   cisoReportsRoute,

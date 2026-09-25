@@ -1,68 +1,48 @@
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@meshagent/ui";
 
 import { Async } from "../components/Async";
 import { PageHeader } from "../components/PageHeader";
-import { Metric, OriginNote } from "../components/WorkflowUI";
+import { OriginNote, StatusBadge } from "../components/WorkflowUI";
 import { api } from "../lib/api";
 import { timestamp } from "../lib/format";
 
+function MetricLink({ to, label, value, detail, tone = "neutral" }: { to: "/analyst/queue" | "/ciso/approvals" | "/ciso/policies" | "/ciso/remediation"; label: string; value: number; detail: string; tone?: "neutral" | "risk" | "warn" | "ok" }) {
+  const skin = tone === "risk" ? "border-risk bg-risk-soft" : tone === "warn" ? "border-warn bg-warn-soft" : tone === "ok" ? "border-ok bg-ok-soft" : "border-line bg-surface";
+  return <Link to={to} className={`group rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent ${skin}`}><div className="flex items-center justify-between gap-2"><p className="font-mono text-[10.5px] tracking-widest text-slate">{label.toUpperCase()}</p><span className="text-slate transition group-hover:translate-x-0.5">→</span></div><p className="mt-1 font-serif text-3xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs leading-snug text-slate">{detail}</p></Link>;
+}
+
+function HealthRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
+  return <div className="flex items-start justify-between gap-4 py-3"><div><dt className="text-sm font-medium text-ink">{label}</dt><p className="mt-0.5 text-xs text-slate">{detail}</p></div><dd><Badge tone={ok ? "ok" : "warn"}>{ok ? "ready" : "attention"}</Badge></dd></div>;
+}
+
 export function CisoOverview() {
   const overview = useQuery({ queryKey: ["governanceOverview"], queryFn: api.governanceOverview });
+  const approvals = useQuery({ queryKey: ["approvals"], queryFn: () => api.approvals() });
+  const policies = useQuery({ queryKey: ["policies"], queryFn: api.policies });
+  const exceptions = useQuery({ queryKey: ["exceptions"], queryFn: api.exceptions });
+  const remediations = useQuery({ queryKey: ["remediations"], queryFn: api.remediations });
+  const lifecycle = useQuery({ queryKey: ["governance-lifecycle"], queryFn: api.governanceLifecycleStatus });
 
-  return (
-    <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      <PageHeader section="CISO" title="Executive overview" meta={<span>governance posture</span>} />
-      <Async query={overview} label="Reading governance posture…">
-        {(data) => (
-          <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
-            <OriginNote origin={data.origin} />
-            <section aria-labelledby="workflow-heading">
-              <h2 id="workflow-heading" className="font-serif text-lg font-semibold text-ink">Control-plane workload</h2>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <Metric label="Open cases" value={data.workflow.open_cases} detail="Cases not resolved or closed." tone={data.workflow.open_cases > 0 ? "warn" : "neutral"} />
-                <Metric label="Overdue cases" value={data.workflow.overdue_cases} detail="Open cases past their server-calculated SLA." tone={data.workflow.overdue_cases > 0 ? "risk" : "neutral"} />
-                <Metric label="Pending approvals" value={data.workflow.pending_approvals} detail="Unexpired decisions waiting for separation-of-duties review." tone={data.workflow.pending_approvals > 0 ? "warn" : "neutral"} />
-                <Metric label="Active exceptions" value={data.workflow.active_exceptions} detail="Approved policy exceptions not yet expired." />
-                <Metric label="Open remediations" value={data.workflow.open_remediations} detail="Remediation work not yet verified or failed." tone={data.workflow.open_remediations > 0 ? "warn" : "neutral"} />
-              </div>
-            </section>
-
-            <section aria-labelledby="fleet-heading">
-              <h2 id="fleet-heading" className="font-serif text-lg font-semibold text-ink">Observed fleet</h2>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <Metric label="Active agents" value={data.fleet.agents_active} detail="Agents represented in fleet memory." />
-                <Metric label="Reachable findings" value={data.fleet.exploitable_findings} detail="Findings with a traced path to a dangerous sink." tone={data.fleet.exploitable_findings > 0 ? "risk" : "neutral"} />
-                <Metric label="Not assessed" value={data.fleet.unassessed_findings} detail="Findings with unknown reachability; not treated as safe." tone={data.fleet.unassessed_findings > 0 ? "warn" : "neutral"} />
-                <Metric label="Runs unscanned" value={data.fleet.runs_unscanned} detail="Runs without external scanner evidence." tone={data.fleet.runs_unscanned > 0 ? "warn" : "neutral"} />
-              </div>
-            </section>
-
-            <div className="grid gap-5 xl:grid-cols-2">
-              <section className="rounded-2xl border border-line bg-surface p-5">
-                <h2 className="font-serif text-lg font-semibold text-ink">Data health</h2>
-                <p className="mt-1 text-sm leading-relaxed text-slate">These are deployment checks, not inferred posture scores.</p>
-                <dl className="mt-4 divide-y divide-line">
-                  {[
-                    ["Durable storage", data.data_health.durable],
-                    ["Evidence engine", data.data_health.engine],
-                    ["Writes persist", data.data_health.persists],
-                    ["Audit chain intact", data.data_health.audit_intact],
-                    ["Identity provider verified", data.data_health.identity_verified],
-                  ].map(([label, ok]) => <div key={String(label)} className="flex items-center justify-between gap-4 py-3"><dt className="text-sm text-ink">{String(label)}</dt><dd><Badge tone={ok ? "ok" : "warn"}>{ok ? "yes" : "no"}</Badge></dd></div>)}
-                </dl>
-              </section>
-              <section className="rounded-2xl border border-line bg-surface p-5">
-                <h2 className="font-serif text-lg font-semibold text-ink">Posture observations</h2>
-                <p className="mt-1 text-sm leading-relaxed text-slate">Stored snapshots returned by the API. No chart is synthesized when history is absent.</p>
-                {data.trends.length === 0 ? <p className="mt-4 rounded-xl border border-line-2 bg-surface-2 px-4 py-4 text-sm text-slate">No historical posture snapshots are available yet.</p> : (
-                  <div className="responsive-table-wrap mt-4"><table className="w-full border-collapse text-left"><thead><tr className="border-b border-line"><th className="pb-2 font-mono text-[10.5px] font-normal tracking-widest text-slate">CAPTURED</th><th className="pb-2 font-mono text-[10.5px] font-normal tracking-widest text-slate">ORIGIN</th><th className="pb-2 font-mono text-[10.5px] font-normal tracking-widest text-slate">OBSERVATIONS</th></tr></thead><tbody>{data.trends.map((trend) => <tr key={trend.id} className="border-b border-line align-top"><td className="py-3 pr-4 font-mono text-xs text-ink">{timestamp(trend.captured_at)}</td><td className="py-3 pr-4"><Badge tone={trend.origin === "live" ? "ok" : trend.origin === "mixed" ? "warn" : "neutral"}>{trend.origin}</Badge></td><td className="py-3 text-xs text-slate">{Object.entries(trend.metrics).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}`).join(" · ") || "No metrics returned"}</td></tr>)}</tbody></table></div>
-                )}
-              </section>
-            </div>
-          </div>
-        )}
-      </Async>
-    </main>
-  );
+  return <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden"><PageHeader section="CISO" title="Governance command center" meta={<span>live posture and accountable work</span>} /><Async query={overview} label="Reading governance posture…">{(data) => {
+    const pending = (approvals.data ?? []).filter((item) => item.status === "pending");
+    const inReview = (policies.data ?? []).flatMap((policy) => policy.versions.filter((version) => version.state === "in_review").map((version) => ({ policy, version })));
+    const expiring = (exceptions.data ?? []).filter((item) => item.status === "approved" && item.expires_at - Date.now() / 1000 < 7 * 86400);
+    const overdueWork = (remediations.data ?? []).filter((item) => item.status === "overdue");
+    const attentionCount = pending.length + inReview.length + expiring.length + overdueWork.length + data.workflow.overdue_cases;
+    return <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6"><OriginNote origin={data.origin} compact />
+      <section className="rounded-2xl bg-ink p-5 text-white shadow-[var(--shadow-lg)] sm:p-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="font-mono text-[10.5px] tracking-widest text-white/55">DECISIONS AND DELIVERY</p><h2 className="mt-2 font-serif text-2xl font-semibold sm:text-3xl">{attentionCount ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention` : "No governance work is waiting"}</h2><p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/65">Start with decisions that are waiting, then overdue cases and expiring exceptions. Each number opens its source record.</p></div><Link to="/ciso/approvals" className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-white/90">Open decision desk</Link></div></section>
+      <section aria-labelledby="workload-heading"><h2 id="workload-heading" className="font-serif text-lg font-semibold text-ink">Workload</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricLink to="/analyst/queue" label="Open cases" value={data.workflow.open_cases} detail={`${data.workflow.overdue_cases} past due`} tone={data.workflow.overdue_cases ? "risk" : "neutral"} /><MetricLink to="/ciso/approvals" label="Pending decisions" value={data.workflow.pending_approvals} detail="Independent decisions still open" tone={data.workflow.pending_approvals ? "warn" : "neutral"} /><MetricLink to="/ciso/policies" label="Active exceptions" value={data.workflow.active_exceptions} detail={`${expiring.length} expire within seven days`} tone={expiring.length ? "warn" : "neutral"} /><MetricLink to="/ciso/remediation" label="Open fixes" value={data.workflow.open_remediations} detail={`${overdueWork.length} past due`} tone={overdueWork.length ? "risk" : "neutral"} /></div></section>
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,.75fr)]"><section className="rounded-2xl border border-line bg-surface p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-serif text-lg font-semibold text-ink">Needs attention</h2><p className="mt-1 text-sm text-slate">Ordered by the next decision or deadline.</p></div><Badge tone={attentionCount ? "warn" : "ok"}>{attentionCount}</Badge></div><ul className="mt-4 divide-y divide-line">
+        {pending.slice(0, 3).map((item) => <li key={item.id}><Link to="/ciso/exceptions/$exceptionId" params={{ exceptionId: item.resource_id }} className="flex items-center justify-between gap-4 py-3 hover:text-accent"><div><p className="text-sm font-medium text-ink">Exception decision</p><p className="mt-0.5 text-xs text-slate">{item.requester_name} · window closes {timestamp(item.expires_at)}</p></div><StatusBadge status={item.status} /></Link></li>)}
+        {inReview.slice(0, 3).map(({ policy, version }) => <li key={`${policy.id}:${version.version}`}><Link to="/ciso/policies/$policyId" params={{ policyId: policy.id }} className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium text-ink">Policy version waiting for activation</p><p className="mt-0.5 text-xs text-slate">{policy.name} · version {version.version}</p></div><StatusBadge status="in_review" /></Link></li>)}
+        {expiring.slice(0, 3).map((item) => <li key={item.id}><Link to="/ciso/exceptions/$exceptionId" params={{ exceptionId: item.id }} className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium text-ink">Exception expiry approaching</p><p className="mt-0.5 text-xs text-slate">{item.scope} · {timestamp(item.expires_at)}</p></div><Badge tone="warn">expiring</Badge></Link></li>)}
+        {overdueWork.slice(0, 3).map((item) => <li key={item.id}><Link to="/ciso/remediation" className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium text-ink">Remediation past due</p><p className="mt-0.5 text-xs text-slate">{item.title} · {item.owner}</p></div><StatusBadge status="overdue" /></Link></li>)}
+        {data.workflow.overdue_cases > 0 ? <li><Link to="/analyst/queue" className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-medium text-ink">Security cases past due</p><p className="mt-0.5 text-xs text-slate">{data.workflow.overdue_cases} case{data.workflow.overdue_cases === 1 ? "" : "s"} need triage</p></div><StatusBadge status="overdue" /></Link></li> : null}
+        {!attentionCount ? <li className="py-8 text-center"><p className="font-serif text-lg font-semibold text-ink">Queue is clear</p><p className="mt-1 text-sm text-slate">No waiting decisions, near-term expiries, or overdue remediation.</p></li> : null}
+      </ul></section><section className="rounded-2xl border border-line bg-surface p-5"><h2 className="font-serif text-lg font-semibold text-ink">Control-plane health</h2><p className="mt-1 text-sm text-slate">Measured deployment checks, not a generated score.</p><dl className="mt-3 divide-y divide-line"><HealthRow label="Durable storage" ok={data.data_health.durable && data.data_health.persists} detail="Workflow and evidence writes persist" /><HealthRow label="HyperMesh engine" ok={data.data_health.engine} detail="Native evidence engine is active" /><HealthRow label="Audit chain" ok={data.data_health.audit_intact} detail="Action history verifies end to end" /><HealthRow label="Identity provider" ok={data.data_health.identity_verified} detail={data.data_health.identity_verified ? "Roles come from a verified provider" : "Local demo identity is active"} /><HealthRow label="Lifecycle worker" ok={Boolean(lifecycle.data?.last_completed_at) && !lifecycle.data?.last_error} detail={lifecycle.data?.last_completed_at ? `Last completed ${timestamp(lifecycle.data.last_completed_at)}` : "Waiting for first completed scan"} /></dl></section></div>
+      <section className="rounded-2xl border border-line bg-surface p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-serif text-lg font-semibold text-ink">Observed evidence</h2><p className="mt-1 text-sm text-slate">Unknown coverage is kept visible and is never counted as safe.</p></div><Link to="/fleet/overview" className="text-sm font-medium text-accent hover:underline">Open fleet evidence</Link></div><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl bg-surface-2 p-4"><p className="font-mono text-[10px] tracking-widest text-slate">ACTIVE AGENTS</p><p className="mt-1 font-serif text-2xl text-ink">{data.fleet.agents_active}</p></div><div className="rounded-xl bg-risk-soft p-4"><p className="font-mono text-[10px] tracking-widest text-slate">REACHABLE FINDINGS</p><p className="mt-1 font-serif text-2xl text-risk">{data.fleet.exploitable_findings}</p></div><div className="rounded-xl bg-warn-soft p-4"><p className="font-mono text-[10px] tracking-widest text-slate">NOT ASSESSED</p><p className="mt-1 font-serif text-2xl text-warn">{data.fleet.unassessed_findings}</p></div><div className="rounded-xl bg-surface-2 p-4"><p className="font-mono text-[10px] tracking-widest text-slate">RUNS UNSCANNED</p><p className="mt-1 font-serif text-2xl text-ink">{data.fleet.runs_unscanned}</p></div></div></section>
+    </div>;
+  }}</Async></main>;
 }

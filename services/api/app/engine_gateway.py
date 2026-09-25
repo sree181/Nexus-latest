@@ -512,31 +512,40 @@ class EngineGateway(Gateway):
             f"policy:{resource_id}"
             if resource_kind == "policy" else f"exception:{resource_id}"
         )
-        parent_subjects = [subject]
-        policy = dict(snapshot.get("policy") or {})
-        exception = dict(snapshot.get("exception") or {})
-        if exception.get("policy_id"):
-            parent_subjects.append(f"policy:{exception['policy_id']}")
-        if exception.get("predecessor_exception_id"):
-            parent_subjects.append(
-                f"exception:{exception['predecessor_exception_id']}"
-            )
-        if policy.get("predecessor_version"):
-            parent_subjects.append(
-                f"policy-version:{policy['id']}@{policy['predecessor_version']}"
-            )
-        allowed = {
+        policy_relations = {
             "policy_version", "policy_activation", "policy_supersession",
+        }
+        exception_relations = {
             "exception_request", "exception_decision", "exception_expiry",
             "exception_revocation",
         }
+        parent_subjects = [(
+            subject,
+            policy_relations if resource_kind == "policy" else exception_relations,
+        )]
+        policy = dict(snapshot.get("policy") or {})
+        exception = dict(snapshot.get("exception") or {})
+        if exception.get("policy_id"):
+            parent_subjects.append((
+                f"policy:{exception['policy_id']}", policy_relations,
+            ))
+        if exception.get("predecessor_exception_id"):
+            parent_subjects.append((
+                f"exception:{exception['predecessor_exception_id']}",
+                exception_relations,
+            ))
+        if policy.get("predecessor_version"):
+            parent_subjects.append((
+                f"policy-version:{policy['id']}@{policy['predecessor_version']}",
+                policy_relations,
+            ))
         parents: list[str] = []
-        for parent_subject in parent_subjects:
+        for parent_subject, parent_kinds in parent_subjects:
             for ulid in self._governance.find_by_subject(parent_subject):
                 record = self._governance.get(ulid)
                 if (
                     record is not None and not record.tombstoned
-                    and _ctype(record) in allowed
+                    and _ctype(record) in parent_kinds
                 ):
                     parents.append(ulid)
         recorder = self._codegraph_recorder(self._governance)
@@ -591,10 +600,11 @@ class EngineGateway(Gateway):
         for root in roots:
             collect(self._governance.why(root, max_depth=16))
         records = [self._governance.get(ulid) for ulid in selected]
+        selected_allowed = root_allowed if resource_kind == "policy" else allowed
         records = [
             record for record in records
             if record is not None and not record.tombstoned
-            and _ctype(record) in allowed
+            and _ctype(record) in selected_allowed
         ]
         for record in records:
             content = dict(record.content or {})

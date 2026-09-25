@@ -122,6 +122,7 @@ from .workflow_models import (
     SavedViewOut,
     SavedViewRequest,
     TransitionCaseRequest,
+    TransitionRemediationRequest,
     WorkActivityListOut,
     WorkCommentOut,
     WorkCommentRequest,
@@ -1424,6 +1425,7 @@ def remediations(
 @app.post("/api/remediations", response_model=RemediationOut, status_code=201)
 def create_remediation(
     req: CreateRemediationRequest,
+    request: Request,
     who: Principal = Depends(require_capability("remediation.write")),
 ) -> RemediationOut:
     note(
@@ -1437,8 +1439,45 @@ def create_remediation(
         due_at=req.due_at,
         target_revision=req.target_revision,
         actor=who.subject,
+        actor_name=who.name,
+        correlation_id=_correlation(request),
     )
     return RemediationOut(**remediation)
+
+
+@app.get("/api/remediations/{remediation_id}", response_model=RemediationOut)
+def remediation(
+    remediation_id: str,
+    _: Principal = Depends(require_capability("remediation.write")),
+) -> RemediationOut:
+    return RemediationOut(**workflow_store.remediation(remediation_id))
+
+
+@app.post(
+    "/api/remediations/{remediation_id}/transition",
+    response_model=RemediationOut,
+)
+def transition_remediation(
+    remediation_id: str,
+    req: TransitionRemediationRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("remediation.write")),
+) -> RemediationOut:
+    note(
+        who, "remediation.transition.request", remediation_id, req.to_state,
+        require_commit=True,
+    )
+    value = workflow_store.transition_remediation(
+        remediation_id,
+        expected_version=req.expected_version,
+        to_state=req.to_state,
+        rationale=req.rationale,
+        evidence_ids=req.evidence_ids,
+        actor=who.subject,
+        actor_name=who.name,
+        correlation_id=_correlation(request),
+    )
+    return RemediationOut(**value)
 
 
 @app.get("/api/reports", response_model=list[ReportOut])

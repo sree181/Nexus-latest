@@ -16,6 +16,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts: ["localhost", ".manus.computer"],
     proxy: {
       "/auth": {
         target: process.env.VITE_API_BASE || "http://localhost:8000",

@@ -290,19 +290,49 @@ class CreateRemediationRequest(BaseModel):
     target_revision: str | None = Field(default=None, max_length=256)
 
 
+RemediationState = Literal[
+    "accepted", "in_progress", "overdue", "verified_remediated", "failed",
+    "exception_covered",
+]
+
+
+class TransitionRemediationRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    to_state: Literal[
+        "in_progress", "verified_remediated", "failed", "exception_covered",
+    ]
+    rationale: str = Field(min_length=1, max_length=4_096)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class RemediationEventOut(BaseModel):
+    id: str
+    remediation_id: str
+    actor: str
+    actor_name: str
+    action: str
+    from_state: str | None = None
+    to_state: RemediationState
+    rationale: str
+    evidence_ids: list[str]
+    at: int
+    correlation_id: str
+
+
 class RemediationOut(BaseModel):
     id: str
     case_id: str
     title: str
     owner: str
     due_at: int
-    status: str
+    status: RemediationState
     target_revision: str | None = None
     evidence_ids: list[str]
     version: int
     created_by: str
     created_at: int
     updated_at: int
+    events: list[RemediationEventOut] = Field(default_factory=list)
 
 
 class ReportRequest(BaseModel):

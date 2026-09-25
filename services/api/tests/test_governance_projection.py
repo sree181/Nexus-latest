@@ -295,6 +295,23 @@ def test_native_governance_projection_is_idempotent_and_resource_scoped(
     }
     assert first_ulid in {relation.id for relation in exception_graph.relations}
 
+    late_exception_ulid = gateway.project_governance_event(
+        event=_exception_event("pol-late", "exc-before-policy", "eev-before")
+    )
+    late_policy_ulid = gateway.project_governance_event(
+        event=_event("pol-late", "pev-after")
+    )
+    late_policy_graph = gateway.governance_evidence_graph("policy", "pol-late")
+    assert late_policy_ulid in {
+        relation.id for relation in late_policy_graph.relations
+    }
+    assert late_exception_ulid not in {
+        relation.id for relation in late_policy_graph.relations
+    }
+    assert {relation.kind for relation in late_policy_graph.relations} == {
+        "policy_activation"
+    }
+
 
 def test_native_governance_graph_rejects_payload_tamper(tmp_path, monkeypatch):
     monkeypatch.setenv("MESHAGENT_DB_DIR", str(tmp_path / "engine-state"))
