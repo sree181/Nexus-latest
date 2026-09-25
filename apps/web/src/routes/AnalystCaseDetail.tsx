@@ -19,6 +19,11 @@ const transitions: Record<CaseRecord["state"], CaseTransition[]> = {
   closed: ["reopened"],
 };
 
+export function reviewRequestIdFromCaseFinding(findingId: string): string | null {
+  if (!findingId.startsWith("review:")) return null;
+  return findingId.slice("review:".length).trim() || null;
+}
+
 function Assignment({ item }: { item: CaseRecord }) {
   const client = useQueryClient();
   const [success, setSuccess] = useState<string | null>(null);
@@ -151,7 +156,7 @@ export function AnalystCaseDetail() {
               <div className="flex flex-wrap items-center gap-2"><SeverityBadge severity={item.severity} /><StatusBadge status={item.state} />{item.overdue ? <StatusBadge status="overdue" /> : null}<span className="font-mono text-xs text-slate">version {item.version}</span></div>
               <h1 className="mt-3 font-serif text-2xl font-semibold text-ink">{item.title}</h1>
               <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                <div><p className="font-mono text-[10.5px] tracking-widest text-slate">FINDING</p><Link to="/analyst/investigate/$runId/$findingId" params={{ runId: item.run_id, findingId: item.finding_id }} className="mt-1 block break-all text-accent hover:underline">{item.finding_id}</Link></div>
+                <div><p className="font-mono text-[10.5px] tracking-widest text-slate">SOURCE</p>{reviewRequestIdFromCaseFinding(item.finding_id) ? <Link to="/analyst/reviews/$requestId" params={{ requestId: reviewRequestIdFromCaseFinding(item.finding_id)! }} className="mt-1 block break-all text-accent hover:underline">Open source review</Link> : <Link to="/analyst/investigate/$runId/$findingId" params={{ runId: item.run_id, findingId: item.finding_id }} className="mt-1 block break-all text-accent hover:underline">{item.finding_id}</Link>}</div>
                 <div><p className="font-mono text-[10.5px] tracking-widest text-slate">RUN</p><Link to="/runs/$runId/security" params={{ runId: item.run_id }} className="mt-1 block break-all text-accent hover:underline">{item.run_id}</Link></div>
                 <div><p className="font-mono text-[10.5px] tracking-widest text-slate">ASSIGNEE</p><p className="mt-1 text-ink">{item.assignee_name ?? "Unassigned"}</p></div>
                 <div><p className="font-mono text-[10.5px] tracking-widest text-slate">UPDATED</p><p className="mt-1 text-ink">{timestamp(item.updated_at)}</p></div>
