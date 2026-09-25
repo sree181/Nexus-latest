@@ -1,6 +1,6 @@
-# MeshAgent Real-Data Client Demo
+# meshAgent Real-Data Client Demo
 
-This release can demonstrate the complete **Developer → Analyst → CISO** workflow with a real local Git clone and a real Cursor session. MeshAgent does not replace Cursor or GitHub. Cursor supplies opted-in coding events; the Git working tree supplies repository, remote, branch, and commit context; MeshAgent governs the resulting package evidence, review, case, exception, remediation, and decision record.
+This release can demonstrate the complete **Developer → Analyst → CISO** workflow with a real local Git clone and a real Cursor session. meshAgent does not replace Cursor or GitHub. Cursor supplies opted-in coding events; the Git working tree supplies repository, remote, branch, and commit context; meshAgent governs the resulting package evidence, review, case, exception, remediation, and decision record.
 
 ## Start here
 
@@ -9,11 +9,11 @@ This release can demonstrate the complete **Developer → Analyst → CISO** wor
 3. Follow [Live Client Demo Runbook](docs/demo/LIVE_CLIENT_DEMO_RUNBOOK.md) during rehearsal and delivery.
 4. Keep [Presenter Checklist](docs/demo/PRESENTER_CHECKLIST.md) open for the final preflight and contingency path.
 5. Use the [editable client-demo PowerPoint](docs/demo/MeshAgent_Client_Demo_Deck.pptx) for the opening narrative.
-6. Produce the master film from the [90-second storyboard](docs/demo/MESHAGENT_90_SECOND_MASTER_FILM_STORYBOARD.md) and [voice-actor script](docs/demo/MESHAGENT_90_SECOND_NARRATION.txt).
+6. Use the [90-second storyboard](docs/demo/MESHAGENT_90_SECOND_MASTER_FILM_STORYBOARD.md), [voice-actor script](docs/demo/MESHAGENT_90_SECOND_NARRATION.txt), and [promotional cut scripts](docs/demo/meshAgent_PROMOTIONAL_CUTS_SCRIPT.md) as the approved film package.
 
 ## What is live
 
-The recommended demonstration creates a new Cursor session during the meeting, records a real file change and package command, submits a real Developer review request, assigns and investigates it as an Analyst, requests a governed exception, decides it with a separate CISO identity, records remediation evidence, and returns to a clean package verification. The repository remote, branch, and commit shown by MeshAgent come from the local Git checkout.
+The recommended demonstration creates a new Cursor session during the meeting, records a real file change and package command, submits a real Developer review request, assigns and investigates it as an Analyst, requests a governed exception, decides it with a separate CISO identity, records remediation evidence, and returns to a clean package verification. The repository remote, branch, and commit shown by meshAgent come from the local Git checkout.
 
 ## What is not claimed
 
