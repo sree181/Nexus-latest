@@ -273,6 +273,15 @@ class GovernanceLifecycleStatusOut(BaseModel):
     last_counts: dict[str, int] = Field(default_factory=dict)
 
 
+class GovernanceEvidenceOut(BaseModel):
+    resource_kind: Literal["policy", "exception"]
+    resource_id: str
+    projection_count: int = Field(ge=1)
+    native_ulids: list[str]
+    payload_sha256: list[str]
+    graph: GraphPayload
+
+
 class CreateRemediationRequest(BaseModel):
     case_id: str = Field(min_length=1, max_length=256)
     title: str = Field(min_length=1, max_length=512)

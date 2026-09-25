@@ -19,6 +19,7 @@ License:     Proprietary
 from __future__ import annotations
 
 import ast
+import hashlib
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -57,6 +58,12 @@ P_REVIEW_EVENT = "review-event:"
 P_SESSION = "session:"
 P_REPOSITORY = "repository:"
 P_ACTOR = "actor:"
+P_POLICY_VERSION = "policy-version:"
+P_GOVERNANCE_EVENT = "governance-event:"
+P_EXCEPTION = "exception:"
+P_SCOPE = "scope:"
+P_CONTROL = "control:"
+P_NATIVE_ROOT = "native-root:"
 
 
 # Dangerous call sites, keyed by the resolved dotted call name. Each maps to
@@ -999,6 +1006,81 @@ class CodeGraphRecorder:
             derived_from=parent_ulids or None,
         )
 
+    def record_governance_event(
+        self, *, event_id: str, relation_kind: str, resource_kind: str,
+        resource_id: str, actor: str, occurred_at: int,
+        canonical_sha256: str, payload: dict[str, Any],
+        parent_ulids: list[str] | None = None,
+    ) -> str:
+        """Append one immutable, digest-bound governance episode.
+
+        The relational outbox event is the idempotency key.  The canonical
+        payload is frozen by the control plane before this method runs; this
+        writer never rebuilds a decision from current mutable state.
+        """
+        if existing := self._projected(event_id, relation_kind):
+            return existing
+        members = [
+            f"{P_GOVERNANCE_EVENT}{event_id}", f"{P_ACTOR}{actor}",
+        ]
+        policy = dict(payload.get("policy") or {})
+        exception = dict(payload.get("exception") or {})
+        if resource_kind == "policy":
+            members.append(f"{P_POLICY}{resource_id}")
+        else:
+            members.append(f"{P_EXCEPTION}{resource_id}")
+        if policy:
+            policy_id = str(policy.get("id") or resource_id)
+            version = policy.get("version")
+            members.append(f"{P_POLICY}{policy_id}")
+            if version is not None:
+                members.append(f"{P_POLICY_VERSION}{policy_id}@{version}")
+            if predecessor := policy.get("predecessor_version"):
+                members.append(f"{P_POLICY_VERSION}{policy_id}@{predecessor}")
+        if exception:
+            exception_id = str(exception.get("id") or resource_id)
+            policy_id = str(exception.get("policy_id") or "")
+            policy_version = exception.get("policy_version")
+            members.append(f"{P_EXCEPTION}{exception_id}")
+            if policy_id:
+                members.append(f"{P_POLICY}{policy_id}")
+                if policy_version is not None:
+                    members.append(
+                        f"{P_POLICY_VERSION}{policy_id}@{policy_version}"
+                    )
+            if exception.get("scope"):
+                members.append(f"{P_SCOPE}{exception['scope']}")
+            if exception.get("owner"):
+                members.append(f"{P_ACTOR}{exception['owner']}")
+            if exception.get("compensating_controls"):
+                control_digest = hashlib.sha256(
+                    str(exception["compensating_controls"]).encode()
+                ).hexdigest()[:24]
+                members.append(f"{P_CONTROL}{control_digest}")
+            if predecessor := exception.get("predecessor_exception_id"):
+                members.append(f"{P_EXCEPTION}{predecessor}")
+            if successor := exception.get("superseded_by_exception_id"):
+                members.append(f"{P_EXCEPTION}{successor}")
+        for item in payload.get("resolved_evidence") or []:
+            kind, linked = item.get("kind"), item.get("resource_id")
+            if kind in ("review", "case") and linked:
+                members.append(f"{kind}:{linked}")
+            if item.get("resolved") and item.get("native_ulid"):
+                members.append(f"{P_NATIVE_ROOT}{item['native_ulid']}")
+        if marker := self._projection_subject(event_id, relation_kind):
+            members.append(marker)
+        return self.memory.write(
+            Kind.EPISODE, list(dict.fromkeys(members)),
+            origin=Origin.AGENT, status=Status.VERIFIED,
+            source="agent:governance-workflow", event_ts=occurred_at,
+            payload={
+                **payload,
+                "type": relation_kind,
+                "canonical_sha256": canonical_sha256,
+            },
+            derived_from=parent_ulids or None,
+        )
+
     # ── reachability: taint findings from a SARIF scan ────────────────────
 
     def record_taint(
@@ -1073,6 +1155,10 @@ def _node_kind(name: str) -> str:
         (P_POLICY, "policy"), (P_REVIEW, "review"),
         (P_REVIEW_EVENT, "review_event"), (P_SESSION, "session"),
         (P_REPOSITORY, "repository"), (P_ACTOR, "agent"),
+        (P_POLICY_VERSION, "policy_version"),
+        (P_GOVERNANCE_EVENT, "governance_event"),
+        (P_EXCEPTION, "exception"), (P_SCOPE, "other"),
+        (P_CONTROL, "other"), (P_NATIVE_ROOT, "other"),
     ):
         if name.startswith(pfx):
             return kind

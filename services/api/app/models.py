@@ -13,7 +13,8 @@ NodeKind = Literal[
     "source", "decision", "class", "package", "version",
     "license", "sink", "cwe", "cve", "entry", "agent",
     "capability", "module", "function", "api", "policy", "review",
-    "review_event", "session", "repository", "other",
+    "review_event", "policy_version", "governance_event", "exception",
+    "session", "repository", "other",
 ]
 Plane = Literal["provenance", "security", "supply", "belief", "time"]
 Severity = Literal["critical", "high", "medium", "low", "unknown"]

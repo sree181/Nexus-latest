@@ -41,6 +41,9 @@ _PREFIX_KIND = [
     ("version:", "version"), ("license:", "license"), ("cve:", "cve"),
     ("entry:", "entry"), ("agent:", "agent"), ("actor:", "agent"),
     ("policy:", "policy"),
+    ("policy-version:", "policy_version"),
+    ("governance-event:", "governance_event"),
+    ("exception:", "exception"),
     ("review:", "review"), ("review-event:", "review_event"),
     ("session:", "session"), ("repository:", "repository"),
 ]

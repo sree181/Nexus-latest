@@ -155,6 +155,16 @@ class Gateway(ABC):
         """Return only the native evidence chain sealed under one review."""
 
     @abstractmethod
+    def project_governance_event(self, *, event: dict) -> str:
+        """Append one immutable policy or exception lifecycle episode."""
+
+    @abstractmethod
+    def governance_evidence_graph(
+        self, resource_kind: str, resource_id: str,
+    ) -> GraphPayload:
+        """Return only the native evidence chain for one governed resource."""
+
+    @abstractmethod
     def fleet_query(self, query: str) -> QueryResult: ...
 
     @abstractmethod
@@ -345,6 +355,14 @@ class SampleGateway(Gateway):
 
     def review_evidence_graph(self, run_id: str, request_id: str) -> GraphPayload:
         raise NotFound("native review evidence is unavailable in sample mode")
+
+    def project_governance_event(self, *, event: dict) -> str:
+        raise NotFound("native governance evidence is unavailable in sample mode")
+
+    def governance_evidence_graph(
+        self, resource_kind: str, resource_id: str,
+    ) -> GraphPayload:
+        raise NotFound("native governance evidence is unavailable in sample mode")
 
     def fleet_query(self, query: str) -> QueryResult:
         return sample.fleet_query(query)

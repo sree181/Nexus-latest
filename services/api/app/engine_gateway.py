@@ -11,8 +11,10 @@ from __future__ import annotations
 import ast
 import functools
 import hashlib
+import json
 import logging
 import re
+import secrets
 import threading
 import time
 from collections import Counter
@@ -75,7 +77,7 @@ _ALLOWED_KINDS = {
     "source", "decision", "class", "package", "version", "license",
     "sink", "cwe", "cve", "entry", "agent", "capability", "other",
     "module", "function", "api", "policy", "review", "review_event",
-    "session", "repository",
+    "policy_version", "governance_event", "exception", "session", "repository",
 }
 
 # The record type that DEFINES each kind of entity, so a why-chain starts from
@@ -215,14 +217,16 @@ class EngineGateway(Gateway):
     def __init__(self) -> None:
         # imported here so the module loads even when the engine is absent
         from hypermeshdb.agentmem import Kind, Origin, Status, Verbs
-        from meshagent.codegraph import cve_impact, export_graph
+        from meshagent.codegraph import CodeGraphRecorder, cve_impact, export_graph
 
         self._export_graph = export_graph
+        self._codegraph_recorder = CodeGraphRecorder
         self._engine_cve_impact = cve_impact
         self._verbs = Verbs
         self._kind, self._origin, self._status = Kind, Origin, Status
 
         self._fleet = engine_seed.seed_fleet_store()
+        self._governance = engine_seed.new_store("governance")
         self._registry = registry.load(engine_seed.base_dir())
         self._operations = operations.load(engine_seed.base_dir())
         seeded = self._registry.runs.get(engine_seed.RUN_ID)
@@ -484,6 +488,174 @@ class EngineGateway(Gateway):
             )
             for record in records
         ]
+        return GraphPayload(
+            nodes=list(nodes.values()), edges=edges, relations=relations,
+        )
+
+    @_serialized
+    def project_governance_event(self, *, event: dict) -> str:
+        relation_kind = str(event["relation_kind"])
+        resource_kind = str(event["resource_kind"])
+        resource_id = str(event["resource_id"])
+        snapshot = {
+            key: value for key, value in event.items()
+            if key not in {"canonical_sha256", "projection_id"}
+        }
+        actual_sha = hashlib.sha256(json.dumps(
+            snapshot, sort_keys=True, separators=(",", ":"),
+        ).encode()).hexdigest()
+        if not secrets.compare_digest(
+            str(event["canonical_sha256"]), actual_sha,
+        ):
+            raise ValueError("governance projection failed digest verification")
+        subject = (
+            f"policy:{resource_id}"
+            if resource_kind == "policy" else f"exception:{resource_id}"
+        )
+        parent_subjects = [subject]
+        policy = dict(snapshot.get("policy") or {})
+        exception = dict(snapshot.get("exception") or {})
+        if exception.get("policy_id"):
+            parent_subjects.append(f"policy:{exception['policy_id']}")
+        if exception.get("predecessor_exception_id"):
+            parent_subjects.append(
+                f"exception:{exception['predecessor_exception_id']}"
+            )
+        if policy.get("predecessor_version"):
+            parent_subjects.append(
+                f"policy-version:{policy['id']}@{policy['predecessor_version']}"
+            )
+        allowed = {
+            "policy_version", "policy_activation", "policy_supersession",
+            "exception_request", "exception_decision", "exception_expiry",
+            "exception_revocation",
+        }
+        parents: list[str] = []
+        for parent_subject in parent_subjects:
+            for ulid in self._governance.find_by_subject(parent_subject):
+                record = self._governance.get(ulid)
+                if (
+                    record is not None and not record.tombstoned
+                    and _ctype(record) in allowed
+                ):
+                    parents.append(ulid)
+        recorder = self._codegraph_recorder(self._governance)
+        return recorder.record_governance_event(
+            event_id=str(event["event_id"]),
+            relation_kind=relation_kind,
+            resource_kind=resource_kind,
+            resource_id=resource_id,
+            actor=str(event["actor"]),
+            occurred_at=int(event["occurred_at"]),
+            canonical_sha256=str(event["canonical_sha256"]),
+            payload=snapshot,
+            parent_ulids=list(dict.fromkeys(parents))[-50:] or None,
+        )
+
+    @_serialized
+    def governance_evidence_graph(
+        self, resource_kind: str, resource_id: str,
+    ) -> GraphPayload:
+        if resource_kind not in ("policy", "exception"):
+            raise NotFound("unknown governance evidence kind")
+        subject = f"{resource_kind}:{resource_id}"
+        allowed = {
+            "policy_version", "policy_activation", "policy_supersession",
+            "exception_request", "exception_decision", "exception_expiry",
+            "exception_revocation",
+        }
+        root_allowed = (
+            {"policy_version", "policy_activation", "policy_supersession"}
+            if resource_kind == "policy"
+            else {
+                "exception_request", "exception_decision", "exception_expiry",
+                "exception_revocation",
+            }
+        )
+        roots = [
+            ulid for ulid in self._governance.find_by_subject(subject)
+            if (record := self._governance.get(ulid)) is not None
+            and not record.tombstoned and _ctype(record) in root_allowed
+        ]
+        if not roots:
+            raise NotFound(
+                f"native {resource_kind} evidence unavailable for {resource_id}"
+            )
+        selected: set[str] = set()
+
+        def collect(node: dict[str, Any]) -> None:
+            selected.add(str(node["ulid"]))
+            for parent in node.get("parents") or []:
+                collect(parent)
+
+        for root in roots:
+            collect(self._governance.why(root, max_depth=16))
+        records = [self._governance.get(ulid) for ulid in selected]
+        records = [
+            record for record in records
+            if record is not None and not record.tombstoned
+            and _ctype(record) in allowed
+        ]
+        for record in records:
+            content = dict(record.content or {})
+            expected = str(content.pop("canonical_sha256", ""))
+            content.pop("type", None)
+            actual = hashlib.sha256(json.dumps(
+                content, sort_keys=True, separators=(",", ":"),
+            ).encode()).hexdigest()
+            if not expected or not secrets.compare_digest(expected, actual):
+                raise NotFound(
+                    f"native {resource_kind} evidence failed digest verification"
+                )
+        members = {
+            member for record in records for member in record.member_names
+            if not member.startswith(("edge:", "activity:"))
+        }
+        nodes = {
+            member: GraphNode(
+                id=member,
+                kind=(kind if (kind := engine_seed.entity_kind(member))
+                      in _ALLOWED_KINDS else "other"),
+                label=_label(member),
+            )
+            for member in sorted(members)
+        }
+        edges: list[GraphEdge] = []
+        relations: list[Relation] = []
+        for record in records:
+            content = dict(record.content or {})
+            event_node = f"governance-event:{content.get('event_id')}"
+            relation_kind = str(content.get("relation_kind") or _ctype(record))
+            primary = subject
+            edges.append(GraphEdge(
+                id=f"{record.ulid}:resource", source=event_node,
+                target=primary, rel=relation_kind,
+            ))
+            for member in record.member_names:
+                if member.startswith("actor:"):
+                    edges.append(GraphEdge(
+                        id=f"{record.ulid}:actor:{member}", source=member,
+                        target=event_node, rel="attests",
+                    ))
+                elif member.startswith("policy-version:"):
+                    policy_id = member.split(":", 1)[1].rsplit("@", 1)[0]
+                    edges.append(GraphEdge(
+                        id=f"{record.ulid}:version:{member}", source=member,
+                        target=f"policy:{policy_id}", rel="version_of",
+                    ))
+                elif member.startswith(("review:", "case:")):
+                    edges.append(GraphEdge(
+                        id=f"{record.ulid}:evidence:{member}", source=member,
+                        target=event_node, rel="supports",
+                    ))
+            relations.append(Relation(
+                id=record.ulid, kind=_ctype(record) or relation_kind,
+                members=[
+                    member for member in record.member_names
+                    if not member.startswith(("edge:", "activity:"))
+                ],
+                label=_detail(record), tombstoned=False,
+            ))
         return GraphPayload(
             nodes=list(nodes.values()), edges=edges, relations=relations,
         )
@@ -1815,6 +1987,14 @@ def _detail(rec: Any) -> str:
     if ctype == "taint":
         rule = f" · {c['rule']}" if c.get("rule") else ""
         return f"{c.get('entry')} reaches {c.get('sink')}{rule}"
+    if ctype in {
+        "policy_version", "policy_activation", "policy_supersession",
+        "exception_request", "exception_decision", "exception_expiry",
+        "exception_revocation",
+    }:
+        action = str(c.get("action") or ctype).replace("_", " ")
+        target = str(c.get("resource_id") or "governed record")
+        return f"{action} · {target}"
     if _is_episode(rec):
         tools = ", ".join(dict.fromkeys(
             str(t.get("tool")) for t in c.get("tool_calls") or []))

@@ -103,6 +103,7 @@ from .workflow_models import (
     CreateReviewRequest,
     EscalateReviewRequest,
     ExceptionOut,
+    GovernanceEvidenceOut,
     GovernanceLifecycleStatusOut,
     OriginOut,
     PolicyLifecycleRequest,
@@ -195,9 +196,11 @@ async def _lifespan(_: FastAPI):
     validate_startup()
     developer_session_store.reset_interrupted_projections()
     workflow_store.reset_interrupted_review_projections()
+    workflow_store.reset_interrupted_governance_projections()
     await asyncio.to_thread(_reconcile_developer_session_projections)
     await asyncio.to_thread(_reconcile_review_projections)
     await asyncio.to_thread(_reconcile_governance_lifecycle)
+    await asyncio.to_thread(_reconcile_governance_projections)
     projection_task = asyncio.create_task(
         _projection_reconciler(), name="developer-session-projection-reconciler"
     )
@@ -528,6 +531,33 @@ def _reconcile_governance_lifecycle() -> dict[str, int]:
         raise
 
 
+def _reconcile_governance_projections() -> None:
+    """Project digest-bound policy and exception events from the outbox."""
+    for work in workflow_store.recoverable_governance_projections():
+        projection_id = str(work["projection_id"])
+        try:
+            workflow_store.mark_governance_projection_started(projection_id)
+            event = workflow_store.verify_governance_projection(projection_id)
+            event["canonical_sha256"] = work["payload_sha256"]
+            event["projection_id"] = projection_id
+            native_ulid = gateway.project_governance_event(event=event)
+            workflow_store.mark_governance_projection_complete(
+                projection_id, native_ulid,
+            )
+        except Exception as exc:
+            workflow_store.mark_governance_projection_failed(
+                projection_id, str(exc),
+            )
+            logger.exception(
+                "governance evidence projection failed",
+                extra={
+                    "resource_kind": work["resource_kind"],
+                    "resource_id": work["resource_id"],
+                    "governance_projection_id": projection_id,
+                },
+            )
+
+
 async def _projection_reconciler() -> None:
     try:
         interval = float(os.environ.get(
@@ -541,6 +571,7 @@ async def _projection_reconciler() -> None:
         try:
             await asyncio.to_thread(_reconcile_developer_session_projections)
             await asyncio.to_thread(_reconcile_review_projections)
+            await asyncio.to_thread(_reconcile_governance_projections)
         except Exception:
             logger.exception("evidence projection scan failed")
 
@@ -557,6 +588,7 @@ async def _governance_reconciler() -> None:
         await asyncio.sleep(interval)
         try:
             await asyncio.to_thread(_reconcile_governance_lifecycle)
+            await asyncio.to_thread(_reconcile_governance_projections)
         except Exception:
             # The sync wrapper records the failure. The resident loop remains
             # available to recover on the next deterministic scan.
@@ -1047,6 +1079,7 @@ def create_policy(
         correlation_id=_correlation(request),
         require_independent_approver=auth.is_production(),
     )
+    _reconcile_governance_projections()
     return PolicyOut(**policy)
 
 
@@ -1058,6 +1091,21 @@ def get_policy(
     return PolicyOut(**workflow_store.policy(policy_id))
 
 
+@app.get(
+    "/api/policies/{policy_id}/evidence",
+    response_model=GovernanceEvidenceOut,
+)
+def policy_evidence(
+    policy_id: str,
+    _: Principal = Depends(require_capability("policy.read")),
+) -> GovernanceEvidenceOut:
+    evidence = workflow_store.governance_evidence_projection(
+        "policy", policy_id,
+    )
+    evidence["graph"] = gateway.governance_evidence_graph("policy", policy_id)
+    return GovernanceEvidenceOut(**evidence)
+
+
 @app.post("/api/policies/{policy_id}/versions", response_model=PolicyOut, status_code=201)
 def create_policy_version(
     policy_id: str,
@@ -1066,7 +1114,7 @@ def create_policy_version(
     who: Principal = Depends(require_capability("policy.write")),
 ) -> PolicyOut:
     note(who, "policy.version.create.request", policy_id, req.rationale, require_commit=True)
-    return PolicyOut(**workflow_store.create_policy_version(
+    policy = workflow_store.create_policy_version(
         policy_id,
         expected_version=req.expected_version,
         severity_threshold=req.severity_threshold,
@@ -1077,7 +1125,9 @@ def create_policy_version(
         actor_name=who.name,
         actor_role=who.role,
         correlation_id=_correlation(request),
-    ))
+    )
+    _reconcile_governance_projections()
+    return PolicyOut(**policy)
 
 
 @app.post("/api/policies/{policy_id}/versions/{version}/submit", response_model=PolicyOut)
@@ -1089,7 +1139,7 @@ def submit_policy_version(
     who: Principal = Depends(require_capability("policy.write")),
 ) -> PolicyOut:
     note(who, "policy.version.submit.request", policy_id, req.rationale, require_commit=True)
-    return PolicyOut(**workflow_store.submit_policy_version(
+    policy = workflow_store.submit_policy_version(
         policy_id,
         version,
         expected_version=req.expected_version,
@@ -1098,7 +1148,9 @@ def submit_policy_version(
         actor_name=who.name,
         actor_role=who.role,
         correlation_id=_correlation(request),
-    ))
+    )
+    _reconcile_governance_projections()
+    return PolicyOut(**policy)
 
 
 @app.post("/api/policies/{policy_id}/versions/{version}/activate", response_model=PolicyOut)
@@ -1110,7 +1162,7 @@ def activate_policy_version(
     who: Principal = Depends(require_capability("policy.activate")),
 ) -> PolicyOut:
     note(who, "policy.version.activate.request", policy_id, req.rationale, require_commit=True)
-    return PolicyOut(**workflow_store.activate_policy_version(
+    policy = workflow_store.activate_policy_version(
         policy_id,
         version,
         expected_version=req.expected_version,
@@ -1120,7 +1172,9 @@ def activate_policy_version(
         actor_role=who.role,
         correlation_id=_correlation(request),
         require_independent_approver=auth.is_production(),
-    ))
+    )
+    _reconcile_governance_projections()
+    return PolicyOut(**policy)
 
 
 @app.post("/api/policies/{policy_id}/versions/{version}/withdraw", response_model=PolicyOut)
@@ -1132,7 +1186,7 @@ def withdraw_policy_version(
     who: Principal = Depends(require_capability("policy.write")),
 ) -> PolicyOut:
     note(who, "policy.version.withdraw.request", policy_id, req.rationale, require_commit=True)
-    return PolicyOut(**workflow_store.withdraw_policy_version(
+    policy = workflow_store.withdraw_policy_version(
         policy_id,
         version,
         expected_version=req.expected_version,
@@ -1141,7 +1195,9 @@ def withdraw_policy_version(
         actor_name=who.name,
         actor_role=who.role,
         correlation_id=_correlation(request),
-    ))
+    )
+    _reconcile_governance_projections()
+    return PolicyOut(**policy)
 
 
 @app.post("/api/policies/{policy_id}/retire", response_model=PolicyOut)
@@ -1152,7 +1208,7 @@ def retire_policy(
     who: Principal = Depends(require_capability("policy.write")),
 ) -> PolicyOut:
     note(who, "policy.retire.request", policy_id, req.rationale, require_commit=True)
-    return PolicyOut(**workflow_store.retire_policy(
+    policy = workflow_store.retire_policy(
         policy_id,
         expected_version=req.expected_version,
         rationale=req.rationale,
@@ -1160,7 +1216,9 @@ def retire_policy(
         actor_name=who.name,
         actor_role=who.role,
         correlation_id=_correlation(request),
-    ))
+    )
+    _reconcile_governance_projections()
+    return PolicyOut(**policy)
 
 
 @app.get("/api/exceptions", response_model=list[ExceptionOut])
@@ -1195,6 +1253,7 @@ def request_exception(
         actor_role=who.role,
         correlation_id=_correlation(request),
     )
+    _reconcile_governance_projections()
     return ApprovalOut(**approval)
 
 
@@ -1204,6 +1263,23 @@ def get_exception(
     _: Principal = Depends(require_capability("exception.read")),
 ) -> ExceptionOut:
     return ExceptionOut(**workflow_store.exception(exception_id))
+
+
+@app.get(
+    "/api/exceptions/{exception_id}/evidence",
+    response_model=GovernanceEvidenceOut,
+)
+def exception_evidence(
+    exception_id: str,
+    _: Principal = Depends(require_capability("exception.read")),
+) -> GovernanceEvidenceOut:
+    evidence = workflow_store.governance_evidence_projection(
+        "exception", exception_id,
+    )
+    evidence["graph"] = gateway.governance_evidence_graph(
+        "exception", exception_id,
+    )
+    return GovernanceEvidenceOut(**evidence)
 
 
 @app.post(
@@ -1236,6 +1312,7 @@ def renew_exception(
         actor_role=who.role,
         correlation_id=_correlation(request),
     )
+    _reconcile_governance_projections()
     return ApprovalOut(**approval)
 
 
@@ -1251,7 +1328,7 @@ def revoke_exception(
         who, "exception.revoke.request", exception_id, req.rationale,
         require_commit=True,
     )
-    return ExceptionOut(**workflow_store.revoke_exception(
+    exception = workflow_store.revoke_exception(
         exception_id,
         expected_version=req.expected_version,
         rationale=req.rationale,
@@ -1260,7 +1337,9 @@ def revoke_exception(
         actor_name=who.name,
         actor_role=who.role,
         correlation_id=_correlation(request),
-    ))
+    )
+    _reconcile_governance_projections()
+    return ExceptionOut(**exception)
 
 
 @app.get("/api/approvals", response_model=list[ApprovalOut])
@@ -1301,6 +1380,7 @@ def decide_approval(
         actor_role=who.role,
         correlation_id=_correlation(request),
     )
+    _reconcile_governance_projections()
     return ApprovalOut(**approval)
 
 
@@ -1328,6 +1408,7 @@ def reconcile_governance_lifecycle(
         require_commit=True,
     )
     _reconcile_governance_lifecycle()
+    _reconcile_governance_projections()
     return GovernanceLifecycleStatusOut(
         **workflow_store.governance_lifecycle_status()
     )

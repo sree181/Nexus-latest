@@ -481,6 +481,34 @@ class ControlPlane:
                   last_error TEXT,
                   last_counts TEXT NOT NULL DEFAULT '{}'
                 );
+                CREATE TABLE IF NOT EXISTS governance_projection_outbox (
+                  projection_id TEXT PRIMARY KEY,
+                  event_id TEXT NOT NULL,
+                  resource_kind TEXT NOT NULL
+                    CHECK(resource_kind IN ('policy','exception')),
+                  resource_id TEXT NOT NULL,
+                  relation_kind TEXT NOT NULL CHECK(relation_kind IN (
+                    'policy_version','policy_activation','policy_supersession',
+                    'exception_request','exception_decision','exception_expiry',
+                    'exception_revocation'
+                  )),
+                  payload_json TEXT NOT NULL,
+                  payload_sha256 TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending','projecting','failed','projected')),
+                  attempts INTEGER NOT NULL DEFAULT 0,
+                  next_attempt_at INTEGER,
+                  native_ulid TEXT,
+                  error TEXT,
+                  created_at INTEGER NOT NULL,
+                  projected_at INTEGER
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS governance_projection_event_kind
+                  ON governance_projection_outbox(event_id,relation_kind);
+                CREATE INDEX IF NOT EXISTS governance_projection_ready
+                  ON governance_projection_outbox(status,next_attempt_at,created_at);
+                CREATE INDEX IF NOT EXISTS governance_projection_resource
+                  ON governance_projection_outbox(resource_kind,resource_id,created_at);
                 """
                 )
                 # All additive upgrades and deterministic backfills below commit
@@ -866,6 +894,18 @@ class ControlPlane:
                             (event["id"], review["id"], review["run_id"], canonical,
                              hashlib.sha256(canonical.encode()).hexdigest(), event["at"]),
                         )
+                for event in conn.execute(
+                    "SELECT id FROM policy_events ORDER BY at,id"
+                ).fetchall():
+                    self._enqueue_governance_event(
+                        conn, resource_kind="policy", event_id=str(event["id"]),
+                    )
+                for event in conn.execute(
+                    "SELECT id FROM exception_events ORDER BY at,id"
+                ).fetchall():
+                    self._enqueue_governance_event(
+                        conn, resource_kind="exception", event_id=str(event["id"]),
+                    )
                 conn.execute("COMMIT")
             finally:
                 conn.close()
@@ -1114,11 +1154,16 @@ class ControlPlane:
                 """INSERT INTO policy_events
                 (id,policy_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
-                VALUES (?,?,?,?,?,'policy.created',NULL,?,?,'[]',?,?)""",
+                VALUES (?,?,?,?,?,'policy.created',NULL,?,?,?,?,?)""",
                 (
                     event_id, policy_id, actor, actor_name, actor_role,
-                    initial_state, rationale, now, correlation_id,
+                    initial_state, rationale,
+                    _json([f"policy-version:{policy_id}@1"]), now,
+                    correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="policy", event_id=event_id,
             )
             if require_independent_approver:
                 self._governance_notify(
@@ -1136,7 +1181,7 @@ class ControlPlane:
         denied_licenses: list[str], block_on_unknown: bool, rationale: str,
         actor: str, actor_name: str, actor_role: str, correlation_id: str,
     ) -> dict[str, Any]:
-        now = _now()
+        now, event_id = _now(), _id("pev")
         licenses = list(dict.fromkeys(value.strip() for value in denied_licenses if value.strip()))
         with self._write() as conn:
             current = conn.execute(
@@ -1185,11 +1230,15 @@ class ControlPlane:
                 """INSERT INTO policy_events
                 (id,policy_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
-                VALUES (?,?,?,?,?,'policy.version_created','active','draft',?,'[]',?,?)""",
+                VALUES (?,?,?,?,?,'policy.version_created','active','draft',?,?,?,?)""",
                 (
-                    _id("pev"), policy_id, actor, actor_name, actor_role,
-                    rationale, now, correlation_id,
+                    event_id, policy_id, actor, actor_name, actor_role,
+                    rationale, _json([f"policy-version:{policy_id}@{next_version}"]),
+                    now, correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="policy", event_id=event_id,
             )
         return self.policy(policy_id)
 
@@ -1211,7 +1260,7 @@ class ControlPlane:
         rationale: str, actor: str, actor_name: str, actor_role: str,
         correlation_id: str,
     ) -> dict[str, Any]:
-        now = _now()
+        now, event_id = _now(), _id("pev")
         with self._write() as conn:
             current = conn.execute(
                 "SELECT * FROM policies WHERE id=?", (policy_id,),
@@ -1245,12 +1294,16 @@ class ControlPlane:
                 """INSERT INTO policy_events
                 (id,policy_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
-                VALUES (?,?,?,?,?,'policy.version_withdrawn',?,?,?,'[]',?,?)""",
+                VALUES (?,?,?,?,?,'policy.version_withdrawn',?,?,?,?,?,?)""",
                 (
-                    _id("pev"), policy_id, actor, actor_name, actor_role,
+                    event_id, policy_id, actor, actor_name, actor_role,
                     f"v{version}:{prior_state}", f"v{version}:withdrawn",
-                    rationale, now, correlation_id,
+                    rationale, _json([f"policy-version:{policy_id}@{version}"]),
+                    now, correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="policy", event_id=event_id,
             )
         return self.policy(policy_id)
 
@@ -1259,7 +1312,7 @@ class ControlPlane:
         rationale: str, actor: str, actor_name: str, actor_role: str,
         correlation_id: str, require_independent_approver: bool = False,
     ) -> dict[str, Any]:
-        now = _now()
+        now, event_id = _now(), _id("pev")
         with self._write() as conn:
             current = conn.execute(
                 "SELECT * FROM policies WHERE id=?", (policy_id,),
@@ -1305,17 +1358,21 @@ class ControlPlane:
                 """INSERT INTO policy_events
                 (id,policy_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
-                VALUES (?,?,?,?,?,'policy.version_activated',?,?,?,'[]',?,?)""",
+                VALUES (?,?,?,?,?,'policy.version_activated',?,?,?,?,?,?)""",
                 (
-                    _id("pev"), policy_id, actor, actor_name, actor_role,
+                    event_id, policy_id, actor, actor_name, actor_role,
                     (
                         f"v{previous}:active"
                         if previous is not None
                         else f"v{version}:in_review"
                     ),
                     f"v{version}:active", rationale,
-                    now, correlation_id,
+                    _json([f"policy-version:{policy_id}@{version}"]), now,
+                    correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="policy", event_id=event_id,
             )
             if candidate["created_by"] != actor:
                 self._governance_notify(
@@ -1333,7 +1390,7 @@ class ControlPlane:
         expected_state: str, target_state: str, action: str, rationale: str,
         actor: str, actor_name: str, actor_role: str, correlation_id: str,
     ) -> dict[str, Any]:
-        now = _now()
+        now, event_id = _now(), _id("pev")
         with self._write() as conn:
             current = conn.execute(
                 "SELECT * FROM policies WHERE id=?", (policy_id,),
@@ -1370,12 +1427,16 @@ class ControlPlane:
                 """INSERT INTO policy_events
                 (id,policy_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
-                VALUES (?,?,?,?,?,?,?,?,?,'[]',?,?)""",
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    _id("pev"), policy_id, actor, actor_name, actor_role,
-                    action, expected_state, target_state, rationale, now,
+                    event_id, policy_id, actor, actor_name, actor_role,
+                    action, expected_state, target_state, rationale,
+                    _json([f"policy-version:{policy_id}@{version}"]), now,
                     correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="policy", event_id=event_id,
             )
             if action == "policy.version_submitted":
                 self._governance_notify(
@@ -1392,7 +1453,7 @@ class ControlPlane:
         self, policy_id: str, *, expected_version: int, rationale: str,
         actor: str, actor_name: str, actor_role: str, correlation_id: str,
     ) -> dict[str, Any]:
-        now = _now()
+        now, event_id = _now(), _id("pev")
         with self._write() as conn:
             current = conn.execute(
                 "SELECT * FROM policies WHERE id=?", (policy_id,),
@@ -1422,11 +1483,16 @@ class ControlPlane:
                 """INSERT INTO policy_events
                 (id,policy_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
-                VALUES (?,?,?,?,?,'policy.retired','active','retired',?,'[]',?,?)""",
+                VALUES (?,?,?,?,?,'policy.retired','active','retired',?,?,?,?)""",
                 (
-                    _id("pev"), policy_id, actor, actor_name, actor_role,
-                    rationale, now, correlation_id,
+                    event_id, policy_id, actor, actor_name, actor_role,
+                    rationale,
+                    _json([f"policy-version:{policy_id}@{current['active_version']}"]),
+                    now, correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="policy", event_id=event_id,
             )
         return self.policy(policy_id)
 
@@ -1561,6 +1627,9 @@ class ControlPlane:
                     rationale, _json(evidence), now, correlation_id,
                 ),
             )
+            self._enqueue_governance_event(
+                conn, resource_kind="exception", event_id=event_id,
+            )
             self._governance_notify(
                 conn, kind="exception.approval_requested",
                 title="Exception approval ready",
@@ -1585,6 +1654,7 @@ class ControlPlane:
             value.strip() for value in evidence_ids if value.strip()
         ))
         successor_id, approval_id = _id("exc"), _id("apr")
+        predecessor_event_id, successor_event_id = _id("eev"), _id("eev")
         with self._write() as conn:
             current = conn.execute(
                 "SELECT * FROM exceptions WHERE id=?", (exception_id,),
@@ -1686,9 +1756,12 @@ class ControlPlane:
                  to_state,rationale,evidence_ids,at,correlation_id)
                 VALUES (?,?,?,?,?,'exception.renewal_started','approved','approved',?,?,?,?)""",
                 (
-                    _id("eev"), exception_id, actor, actor_name, actor_role,
+                    predecessor_event_id, exception_id, actor, actor_name, actor_role,
                     rationale, _json([successor_id, *evidence]), now, correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="exception", event_id=predecessor_event_id,
             )
             conn.execute(
                 """INSERT INTO exception_events
@@ -1696,9 +1769,12 @@ class ControlPlane:
                  to_state,rationale,evidence_ids,at,correlation_id)
                 VALUES (?,?,?,?,?,'exception.renewal_requested',NULL,'pending',?,?,?,?)""",
                 (
-                    _id("eev"), successor_id, actor, actor_name, actor_role,
+                    successor_event_id, successor_id, actor, actor_name, actor_role,
                     rationale, _json([exception_id, *evidence]), now, correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="exception", event_id=successor_event_id,
             )
             self._governance_notify(
                 conn, kind="exception.renewal_requested",
@@ -1716,7 +1792,7 @@ class ControlPlane:
         correlation_id: str,
     ) -> dict[str, Any]:
         """End an approved exception and cancel any pending renewal atomically."""
-        now = _now()
+        now, event_id = _now(), _id("eev")
         evidence = list(dict.fromkeys(
             value.strip() for value in evidence_ids if value.strip()
         ))
@@ -1746,9 +1822,12 @@ class ControlPlane:
                  to_state,rationale,evidence_ids,at,correlation_id)
                 VALUES (?,?,?,?,?,'exception.revoked','approved','revoked',?,?,?,?)""",
                 (
-                    _id("eev"), exception_id, actor, actor_name, actor_role,
+                    event_id, exception_id, actor, actor_name, actor_role,
                     rationale, _json(evidence), now, correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="exception", event_id=event_id,
             )
             successors = conn.execute(
                 """SELECT * FROM exceptions WHERE predecessor_exception_id=?
@@ -1756,6 +1835,7 @@ class ControlPlane:
             ).fetchall()
             for successor in successors:
                 cancellation = "Renewal cancelled because the prior exception was revoked."
+                cancellation_event_id = _id("eev")
                 conn.execute(
                     """UPDATE exceptions SET status='revoked',revoked_by=?,
                     revoked_by_name=?,revoked_at=?,revocation_rationale=?,
@@ -1774,9 +1854,14 @@ class ControlPlane:
                      to_state,rationale,evidence_ids,at,correlation_id)
                     VALUES (?,?,?,?,?,'exception.renewal_cancelled','pending','revoked',?,?,?,?)""",
                     (
-                        _id("eev"), successor["id"], actor, actor_name, actor_role,
+                        cancellation_event_id, successor["id"], actor, actor_name,
+                        actor_role,
                         cancellation, _json([exception_id]), now, correlation_id,
                     ),
+                )
+                self._enqueue_governance_event(
+                    conn, resource_kind="exception",
+                    event_id=cancellation_event_id,
                 )
             recipients = {current["requested_by"]} - {actor}
             for recipient in recipients:
@@ -1885,16 +1970,20 @@ class ControlPlane:
                     rationale, now, now, current["resource_id"],
                 ),
             )
+            decision_event_id = _id("eev")
             conn.execute(
                 """INSERT INTO exception_events
                 (id,exception_id,actor,actor_name,actor_role,action,from_state,
                  to_state,rationale,evidence_ids,at,correlation_id)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    _id("eev"), current["resource_id"], actor, actor_name,
+                    decision_event_id, current["resource_id"], actor, actor_name,
                     actor_role, f"exception.{status}", "pending", status,
                     rationale, current["evidence_ids"], now, correlation_id,
                 ),
+            )
+            self._enqueue_governance_event(
+                conn, resource_kind="exception", event_id=decision_event_id,
             )
             if predecessor is not None:
                 conn.execute(
@@ -1903,16 +1992,21 @@ class ControlPlane:
                     updated_at=? WHERE id=?""",
                     (exception["id"], now, now, predecessor["id"]),
                 )
+                supersession_event_id = _id("eev")
                 conn.execute(
                     """INSERT INTO exception_events
                     (id,exception_id,actor,actor_name,actor_role,action,from_state,
                      to_state,rationale,evidence_ids,at,correlation_id)
                     VALUES (?,?,?,?,?,'exception.superseded','approved','superseded',?,?,?,?)""",
                     (
-                        _id("eev"), predecessor["id"], actor, actor_name,
+                        supersession_event_id, predecessor["id"], actor, actor_name,
                         actor_role, rationale, _json([exception["id"]]), now,
                         correlation_id,
                     ),
+                )
+                self._enqueue_governance_event(
+                    conn, resource_kind="exception",
+                    event_id=supersession_event_id,
                 )
             recipients = {exception["requested_by"]} - {actor}
             for recipient in recipients:
@@ -2071,6 +2165,7 @@ class ControlPlane:
                             version=version+1,updated_at=? WHERE id=?""",
                             (at, exception["id"]),
                         )
+                        expiry_event_id = _id("eev")
                         conn.execute(
                             """INSERT INTO exception_events
                             (id,exception_id,actor,actor_name,actor_role,action,
@@ -2078,11 +2173,15 @@ class ControlPlane:
                             VALUES (?,?,?,?,?,'exception.approval_expired','pending',
                                     'expired',?,?,?,'system:governance-expiry')""",
                             (
-                                _id("eev"), exception["id"], "meshagent-system",
+                                expiry_event_id, exception["id"], "meshagent-system",
                                 "MeshAgent", "system",
                                 "The approval window expired without a decision.",
                                 approval["evidence_ids"], at,
                             ),
+                        )
+                        self._enqueue_governance_event(
+                            conn, resource_kind="exception",
+                            event_id=expiry_event_id,
                         )
                         counts["exceptions_expired"] += 1
                         for recipient in {exception["requested_by"]}:
@@ -2121,6 +2220,7 @@ class ControlPlane:
                         updated_at=? WHERE id=? AND status='approved'""",
                         (at, exception["id"]),
                     )
+                    expiry_event_id = _id("eev")
                     conn.execute(
                         """INSERT INTO exception_events
                         (id,exception_id,actor,actor_name,actor_role,action,
@@ -2128,11 +2228,15 @@ class ControlPlane:
                         VALUES (?,?,?,?,?,'exception.expired','approved','expired',
                                 ?,?,?, 'system:governance-expiry')""",
                         (
-                            _id("eev"), exception["id"], "meshagent-system",
+                            expiry_event_id, exception["id"], "meshagent-system",
                             "MeshAgent", "system",
                             "The governed exception reached its expiry time.",
                             exception["evidence_ids"], at,
                         ),
+                    )
+                    self._enqueue_governance_event(
+                        conn, resource_kind="exception",
+                        event_id=expiry_event_id,
                     )
                     counts["exceptions_expired"] += 1
                     for recipient in {exception["requested_by"]}:
@@ -2182,6 +2286,389 @@ class ControlPlane:
         body.pop("singleton", None)
         body["last_counts"] = _loads(body["last_counts"], {})
         return body
+
+    @staticmethod
+    def _governance_relation_kinds(
+        action: str, *, from_state: str | None = None,
+    ) -> list[str]:
+        if action == "policy.version_activated":
+            kinds = ["policy_activation"]
+            if from_state and from_state.endswith(":active"):
+                kinds.append("policy_supersession")
+            return kinds
+        if action.startswith("policy."):
+            return ["policy_version"]
+        if action in (
+            "exception.requested", "exception.renewal_requested",
+            "exception.renewal_started",
+        ):
+            return ["exception_request"]
+        if action in (
+            "exception.approved", "exception.rejected", "exception.superseded",
+        ):
+            return ["exception_decision"]
+        if action in ("exception.expired", "exception.approval_expired"):
+            return ["exception_expiry"]
+        if action in ("exception.revoked", "exception.renewal_cancelled"):
+            return ["exception_revocation"]
+        return []
+
+    @staticmethod
+    def _policy_event_version(
+        conn: sqlite3.Connection, event: sqlite3.Row,
+    ) -> sqlite3.Row | None:
+        policy_id, action, at = event["policy_id"], event["action"], event["at"]
+        match: sqlite3.Row | None = None
+        for value in _loads(event["evidence_ids"], []):
+            prefix = f"policy-version:{policy_id}@"
+            if str(value).startswith(prefix) and str(value)[len(prefix):].isdigit():
+                return conn.execute(
+                    "SELECT * FROM policy_versions WHERE policy_id=? AND version=?",
+                    (policy_id, int(str(value)[len(prefix):])),
+                ).fetchone()
+        if action == "policy.created":
+            match = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND version=1",
+                (policy_id,),
+            ).fetchone()
+        elif action == "policy.version_created":
+            match = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND created_at=? "
+                "ORDER BY version DESC LIMIT 1", (policy_id, at),
+            ).fetchone()
+        elif action == "policy.version_submitted":
+            match = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND submitted_at=? "
+                "ORDER BY version DESC LIMIT 1", (policy_id, at),
+            ).fetchone()
+        elif action == "policy.version_withdrawn":
+            match = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND withdrawn_at=? "
+                "ORDER BY version DESC LIMIT 1", (policy_id, at),
+            ).fetchone()
+        elif action == "policy.version_activated":
+            match = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND activated_at=? "
+                "ORDER BY version DESC LIMIT 1", (policy_id, at),
+            ).fetchone()
+        elif action == "policy.retired":
+            match = conn.execute(
+                "SELECT * FROM policy_versions WHERE policy_id=? AND state='retired' "
+                "ORDER BY version DESC LIMIT 1", (policy_id,),
+            ).fetchone()
+        if match is not None:
+            return match
+        return conn.execute(
+            "SELECT * FROM policy_versions WHERE policy_id=? "
+            "ORDER BY ABS(created_at-?),version DESC LIMIT 1", (policy_id, at),
+        ).fetchone()
+
+    @staticmethod
+    def _resolved_governance_evidence(
+        conn: sqlite3.Connection, evidence_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        resolved: list[dict[str, Any]] = []
+        for evidence_id in dict.fromkeys(evidence_ids):
+            kind: str | None = None
+            resource_id = ""
+            if evidence_id.startswith("review:"):
+                kind, resource_id = "review", evidence_id.split(":", 1)[1]
+                row = conn.execute(
+                    "SELECT evidence_root_ulid FROM review_requests WHERE id=?",
+                    (resource_id,),
+                ).fetchone()
+            elif evidence_id.startswith("case:"):
+                kind, resource_id = "case", evidence_id.split(":", 1)[1]
+                row = conn.execute(
+                    "SELECT evidence_root_ulid FROM review_requests "
+                    "WHERE escalated_case_id=? ORDER BY created_at LIMIT 1",
+                    (resource_id,),
+                ).fetchone()
+            else:
+                continue
+            native_ulid = (
+                str(row["evidence_root_ulid"])
+                if row is not None and row["evidence_root_ulid"] else None
+            )
+            resolved.append({
+                "kind": kind, "resource_id": resource_id,
+                "native_ulid": native_ulid, "resolved": bool(native_ulid),
+            })
+        return resolved
+
+    @classmethod
+    def _governance_snapshot(
+        cls, conn: sqlite3.Connection, *, resource_kind: str,
+        event: sqlite3.Row, relation_kind: str,
+    ) -> dict[str, Any]:
+        evidence_ids = list(_loads(event["evidence_ids"], []))
+        payload: dict[str, Any] = {
+            "schema_version": 1,
+            "event_id": event["id"],
+            "resource_kind": resource_kind,
+            "resource_id": event[f"{resource_kind}_id"],
+            "relation_kind": relation_kind,
+            "action": event["action"],
+            "from_state": event["from_state"],
+            "to_state": event["to_state"],
+            "actor": event["actor"],
+            "actor_name": event["actor_name"],
+            "actor_role": event["actor_role"],
+            "rationale": event["rationale"],
+            "evidence_ids": evidence_ids,
+            "occurred_at": event["at"],
+            "correlation_id": event["correlation_id"],
+        }
+        if resource_kind == "policy":
+            policy = conn.execute(
+                "SELECT * FROM policies WHERE id=?", (event["policy_id"],),
+            ).fetchone()
+            version = cls._policy_event_version(conn, event)
+            if policy is None or version is None:
+                raise Missing("governance projection source is unavailable")
+            predecessor_version: int | None = None
+            if relation_kind == "policy_supersession" and event["from_state"]:
+                raw = str(event["from_state"]).split(":", 1)[0]
+                if raw.startswith("v") and raw[1:].isdigit():
+                    predecessor_version = int(raw[1:])
+            payload["policy"] = {
+                "id": policy["id"], "name": policy["name"],
+                "scope": policy["scope"], "version": int(version["version"]),
+                "version_state": version["state"],
+                "content_digest": version["content_digest"],
+                "severity_threshold": version["severity_threshold"],
+                "denied_licenses": _loads(version["denied_licenses"], []),
+                "block_on_unknown": bool(version["block_on_unknown"]),
+                "version_rationale": version["rationale"],
+                "created_by": version["created_by"],
+                "submitted_by": version["submitted_by"],
+                "activated_by": version["activated_by"],
+                "effective_from": version["effective_from"],
+                "effective_until": version["effective_until"],
+                "predecessor_version": predecessor_version,
+            }
+        else:
+            exception = conn.execute(
+                "SELECT * FROM exceptions WHERE id=?", (event["exception_id"],),
+            ).fetchone()
+            if exception is None:
+                raise Missing("governance projection source is unavailable")
+            declared = list(dict.fromkeys(
+                [*evidence_ids, *_loads(exception["evidence_ids"], [])]
+            ))
+            payload["evidence_ids"] = declared
+            payload["exception"] = {
+                "id": exception["id"], "policy_id": exception["policy_id"],
+                "policy_version": int(exception["policy_version"]),
+                "policy_digest": exception["policy_digest"],
+                "request_digest": exception["request_digest"],
+                "scope": exception["scope"], "owner": exception["owner"],
+                "owner_name": exception["owner_name"],
+                "compensating_controls": exception["compensating_controls"],
+                "expires_at": int(exception["expires_at"]),
+                "requested_by": exception["requested_by"],
+                "approved_by": exception["approved_by"],
+                "decision_rationale": exception["decision_rationale"],
+                "predecessor_exception_id": exception["predecessor_exception_id"],
+                "superseded_by_exception_id": exception["superseded_by_exception_id"],
+                "renewal_number": int(exception["renewal_number"] or 0),
+            }
+            payload["resolved_evidence"] = cls._resolved_governance_evidence(
+                conn, declared,
+            )
+        return payload
+
+    @classmethod
+    def _enqueue_governance_event(
+        cls, conn: sqlite3.Connection, *, resource_kind: str,
+        event_id: str,
+    ) -> int:
+        table = "policy_events" if resource_kind == "policy" else "exception_events"
+        event = conn.execute(
+            f"SELECT * FROM {table} WHERE id=?", (event_id,),
+        ).fetchone()
+        if event is None:
+            raise Missing("unknown governance event")
+        inserted = 0
+        for relation_kind in cls._governance_relation_kinds(
+            str(event["action"]), from_state=event["from_state"],
+        ):
+            payload = cls._governance_snapshot(
+                conn, resource_kind=resource_kind, event=event,
+                relation_kind=relation_kind,
+            )
+            canonical = _json(payload)
+            projection_id = f"{event_id}:{relation_kind}"
+            result = conn.execute(
+                """INSERT OR IGNORE INTO governance_projection_outbox
+                (projection_id,event_id,resource_kind,resource_id,relation_kind,
+                 payload_json,payload_sha256,created_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    projection_id, event_id, resource_kind,
+                    event[f"{resource_kind}_id"], relation_kind, canonical,
+                    hashlib.sha256(canonical.encode()).hexdigest(), event["at"],
+                ),
+            )
+            inserted += int(result.rowcount)
+        return inserted
+
+    def reset_interrupted_governance_projections(self) -> int:
+        with self._write() as conn:
+            result = conn.execute(
+                "UPDATE governance_projection_outbox SET status='pending', "
+                "error='projection interrupted before acknowledgement', "
+                "next_attempt_at=NULL WHERE status='projecting'"
+            )
+            return int(result.rowcount)
+
+    def recoverable_governance_projections(
+        self, *, limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM governance_projection_outbox WHERE "
+                "status IN ('pending','failed') AND "
+                "(next_attempt_at IS NULL OR next_attempt_at<=?) "
+                "ORDER BY created_at,projection_id LIMIT ?",
+                (_now(), max(1, min(limit, 500))),
+            ).fetchall()
+        values: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["payload"] = _loads(item["payload_json"], {})
+            values.append(item)
+        return values
+
+    def mark_governance_projection_started(self, projection_id: str) -> None:
+        with self._write() as conn:
+            conn.execute(
+                "UPDATE governance_projection_outbox SET status='projecting', "
+                "attempts=attempts+1,error=NULL,next_attempt_at=NULL "
+                "WHERE projection_id=? AND status IN ('pending','failed')",
+                (projection_id,),
+            )
+
+    @staticmethod
+    def _verify_governance_projection_row(
+        conn: sqlite3.Connection, row: sqlite3.Row,
+    ) -> dict[str, Any]:
+        payload = _loads(row["payload_json"], {})
+        canonical_sha = hashlib.sha256(_json(payload).encode()).hexdigest()
+        if canonical_sha != row["payload_sha256"]:
+            raise StoreError("governance projection payload digest mismatch")
+        if row["resource_kind"] == "policy":
+            policy = payload.get("policy") or {}
+            source = conn.execute(
+                "SELECT content_digest FROM policy_versions "
+                "WHERE policy_id=? AND version=?",
+                (policy.get("id"), policy.get("version")),
+            ).fetchone()
+            if source is None or source["content_digest"] != policy.get("content_digest"):
+                raise StoreError("policy version digest no longer matches projection")
+        else:
+            exception = payload.get("exception") or {}
+            source = conn.execute(
+                "SELECT request_digest,policy_digest FROM exceptions WHERE id=?",
+                (exception.get("id"),),
+            ).fetchone()
+            if (
+                source is None
+                or source["request_digest"] != exception.get("request_digest")
+                or source["policy_digest"] != exception.get("policy_digest")
+            ):
+                raise StoreError("exception digest no longer matches projection")
+        return payload
+
+    def verify_governance_projection(self, projection_id: str) -> dict[str, Any]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM governance_projection_outbox WHERE projection_id=?",
+                (projection_id,),
+            ).fetchone()
+            if row is None:
+                raise Missing("unknown governance projection")
+            return self._verify_governance_projection_row(conn, row)
+
+    def mark_governance_projection_complete(
+        self, projection_id: str, native_ulid: str,
+    ) -> None:
+        with self._write() as conn:
+            row = conn.execute(
+                "SELECT * FROM governance_projection_outbox WHERE projection_id=?",
+                (projection_id,),
+            ).fetchone()
+            if row is None:
+                raise Missing("unknown governance projection")
+            self._verify_governance_projection_row(conn, row)
+            conn.execute(
+                "UPDATE governance_projection_outbox SET status='projected', "
+                "native_ulid=?,projected_at=?,error=NULL,next_attempt_at=NULL "
+                "WHERE projection_id=?",
+                (native_ulid, _now(), projection_id),
+            )
+
+    def mark_governance_projection_failed(
+        self, projection_id: str, error: str,
+    ) -> None:
+        with self._write() as conn:
+            row = conn.execute(
+                "SELECT attempts FROM governance_projection_outbox "
+                "WHERE projection_id=?", (projection_id,),
+            ).fetchone()
+            attempts = int(row["attempts"]) if row is not None else 1
+            delay = min(300, 2 ** min(max(attempts - 1, 0), 8))
+            conn.execute(
+                "UPDATE governance_projection_outbox SET status='failed',error=?, "
+                "next_attempt_at=? WHERE projection_id=?",
+                (error[:512], _now() + delay, projection_id),
+            )
+
+    def governance_projection_ulids(
+        self, resource_kind: str, resource_id: str,
+    ) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT native_ulid FROM governance_projection_outbox "
+                "WHERE resource_kind=? AND resource_id=? AND status='projected' "
+                "AND native_ulid IS NOT NULL ORDER BY created_at,projection_id",
+                (resource_kind, resource_id),
+            ).fetchall()
+        return [str(row["native_ulid"]) for row in rows]
+
+    def governance_evidence_projection(
+        self, resource_kind: str, resource_id: str,
+    ) -> dict[str, Any]:
+        if resource_kind not in ("policy", "exception"):
+            raise Missing("unknown governance evidence kind")
+        with self._connect() as conn:
+            table = "policies" if resource_kind == "policy" else "exceptions"
+            if conn.execute(
+                f"SELECT 1 FROM {table} WHERE id=?", (resource_id,),
+            ).fetchone() is None:
+                raise Missing(f"unknown {resource_kind}")
+            rows = conn.execute(
+                "SELECT * FROM governance_projection_outbox "
+                "WHERE resource_kind=? AND resource_id=? "
+                "ORDER BY created_at,projection_id",
+                (resource_kind, resource_id),
+            ).fetchall()
+            if not rows or any(
+                row["status"] != "projected" or not row["native_ulid"]
+                for row in rows
+            ):
+                raise Missing(
+                    f"native {resource_kind} evidence is not fully projected"
+                )
+            for row in rows:
+                self._verify_governance_projection_row(conn, row)
+        return {
+            "resource_kind": resource_kind,
+            "resource_id": resource_id,
+            "projection_count": len(rows),
+            "native_ulids": [str(row["native_ulid"]) for row in rows],
+            "payload_sha256": [str(row["payload_sha256"]) for row in rows],
+        }
 
     @staticmethod
     def _enqueue_review_projection(

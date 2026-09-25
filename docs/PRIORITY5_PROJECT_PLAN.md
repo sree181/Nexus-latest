@@ -4,7 +4,7 @@
 **Planning horizon:** 12 working days
 **Author:** Manus AI
 
-**Progress:** Stages 5A and 5B completed on 24 September 2026; Stages 5C–5E remain ordered future work.
+**Progress:** Stages 5A, 5B, and 5C completed on 24 September 2026; Stages 5D and 5E remain in ordered delivery.
 
 ## 1. Delivery objective
 
@@ -20,7 +20,7 @@ The following is an engineering forecast, not a production deployment commitment
 | --- | ---: | --- | --- | --- |
 | **5A — Durable contracts** | 2 | 24–25 September | **Completed 24 September** | Versioned policy and exception aggregates, immutable events, migrations, APIs, tests, documentation, release commit |
 | **5B — Governance enforcement** | 3 | 28–30 September | **Completed 24 September** | Maker-checker separation, renewal/revocation, materialized expiry, deterministic reconciliation, notification rules |
-| **5C — HyperMesh evidence integration** | 2 | 1–2 October | Planned | Transactional projection outbox, native policy/exception relations, review/case linkage, scoped retrieval |
+| **5C — HyperMesh evidence integration** | 2 | 1–2 October | **Completed 24 September** | Transactional projection outbox, native policy/exception relations, review/case linkage, scoped retrieval |
 | **5D — CISO operating experience** | 3 | 5–7 October | Planned | Policy studio, approval workspace, exception register, remediation portfolio, executive drill-down |
 | **5E — Release qualification** | 2 | 8–9 October | Planned | Full regression, migration/recovery and role tests, container build, live walkthrough, commit and package |
 
@@ -44,11 +44,11 @@ Acceptance tests cover every permitted and forbidden transition, exact clock bou
 
 ### 3.3 Stage 5C — Native HyperMesh evidence integration
 
-Stage 5C will make policy and exception provenance available through native HyperMesh records. The relational mutation and a projection-outbox row will commit together. The reconciler will write idempotent native episodes and acknowledge only the returned ULID, following the review-evidence pattern completed in Stage 1.
+Stage 5C makes policy and exception provenance available through native HyperMesh records. The relational mutation and a projection-outbox row commit together. The reconciler writes idempotent native episodes and acknowledges only the returned ULID, following the review-evidence pattern completed in Stage 1.
 
-A policy activation will relate the policy, exact version, control values, author, approver, effective interval, and superseded version. An exception decision will relate its exact policy digest, scope, owner, compensating controls, expiry, evidence nodes, requester, and approver. Analyst reviews and cases will reference these native identifiers rather than copied labels.
+A policy activation relates the policy, exact version, control values, author, approver, effective interval, and superseded version. An exception decision relates its exact policy digest, scope, owner, compensating controls, expiry, evidence nodes, requester, and approver. Analyst reviews and cases reference stored native boundaries rather than copied labels.
 
-Completion requires retry and startup reconciliation tests, native-only scoped graph retrieval, digest verification, and proof that unrelated tenant or Developer evidence cannot enter a decision graph.
+Completion included retry and startup reconciliation tests, native-only scoped graph retrieval, digest verification, Developer access denial, and restart proof that native ULIDs and scoped relation counts remain stable.[6]
 
 ### 3.4 Stage 5D — CISO operating experience
 
@@ -100,3 +100,4 @@ A change that alters role authority, evidence visibility, lifecycle states, or p
 [3]: ./ANALYST_OPERATIONS.md "Priority 4 Analyst Operations contract"
 [4]: ./PRODUCTION_OPERATIONS.md "MeshAgent production operations and recovery guide"
 [5]: ../RELEASE_VALIDATION_REPORT.md "MeshAgent release validation report"
+[6]: ./PRIORITY5C_NATIVE_GOVERNANCE_EVIDENCE.md "Priority 5C native HyperMesh governance evidence design"
