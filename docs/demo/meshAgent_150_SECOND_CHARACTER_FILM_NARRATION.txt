@@ -1,0 +1,32 @@
+meshAgent — THE CHANGE BEFORE THE RELEASE
+150-SECOND MASTER FILM NARRATION
+
+[00:00–00:18]
+Recent incidents have made the stakes clear. An agent deleted application data. Researchers showed how hidden instructions could influence coding assistants. Security teams documented malicious skills entering agent ecosystems. As agents gain access, their actions need accountable oversight.
+
+[00:18–00:36]
+Now consider a fictional release team. Maya is using Cursor inside a real Git repository. Her coding agent proposes a pinned package for a customer-facing change. She stays in the work, while meshAgent records only the activity her organization has chosen to govern.
+
+[00:36–00:52]
+Before execution, meshAgent checks the exact package version, connects published advisory evidence, identifies the affected code and policy, and shows the safer available release. The risk is visible before it becomes an invisible release decision.
+
+[00:52–01:07]
+Maya does not copy logs into a ticket or abandon her flow. She sends one evidence-bound review. The repository, package, advisory, code relationship, and policy context travel together to Security.
+
+[01:07–01:28]
+Daniel receives the request in one ranked operations queue alongside active cases. He assigns an owner, sets the due time, opens the linked evidence, and collaborates in the same record. He can see what needs attention, why it matters, and what action comes next.
+
+[01:28–01:46]
+The release window is closing, but the team cannot replace the dependency immediately. Daniel escalates the review into a case and requests a time-bound exception. The request remains bound to the source evidence, compensating controls, owner, and expiry.
+
+[01:46–02:06]
+Elena sees exactly what she is asked to approve: policy version, request digest, evidence, controls, owner, and expiry. Separation of duties prevents self-approval. Her decision is bounded and attributable.
+
+[02:06–02:20]
+When remediation is complete, Daniel attaches verification evidence. Maya sees the package check resolve. Approval, exception, and remediation become native hypermesh relationships, preserving the path from agent action to verified result.
+
+[02:20–02:30]
+meshAgent, powered by hypermesh. See the workflow with your repository and policy. Explore more at hypermeshai dot com.
+
+VOICE DIRECTION
+Read in English with a mature, warm, confident enterprise-documentary tone. Keep the pace measured and credible rather than promotional. Build restrained urgency during the release decision, then resolve with quiet confidence. Pronounce meshAgent as “Mesh Agent,” hypermesh as “hyper mesh,” and hypermeshai.com as “hyper mesh A I dot com.”

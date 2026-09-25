@@ -9,7 +9,8 @@ This release can demonstrate the complete **Developer → Analyst → CISO** wor
 3. Follow [Live Client Demo Runbook](docs/demo/LIVE_CLIENT_DEMO_RUNBOOK.md) during rehearsal and delivery.
 4. Keep [Presenter Checklist](docs/demo/PRESENTER_CHECKLIST.md) open for the final preflight and contingency path.
 5. Use the [editable client-demo PowerPoint](docs/demo/MeshAgent_Client_Demo_Deck.pptx) for the opening narrative.
-6. Use the [90-second storyboard](docs/demo/MESHAGENT_90_SECOND_MASTER_FILM_STORYBOARD.md), [voice-actor script](docs/demo/MESHAGENT_90_SECOND_NARRATION.txt), and [promotional cut scripts](docs/demo/meshAgent_PROMOTIONAL_CUTS_SCRIPT.md) as the approved film package.
+6. Use the [150-second character-film storyboard](docs/demo/meshAgent_150_SECOND_CHARACTER_FILM_STORYBOARD.md) and [matching narration](docs/demo/meshAgent_150_SECOND_CHARACTER_FILM_NARRATION.txt) for the Maya → Daniel → Elena master film. The release bundle also includes a 30-second character teaser and 15-second character website loop.
+7. Retain the [90-second product storyboard](docs/demo/MESHAGENT_90_SECOND_MASTER_FILM_STORYBOARD.md), [voice-actor script](docs/demo/MESHAGENT_90_SECOND_NARRATION.txt), and [promotional cut scripts](docs/demo/meshAgent_PROMOTIONAL_CUTS_SCRIPT.md) as the interface-led alternative.
 
 ## What is live
 
