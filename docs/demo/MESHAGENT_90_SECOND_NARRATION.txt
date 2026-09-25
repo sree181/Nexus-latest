@@ -1,0 +1,32 @@
+MESHAGENT — 90-SECOND MASTER PRODUCT FILM
+VOICE-OVER SCRIPT
+
+[00:00–00:09]
+Coding agents can change software in minutes. Security still needs to know what changed, why it matters, and who approved the response.
+
+[00:09–00:19]
+Maya works in Cursor, inside a real Git repository. MeshAgent records only the activity her organization has chosen to govern.
+
+[00:19–00:30]
+When a pinned package is requested, MeshAgent checks the version before execution, connects published advisory evidence, and shows the safer available release.
+
+[00:30–00:41]
+Maya sees the affected package, code, and policy in one place. If help is needed, she sends an evidence-bound review to Security.
+
+[00:41–00:53]
+Priya receives that request in a unified operations queue. She assigns ownership, sets a due time, collaborates with her team, and opens the linked evidence.
+
+[00:53–01:03]
+If the risk cannot be resolved immediately, Priya escalates it into a case and requests a time-bound exception with compensating controls.
+
+[01:03–01:14]
+Alex sees the exact policy version, request digest, evidence, owner, and expiry. Separation of duties prevents the requester from approving the same exception.
+
+[01:14–01:24]
+The decision and remediation are recorded as native HyperMesh relationships, preserving the path from code change to verified outcome.
+
+[01:24–01:30]
+MeshAgent. Govern connected coding agents without disrupting development.
+
+VOICE DIRECTION
+Measured, confident, and conversational. The script is 182 words, or approximately 121 words per minute. Pronounce MeshAgent as “Mesh Agent” and HyperMesh as “Hyper Mesh.” Avoid a theatrical sales cadence. Leave short natural pauses after Security, evidence, and independent decision.

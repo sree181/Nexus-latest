@@ -9,6 +9,7 @@ This release can demonstrate the complete **Developer → Analyst → CISO** wor
 3. Follow [Live Client Demo Runbook](docs/demo/LIVE_CLIENT_DEMO_RUNBOOK.md) during rehearsal and delivery.
 4. Keep [Presenter Checklist](docs/demo/PRESENTER_CHECKLIST.md) open for the final preflight and contingency path.
 5. Use the [editable client-demo PowerPoint](docs/demo/MeshAgent_Client_Demo_Deck.pptx) for the opening narrative.
+6. Produce the master film from the [90-second storyboard](docs/demo/MESHAGENT_90_SECOND_MASTER_FILM_STORYBOARD.md) and [voice-actor script](docs/demo/MESHAGENT_90_SECOND_NARRATION.txt).
 
 ## What is live
 
