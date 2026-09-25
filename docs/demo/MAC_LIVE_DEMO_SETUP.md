@@ -80,6 +80,24 @@ cd YOUR_DEMO_REPOSITORY
 git switch -c meshagent-live-demo
 ```
 
+### Preferred: configure the repository in one command
+
+Run the release configurator from the MeshAgent clone. It validates the dedicated Python runtime, copies the hook, creates the repository opt-in, merges all five MeshAgent entries without removing existing Cursor hooks, backs up an existing `hooks.json` before changing it, and runs a harmless permission-hook smoke test:
+
+```bash
+cd "$HOME/Documents/YOUR_DEMO_REPOSITORY"
+export MESHAGENT_HOME="$HOME/Documents/meshagent"
+"$MESHAGENT_HOME/scripts/demo/configure_cursor_hooks.py" \
+  "$PWD" \
+  --local-exclude
+```
+
+`--local-exclude` keeps `.meshagent/`, `.meshagent.json`, and `.cursor/hooks.json` out of commits through the clone's `.git/info/exclude`. Omit that option only when the project intentionally versions its approved hook configuration. If `.meshagent.json` already exists with `record` disabled or absent, the configurator refuses to override that privacy choice.
+
+On success, skip to the validation commands below and then fully restart Cursor.
+
+### Manual equivalent
+
 Copy the installed hook script into the demonstration repository. `MESHAGENT_HOME` is the local MeshAgent clone from section 3. Use the wrapper below so Cursor always runs the hook with the dedicated MeshAgent virtual environment, even when Cursor is launched from Finder and does not inherit an activated Terminal environment.
 
 ```bash
