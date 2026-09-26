@@ -44,7 +44,7 @@ export async function browserSession(): Promise<BrowserSessionStatus> {
     return { authenticated: false, expires_at: null, reauth_required: true };
   }
   if (!response.ok) {
-    throw new Error("MeshAgent could not verify the browser session.");
+    throw new Error("meshAgent could not verify the browser session.");
   }
   return response.json() as Promise<BrowserSessionStatus>;
 }

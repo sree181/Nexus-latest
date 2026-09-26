@@ -17,7 +17,7 @@ Run this immediately before the meeting:
 ```bash
 scripts/demo/verify-live-demo.sh http://localhost:8080
 meshagent doctor
-meshagent sessions
+meshagent status
 ```
 
 The preflight must show `EngineGateway`, durable state, the three role routes, and the Cursor command path. If it does not, use the contingency section rather than improvising against an unhealthy service.

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -47,6 +47,7 @@ function NavLink({
   return (
     <Link
       to={to}
+      title={typeof children === "string" ? children : undefined}
       params={params}
       className={`${row} text-rail-ink-dim transition hover:bg-rail-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright`}
       activeProps={{
@@ -56,7 +57,7 @@ function NavLink({
       activeOptions={{ exact: exact ?? false }}
     >
       {icon}
-      {children}
+      <span className="control-nav-label">{children}</span>
     </Link>
   );
 }
@@ -85,7 +86,7 @@ function Unavailable({
 function Group({ label, children }: { label: string; children: ReactNode }) {
   return (
     <>
-      <p className="mx-3 mb-2 mt-5 font-mono text-[10.5px] tracking-widest text-rail-ink-faint">
+      <p className="control-nav-group mx-3 mb-2 mt-5 font-mono text-[10.5px] tracking-widest text-rail-ink-faint">
         {label}
       </p>
       {children}
@@ -269,6 +270,10 @@ function CisoNav() {
 
 export function Sidebar() {
   const { me, developer } = useIdentity();
+  const [open, setOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const sessions = useQuery({
     queryKey: ["developer-sessions"],
     queryFn: () => api.developerSessions(200),
@@ -282,8 +287,82 @@ export function Sidebar() {
       ? "Could not load sessions"
       : "No connected session yet";
 
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => {
+      setCompact(media.matches);
+      if (!media.matches) setOpen(false);
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarRef.current) return;
+    (sidebarRef.current as HTMLElement & { inert: boolean }).inert = compact && !open;
+  }, [compact, open]);
+
+  useEffect(() => {
+    if (!open || !compact) return;
+    const sidebar = sidebarRef.current;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusable = () => Array.from(sidebar?.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), summary, select:not([disabled]), input:not([disabled]), textarea:not([disabled])") ?? [])
+      .filter((element) => element.getClientRects().length > 0 && !element.closest("[inert]"));
+    const frame = window.requestAnimationFrame(() => focusable()[0]?.focus());
+    const containFocus = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", containFocus);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", containFocus);
+      (previous ?? triggerRef.current)?.focus();
+    };
+  }, [compact, open]);
+
+  const roleLabel = me?.primary_role === "ciso" ? "CISO" : me?.primary_role === "analyst" ? "Security analyst" : "Developer";
+
   return (
-    <aside className="flex max-h-[34vh] w-full shrink-0 flex-col overflow-auto bg-rail px-3.5 py-3 md:h-full md:max-h-none md:w-[252px] md:py-5">
+    <>
+      <header className="control-mobile-header">
+        <Link to="/" className="control-mobile-brand" aria-label="meshAgent workspace">
+          <span className="control-mobile-mark"><Icon d={icons.graph} /></span>
+          <span><strong>meshAgent</strong><small>{roleLabel}</small></span>
+        </Link>
+        <button ref={triggerRef} type="button" aria-label={open ? "Close navigation" : "Open navigation"} aria-expanded={open} aria-controls="control-sidebar" onClick={() => setOpen((value) => !value)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d={open ? "M6 6l12 12M18 6L6 18" : "M4 7h16M4 12h16M4 17h16"} /></svg>
+        </button>
+      </header>
+      {open ? <button type="button" className="control-sidebar-overlay" aria-label="Close navigation" onClick={() => setOpen(false)} /> : null}
+      <aside
+        ref={sidebarRef}
+        id="control-sidebar"
+        className={`control-sidebar ${open ? "is-open" : ""}`}
+        aria-hidden={compact && !open}
+        aria-label={compact ? "Main navigation" : undefined}
+        aria-modal={compact && open ? true : undefined}
+        role={compact ? "dialog" : undefined}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("a")) setOpen(false);
+        }}
+      >
       <Link
         to="/"
         className="flex items-center gap-3 rounded-lg px-2.5 pb-4 pt-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-bright"
@@ -306,11 +385,11 @@ export function Sidebar() {
             <path d="M12 7v4M12 11l-6 6M12 11l6 6" />
           </svg>
         </div>
-        <span className="font-serif text-[19px] font-semibold text-rail-ink">
-          MeshAgent
+        <span className="control-brand-label font-sans text-[19px] font-semibold tracking-tight text-rail-ink">
+          meshAgent
         </span>
       </Link>
-      <nav aria-label="Main" className="flex flex-col md:min-w-[224px]">
+      <nav aria-label="Main" className="flex flex-col">
         {me?.role === "developer" ? (
           <DeveloperNav
             sessionId={latestSession?.id}
@@ -323,7 +402,8 @@ export function Sidebar() {
         {me?.role === "ciso" ? <CisoNav /> : null}
       </nav>
       <Identity me={me} />
-    </aside>
+      </aside>
+    </>
   );
 }
 
@@ -353,12 +433,12 @@ function Identity({ me }: { me: Me | undefined }) {
     ciso: "alex@company.com",
   };
   return (
-    <div className="mt-auto border-t border-rail-line p-2.5">
-      <div className="flex items-center gap-2.5">
+    <details className="control-identity mt-auto border-t border-rail-line p-2.5">
+      <summary aria-label={`${me.name} account`} title={`${me.name} · ${labels[me.primary_role]}`}>
         <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-rail-2 font-mono text-xs text-accent-bright">
           {initials(me.name)}
         </div>
-        <div className="flex min-w-0 flex-col">
+        <div className="control-identity-summary flex min-w-0 flex-col">
           <span className="truncate text-[13px] text-rail-ink-dim">
             {me.name}
           </span>
@@ -366,8 +446,10 @@ function Identity({ me }: { me: Me | undefined }) {
             {labels[me.primary_role]}
           </span>
         </div>
-      </div>
-      {!me.verified ? (
+      </summary>
+      <div className="control-identity-popover">
+        <div className="control-identity-heading"><strong>{me.name}</strong><span>{labels[me.primary_role]}</span></div>
+        {!me.verified ? (
         <>
           <p className="mt-2.5 rounded-md bg-rail-2 px-2.5 py-2 text-[11px] leading-snug text-rail-ink-faint">
             Local identity assertion. No identity provider verified this role.
@@ -406,8 +488,8 @@ function Identity({ me }: { me: Me | undefined }) {
             </button>
           </form>
         </>
-      ) : null}
-      {oidcEnabled ? (
+        ) : null}
+        {oidcEnabled ? (
         <button
           type="button"
           onClick={signOut}
@@ -415,7 +497,8 @@ function Identity({ me }: { me: Me | undefined }) {
         >
           Sign out
         </button>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </details>
   );
 }

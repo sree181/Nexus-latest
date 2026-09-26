@@ -114,12 +114,12 @@ function Coverage({ data }: { data: CoverageOut }) {
         /* No external agent has recorded here. Saying so beats showing 100%,
            which is what an empty ratio would round to. */
         <p className="rounded-xl border border-line-2 bg-wash px-4 py-3 text-[13px] leading-relaxed text-ink">
-          No agent outside MeshAgent has recorded anything yet, so there is no
+          No agent outside meshAgent has recorded anything yet, so there is no
           adoption to measure.{" "}
           {data.self_recorded > 0 && (
             <>
               The {data.self_recorded} file
-              {data.self_recorded === 1 ? "" : "s"} MeshAgent’s own loop wrote
+              {data.self_recorded === 1 ? "" : "s"} meshAgent’s own loop wrote
               are not counted here: it is made to state a decision before it
               writes, so it would always read as perfect.
             </>

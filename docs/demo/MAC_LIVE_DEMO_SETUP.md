@@ -26,10 +26,14 @@ Use the release branch supplied with the demo package. From Terminal:
 ```bash
 git clone https://github.com/sree181/Nexus-latest.git meshagent
 cd meshagent
-git switch manus/priority5-complete-demo-v1
+git switch manus/figma-workflow-integration-v1
+git pull --ff-only
+git rev-parse --short HEAD
 
 docker compose up --build -d
 ```
+
+For the redesigned seven-screen release, the expected commit is `bf0d3bc`.
 
 Wait until the API is healthy, then open `http://localhost:8080`.
 

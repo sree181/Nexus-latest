@@ -75,7 +75,7 @@ export function activityCopy(event: Pick<ActivityEvent, "type" | "payload">): Ac
   const p = event.payload;
   switch (event.type) {
     case "session.started":
-      return { group: "session", label: "SESSION", title: "Session started", detail: text(p, "task") || "The editor connected to MeshAgent." };
+      return { group: "session", label: "SESSION", title: "Session started", detail: text(p, "task") || "The editor connected to meshAgent." };
     case "prompt.submitted":
       return { group: "prompt", label: "PROMPT", title: "Prompt submitted", detail: text(p, "prompt") || "Prompt content was recorded." };
     case "tool.started":
@@ -155,7 +155,7 @@ export function projectionVisual(status: ProjectionStatus): {
   detail: string;
 } {
   if (status === "projected") return { label: "Recorded", tone: "success", detail: "Governed evidence was created." };
-  if (status === "projecting") return { label: "Syncing", tone: "accent", detail: "MeshAgent is creating evidence." };
+  if (status === "projecting") return { label: "Syncing", tone: "accent", detail: "meshAgent is creating evidence." };
   if (status === "pending") return { label: "Stored", tone: "warning", detail: "The event is stored and waiting for evidence." };
   if (status === "refused") return { label: "Refused", tone: "danger", detail: "The evidence write was refused." };
   return { label: "Failed", tone: "danger", detail: "The event is stored, but evidence was not created." };

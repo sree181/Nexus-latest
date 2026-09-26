@@ -108,7 +108,7 @@ export function DeveloperConnectionsEditors() {
 
           {step === "hook" ? (
             <div className="dev-stack">
-              <div className="dev-field"><label htmlFor="meshagent-root">MeshAgent path</label><input id="meshagent-root" value={root} onChange={(event) => setCheckout(event.target.value)} /></div>
+              <div className="dev-field"><label htmlFor="meshagent-root">meshAgent path</label><input id="meshagent-root" value={root} onChange={(event) => setCheckout(event.target.value)} /></div>
               <span className="dev-mono dev-muted">{editor === "cursor" ? ".cursor/hooks.json" : ".claude/settings.json"}</span>
               <CodeBlock value={editorHook(editor, root)} />
               <Disclosure label="MCP · optional" icon="connect"><CodeBlock value={JSON.stringify({ mcpServers: { meshagent: { command: "python3", args: [`${root}/adapters/mcp/meshagent_mcp.py`], env: { MESHAGENT_API: apiUrl } } } }, null, 2)} /></Disclosure>

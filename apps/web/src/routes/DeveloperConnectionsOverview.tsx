@@ -23,7 +23,7 @@ export function DeveloperConnectionsOverview() {
           { id: "editor", label: "Editor", icon: "cursor", tone: adapters.size ? "success" : "warning", detail: adapters.size ? `${[...adapters].map((item) => item === "claude-code" ? "Claude Code" : "Cursor").join(" and ")} observed.` : "No editor activity yet." },
           { id: "device", label: "Device", icon: "device", tone: devices.isError ? "danger" : devices.data?.length ? "success" : "warning", detail: devices.isError ? "Device status is unavailable." : devices.data?.length ? `${devices.data.length} paired device${devices.data.length === 1 ? "" : "s"}.` : "No device is paired." },
           { id: "repository", label: "Project", icon: "repository", tone: project.projects.length ? "success" : "warning", detail: project.projects.length ? `${project.projects.length} observed project${project.projects.length === 1 ? "" : "s"}.` : "No repository activity yet." },
-          { id: "meshagent", label: "MeshAgent", icon: "connect", tone: health.isError ? "danger" : health.data ? "success" : "neutral", detail: health.isError ? "MeshAgent is unavailable." : health.data ? "MeshAgent is reachable." : "Checking MeshAgent." },
+          { id: "meshagent", label: "meshAgent", icon: "connect", tone: health.isError ? "danger" : health.data ? "success" : "neutral", detail: health.isError ? "meshAgent is unavailable." : health.data ? "meshAgent is reachable." : "Checking meshAgent." },
           { id: "evidence", label: "Evidence", icon: "evidence", tone: evidenceCount ? "success" : project.sessions.length ? "warning" : "neutral", detail: evidenceCount ? `${evidenceCount} session${evidenceCount === 1 ? "" : "s"} linked to evidence.` : "No evidence run is linked yet." },
         ]} />
       </section>

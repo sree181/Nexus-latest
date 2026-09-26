@@ -48,7 +48,7 @@ function EventDetail({ event, close }: { event: ActivityEvent; close: () => void
       <div className="dev-stack">
         <VisualFlow label="Evidence flow" nodes={[
           { id: "editor", label: "Editor", icon: activityIcon(event.type), tone: "success", detail: `Editor event ${event.sequence} was observed.` },
-          { id: "stored", label: "Stored", icon: "check", tone: "success", detail: "MeshAgent received this event." },
+          { id: "stored", label: "Stored", icon: "check", tone: "success", detail: "meshAgent received this event." },
           { id: "evidence", label: projection.label, icon: "evidence", tone: projection.tone, detail: projection.detail },
         ]} />
         <dl className="dev-kv">

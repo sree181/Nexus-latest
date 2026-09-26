@@ -80,9 +80,9 @@ export function DeveloperRail() {
   return (
     <>
       <header className="dev-mobile-shell">
-        <Link to="/developer/sessions" className="dev-mobile-brand" aria-label="MeshAgent Sessions">
+        <Link to="/developer/sessions" className="dev-mobile-brand" aria-label="meshAgent Sessions">
           <span className="dev-brand-mark"><DevIcon name="evidence" size={18} /></span>
-          <strong>MeshAgent</strong>
+          <strong>meshAgent</strong>
         </Link>
         <button type="button" className="dev-mobile-menu" aria-label="Open navigation" aria-expanded={open} onClick={() => setOpen(true)}>
           <DevIcon name="dots" />
@@ -90,7 +90,7 @@ export function DeveloperRail() {
       </header>
       {open ? <button type="button" aria-label="Close navigation" className="dev-rail-overlay" onClick={close} /> : null}
       <aside className={`dev-rail ${open ? "dev-rail-open" : ""}`} aria-label="Developer navigation">
-        <Link to="/developer/sessions" aria-label="MeshAgent" className="dev-rail-brand" onClick={close}>
+        <Link to="/developer/sessions" aria-label="meshAgent" className="dev-rail-brand" onClick={close}>
           <DevIcon name="evidence" size={20} />
         </Link>
         <nav className="dev-rail-nav">
