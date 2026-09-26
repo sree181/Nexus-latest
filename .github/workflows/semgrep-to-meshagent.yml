@@ -22,7 +22,7 @@ jobs:
     container:
       image: semgrep/semgrep
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run Semgrep
         # continue-on-error: findings are for the tracker to triage, not for
@@ -30,16 +30,20 @@ jobs:
         continue-on-error: true
         run: semgrep scan --config=p/security-audit --config=p/python --sarif --output=semgrep.sarif
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Upload the scan to MeshAgent
+        if: ${{ vars.MESHAGENT_API != '' && vars.MESHAGENT_RUN_ID != '' }}
         env:
           MESHAGENT_API: ${{ vars.MESHAGENT_API }}
           MESHAGENT_TOKEN: ${{ secrets.MESHAGENT_TOKEN }}
         run: |
-          python services/api/app/upload_scan.py \
+          python3 services/api/app/upload_scan.py \
             --run "${{ vars.MESHAGENT_RUN_ID }}" \
             --sarif semgrep.sarif
+
+      - name: Retain Semgrep evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: semgrep-${{ github.sha }}
+          path: semgrep.sarif
+          if-no-files-found: error
+          retention-days: 14
