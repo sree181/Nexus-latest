@@ -1,16 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { DevIcon } from "../components/DeveloperIcons";
 import { DeveloperTopbar, useDeveloperProject } from "../components/DeveloperProject";
 import { AdvisoryCard, ReviewStateBadge } from "../components/ReviewUI";
+import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
 import { SidePanel, Status } from "../components/DeveloperVisual";
-import { ResponsibilityDock, StateFrame, WorkflowHero, WorkflowJourney, WorkflowSection, type JourneyItem } from "../components/WorkflowVisual";
-import { api, type AttentionItem, type ReviewKind } from "../lib/api";
+import { ResponsibilityDock, StateFrame, WorkflowJourney, type JourneyItem } from "../components/WorkflowVisual";
+import { ApiError, api, type AttentionItem, type ReviewKind } from "../lib/api";
 import { relativeTimeMs } from "../lib/format";
 
 type Filter = "open" | "blocked" | "unknown" | "sent" | "all";
+type RequestStep = 1 | 2 | 3;
 
 export function filterAttention(items: AttentionItem[], filter: Filter): AttentionItem[] {
   if (filter === "open") return items.filter((item) => !item.review_status || !["verified", "false_positive", "not_approved"].includes(item.review_status));
@@ -30,9 +32,30 @@ function attentionJourney(item: AttentionItem): JourneyItem[] {
   ];
 }
 
-function AttentionDetail({ item, close }: { item: AttentionItem; close: () => void }) {
+function verdictTone(item: AttentionItem) {
+  if (item.verdict === "block") return "danger" as const;
+  if (item.verdict === "unknown" || item.unavailable) return "warning" as const;
+  return "warning" as const;
+}
+
+function focusHeadline(item: AttentionItem): string {
+  const coordinate = `${item.package}${item.version ? `@${item.version}` : ""}`;
+  if (item.unavailable || item.verdict === "unknown") return `${coordinate} could not be fully checked`;
+  if (item.verdict === "block") return `${coordinate} needs your attention`;
+  return `Review the recorded signal for ${coordinate}`;
+}
+
+function focusDescription(item: AttentionItem): string {
+  if (item.unavailable) return item.unavailable;
+  if (item.reasons.length) return item.reasons.join(" ");
+  if (item.advisories.length) return `${item.advisories.length} published ${item.advisories.length === 1 ? "advisory is" : "advisories are"} linked to this package check.`;
+  return `meshAgent recorded this package evaluation in session ${item.session_id}.`;
+}
+
+function RequestDrawer({ item, close }: { item: AttentionItem; close: () => void }) {
   const navigate = useNavigate();
   const client = useQueryClient();
+  const [step, setStep] = useState<RequestStep>(1);
   const [kind, setKind] = useState<ReviewKind>(item.suggested_version ? "safe_version" : "security_guidance");
   const [rationale, setRationale] = useState("");
   const create = useMutation({
@@ -47,125 +70,227 @@ function AttentionDetail({ item, close }: { item: AttentionItem; close: () => vo
       void navigate({ to: "/developer/reviews/$requestId", params: { requestId: request.id } });
     },
   });
-  const version = item.version || "unpinned";
+
+  const labels: Record<ReviewKind, { title: string; detail: string }> = {
+    security_guidance: { title: "Security guidance", detail: "Ask Security to interpret the recorded package signal." },
+    safe_version: { title: "Safer version path", detail: "Ask Security to review the candidate version and next step." },
+    exception: { title: "Temporary approval review", detail: "Ask whether a governed, time-limited exception should be considered." },
+    false_positive: { title: "False-positive review", detail: "Ask Security to reassess whether the advisory applies." },
+  };
+
   return (
-    <SidePanel title={`${item.package}@${version}`} icon="warning" onClose={close} footer={
-      item.review_request_id ? (
-        <Link to="/developer/reviews/$requestId" params={{ requestId: item.review_request_id }} className="dev-action dev-action-primary w-full">Open review <DevIcon name="arrow" size={16} /></Link>
-      ) : (
-        <button type="button" className="dev-action dev-action-primary w-full" disabled={!rationale.trim() || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Sending…" : "Send to security"}<DevIcon name="arrow" size={16} /></button>
-      )
-    }>
-      <div className="dev-stack">
-        <WorkflowJourney items={attentionJourney(item)} label="Attention item journey" />
-        <section className="review-impact-summary" aria-label="Evidence summary">
-          <span className="review-impact-package"><DevIcon name="package" /><strong>{item.package}</strong><small>{item.ecosystem} · {version}</small></span>
-          <DevIcon name="arrow" size={16} />
-          <span className="review-impact-package"><DevIcon name="security" /><strong>{item.advisories.length || "—"}</strong><small>{item.advisories.length === 1 ? "advisory" : "advisories"}</small></span>
-          <DevIcon name="arrow" size={16} />
-          <span className="review-impact-package"><DevIcon name="code" /><strong>{item.code_entities.length}</strong><small>linked code</small></span>
-        </section>
-        {item.reasons.length ? <section className="review-fix-card"><span className="dev-tone-warning"><DevIcon name="warning" /></span><span><strong>Why this needs attention</strong><small>{item.reasons.join(" ")}</small></span></section> : null}
-        {item.suggested_version ? <div className="review-fix-card"><span className="dev-tone-success"><DevIcon name="check" /></span><span><strong>Suggested next version: {item.suggested_version}</strong><small>This is a candidate from the advisory response. The next package check remains authoritative.</small></span></div> : null}
-        {item.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />)}
-        {item.unavailable ? <div className="review-fix-card"><span className="dev-tone-warning"><DevIcon name="warning" /></span><span><strong>Check incomplete</strong><small>{item.unavailable}</small></span></div> : null}
-        {item.code_entities.length ? <section className="dev-surface"><header className="dev-panel-heading"><h2>Linked code</h2></header><ul className="dev-compact-list">{item.code_entities.map((entity) => <li key={entity} className="dev-compact-row"><DevIcon name="code" size={16} /><span className="dev-compact-row-main"><strong>{entity}</strong></span></li>)}</ul></section> : null}
-        {item.review_status ? <div className="flex items-center gap-2"><span className="text-xs text-slate">Current review state</span><ReviewStateBadge state={item.review_status} /></div> : (
-          <section className="review-request-form" aria-label="Security review request">
-            <label>What do you need?
-              <select value={kind} onChange={(event) => setKind(event.target.value as ReviewKind)}>
-                <option value="safe_version">A safer version</option>
-                <option value="security_guidance">Security guidance</option>
-                <option value="exception">Temporary approval</option>
-                <option value="false_positive">False-positive review</option>
-              </select>
-            </label>
-            <label>Context
-              <textarea value={rationale} onChange={(event) => setRationale(event.target.value)} maxLength={4096} placeholder="What are you trying to ship, and what constraint matters?" />
-            </label>
-            {create.isError ? <p role="alert" className="text-sm text-risk">{create.error instanceof Error ? create.error.message : "Could not send the request."}</p> : null}
-          </section>
-        )}
+    <SidePanel
+      title="Ask Security"
+      icon="security"
+      onClose={close}
+      footer={(
+        <div className="attention-drawer-footer">
+          {step > 1 ? <button type="button" className="dev-action" disabled={create.isPending} onClick={() => setStep((step - 1) as RequestStep)}>Back</button> : null}
+          {step < 3 ? (
+            <button type="button" className="dev-action dev-action-primary" disabled={step === 2 && !rationale.trim()} onClick={() => setStep((step + 1) as RequestStep)}>Continue <DevIcon name="arrow" size={16} /></button>
+          ) : (
+            <button type="button" className="dev-action dev-action-primary" disabled={!rationale.trim() || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Sending…" : "Submit request"}<DevIcon name="arrow" size={16} /></button>
+          )}
+        </div>
+      )}
+    >
+      <div className="dev-stack attention-drawer">
+        <div className="attention-drawer-progress" aria-label={`Step ${step} of 3`}>
+          {[1, 2, 3].map((value) => <span key={value} className={value <= step ? "is-active" : ""} />)}
+        </div>
+        <div>
+          <p className="workflow-eyebrow">Step {step} of 3</p>
+          <h2>{step === 1 ? "Choose the review you need" : step === 2 ? "Explain the constraint" : "Review the exact request"}</h2>
+        </div>
+        {step === 1 ? (
+          <div className="attention-request-kinds" role="radiogroup" aria-label="Review kind">
+            {(Object.entries(labels) as Array<[ReviewKind, { title: string; detail: string }]>).map(([value, copy]) => (
+              <label key={value} className={kind === value ? "is-selected" : ""}>
+                <input type="radio" name="review-kind" value={value} checked={kind === value} onChange={() => setKind(value)} />
+                <span><strong>{copy.title}</strong><small>{copy.detail}</small></span>
+              </label>
+            ))}
+          </div>
+        ) : null}
+        {step === 2 ? (
+          <label className="attention-rationale">Context
+            <textarea value={rationale} onChange={(event) => setRationale(event.target.value)} maxLength={4096} rows={7} placeholder="What are you trying to ship, and what constraint matters?" />
+            <small>This context becomes part of the review request.</small>
+          </label>
+        ) : null}
+        {step === 3 ? (
+          <dl className="attention-request-review">
+            <div><dt>Session</dt><dd><code>{item.session_id}</code></dd></div>
+            <div><dt>Policy evaluation</dt><dd><code>{item.policy_evaluation_id}</code></dd></div>
+            <div><dt>Request</dt><dd>{labels[kind].title}</dd></div>
+            <div><dt>Context</dt><dd>{rationale}</dd></div>
+          </dl>
+        ) : null}
+        {create.isError ? <p role="alert" className="text-sm text-risk">{create.error instanceof Error ? create.error.message : "Could not send the request."}</p> : null}
       </div>
     </SidePanel>
   );
 }
 
-function verdictTone(item: AttentionItem) {
-  if (item.verdict === "block") return "danger" as const;
-  if (item.verdict === "unknown" || item.unavailable) return "warning" as const;
-  return "warning" as const;
+function QueueRows({ items, selectedId, select }: { items: AttentionItem[]; selectedId: string | null; select: (id: string) => void }) {
+  return (
+    <div className="attention-queue-list" role="listbox" aria-label="Attention items">
+      {items.map((item) => (
+        <button
+          type="button"
+          role="option"
+          aria-selected={selectedId === item.id}
+          className={`attention-queue-row ${selectedId === item.id ? "is-selected" : ""}`}
+          key={item.id}
+          onClick={() => select(item.id)}
+        >
+          <span className={`attention-queue-accent is-${verdictTone(item)}`} aria-hidden="true" />
+          <span className="attention-queue-row-top">
+            <strong>{item.package}{item.version ? `@${item.version}` : ""}</strong>
+            <Status label={item.verdict === "block" ? "Blocked" : item.unavailable ? "Incomplete" : item.verdict} tone={verdictTone(item)} />
+          </span>
+          <span className="attention-queue-row-meta">{item.repository_name} · {item.ecosystem}</span>
+          <span className="attention-queue-row-evidence">{item.advisories.length ? item.advisories.slice(0, 2).map((advisory) => advisory.id).join(" · ") : "Check incomplete"}</span>
+          <span className="attention-queue-row-bottom">
+            {item.review_status ? <ReviewStateBadge state={item.review_status} /> : <small>{item.code_entities.length} linked code</small>}
+            <small>{relativeTimeMs(item.checked_at_ms)}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function DeveloperAttention() {
   const project = useDeveloperProject();
   const [filter, setFilter] = useState<Filter>("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const attention = useQuery({ queryKey: ["developer-attention"], queryFn: () => api.developerAttention(500), refetchInterval: 8_000 });
   const scopedItems = useMemo(() => project.projectId === "all" ? attention.data?.items ?? [] : (attention.data?.items ?? []).filter((item) => item.repository_id === project.projectId), [attention.data?.items, project.projectId]);
   const items = useMemo(() => filterAttention(scopedItems, filter), [scopedItems, filter]);
-  const selected = selectedId ? scopedItems.find((item) => item.id === selectedId) ?? null : null;
-  const open = scopedItems.filter((item) => !item.review_status || !["verified", "false_positive", "not_approved"].includes(item.review_status));
+
+  useEffect(() => {
+    if (!items.length) {
+      setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !items.some((item) => item.id === selectedId)) setSelectedId(items[0].id);
+  }, [items, selectedId]);
+
+  const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
+  const graph = useQuery({
+    queryKey: ["attention", selected?.id ?? "none", "run-graph", selected?.run_id ?? "none"],
+    queryFn: () => api.runGraph(selected!.run_id!),
+    enabled: Boolean(selected?.run_id),
+    retry: false,
+    refetchInterval: 15_000,
+  });
   const blocked = scopedItems.filter((item) => item.verdict === "block").length;
-  const incomplete = scopedItems.filter((item) => item.verdict === "unknown" || Boolean(item.unavailable)).length;
   const withSecurity = scopedItems.filter((item) => Boolean(item.review_request_id)).length;
 
+  const select = (id: string) => {
+    setSelectedId(id);
+    setQueueOpen(false);
+  };
+
   return (
-    <main className="dev-page workflow-page">
+    <main className="dev-page workflow-page attention-page">
       <DeveloperTopbar title="Attention" />
-      <div className="dev-scroll workflow-scroll">
-        <div className="workflow-layout">
-          <div className="workflow-main">
-            <WorkflowHero
-              eyebrow="Developer attention"
-              title={open.length ? `${open.length} item${open.length === 1 ? "" : "s"} need your choice` : "No action is waiting"}
-              description="Package signals from your connected coding-agent sessions. Open an item to see the recorded evidence and choose whether security should review it."
-              tone={blocked ? "danger" : incomplete ? "warning" : "success"}
-              meta={<><span>{project.projectId === "all" ? "All projects" : project.projectId}</span><span>{withSecurity} with security</span></>}
-              status={<Status label={blocked ? `${blocked} blocked` : incomplete ? `${incomplete} incomplete` : "Clear"} tone={blocked ? "danger" : incomplete ? "warning" : "success"} />}
-            />
-
-            <div className="workflow-kpis" aria-label="Attention summary">
-              <div className={open.length ? "workflow-kpi is-warning" : "workflow-kpi is-success"}><strong>{open.length}</strong><span>Need a choice</span></div>
-              <div className={blocked ? "workflow-kpi is-risk" : "workflow-kpi"}><strong>{blocked}</strong><span>Blocked packages</span></div>
-              <div className={incomplete ? "workflow-kpi is-warning" : "workflow-kpi"}><strong>{incomplete}</strong><span>Checks incomplete</span></div>
-              <div className="workflow-kpi"><strong>{withSecurity}</strong><span>With security</span></div>
+      <div className="attention-mobile-summary">
+        <button type="button" aria-expanded={queueOpen} onClick={() => setQueueOpen((value) => !value)}>
+          <span><small>Attention queue</small><strong>{items.length} shown · {blocked} blocked</strong></span>
+          <DevIcon name="chevron" size={16} className={queueOpen ? "is-open" : ""} />
+        </button>
+        {queueOpen ? (
+          <div className="attention-mobile-queue-panel">
+            <div className="attention-queue-filters">
+              {(["open", "blocked", "unknown", "sent", "all"] as Filter[]).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === "sent" ? "With security" : value[0].toUpperCase() + value.slice(1)}</button>)}
             </div>
-
-            <WorkflowSection className="flush" eyebrow="Your work" title="Attention queue" description="Highest priority appears first. Select a row to reveal evidence and the next action." action={<span className="font-mono text-[11px] text-slate">{items.length} shown</span>}>
-              <div className="dev-list-toolbar">
-                <div className="dev-filter-chips" aria-label="Attention filter">
-                  {(["open", "blocked", "unknown", "sent", "all"] as Filter[]).map((value) => <button key={value} type="button" className="dev-filter-chip" aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === "sent" ? "With security" : value[0].toUpperCase() + value.slice(1)}</button>)}
-                </div>
-              </div>
-              {attention.isPending ? <StateFrame kind="loading" title="Loading attention" detail="Reading package checks from your connected sessions." /> : attention.isError ? <StateFrame kind="error" title="Attention could not be loaded" detail={attention.error instanceof Error ? attention.error.message : "Try again when the service is available."} action={<button type="button" className="dev-action" onClick={() => void attention.refetch()}>Try again</button>} /> : items.length ? (
-                <div className="review-attention-list">
-                  {items.map((item) => (
-                    <button type="button" className="review-attention-row" key={item.id} onClick={() => setSelectedId(item.id)}>
-                      <span className={`review-attention-priority dev-tone-${verdictTone(item)}`}><DevIcon name={item.verdict === "block" ? "lock" : "warning"} /></span>
-                      <span className="review-attention-main"><strong>{item.package}{item.version ? `@${item.version}` : ""}</strong><small>{item.repository_name} · {item.ecosystem}</small></span>
-                      <span className="review-attention-cves">{item.advisories.length ? item.advisories.slice(0, 2).map((advisory) => <span key={advisory.id}>{advisory.id}</span>) : <span>Check incomplete</span>}</span>
-                      <span className="review-attention-fix">{item.suggested_version ? <>Suggested <strong>{item.suggested_version}</strong></> : "Review needed"}</span>
-                      {item.review_status ? <ReviewStateBadge state={item.review_status} /> : <Status label={item.verdict === "block" ? "Blocked" : "Review"} tone={verdictTone(item)} />}
-                      <span className="dev-relative-time">{relativeTimeMs(item.checked_at_ms)}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : <StateFrame kind="empty" title={filter === "open" ? "Nothing needs attention" : "No items match this view"} detail={filter === "open" ? "New package checks that need your decision will appear here." : "Choose another filter to see the rest of your work."} />}
-            </WorkflowSection>
+            <QueueRows items={items} selectedId={selectedId} select={select} />
           </div>
-
-          <ResponsibilityDock
-            responsibility={open.length ? "Review the highest-priority package signal." : "Continue your development work."}
-            why={open.length ? "You decide when more context is needed. Security receives a request only after you submit one." : "meshAgent will surface the next package check that needs a decision."}
-          >
-            {open[0] ? <button type="button" className="dev-action dev-action-primary w-full" onClick={() => setSelectedId(open[0].id)}>Review {open[0].package}<DevIcon name="arrow" size={16} /></button> : null}
-            {withSecurity ? <Link to="/developer/attention" search={{}} className="dev-action w-full" onClick={() => setFilter("sent")}>View requests with security</Link> : null}
-            <p className="text-xs leading-relaxed text-slate">Only your own sessions and review requests are returned by the server.</p>
-          </ResponsibilityDock>
-        </div>
+        ) : null}
       </div>
-      {selected ? <AttentionDetail key={selected.id} item={selected} close={() => setSelectedId(null)} /> : null}
+
+      <div className="attention-workspace">
+        <aside className="attention-queue" aria-label="Attention queue">
+          <header>
+            <div><p className="workflow-eyebrow">Your work</p><h1>Attention</h1></div>
+            <span>{items.length}</span>
+          </header>
+          <p className="attention-queue-scope">{project.projectId === "all" ? "All projects" : project.projectId} · {withSecurity} with security</p>
+          <div className="attention-queue-filters" aria-label="Attention filter">
+            {(["open", "blocked", "unknown", "sent", "all"] as Filter[]).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === "sent" ? "With security" : value[0].toUpperCase() + value.slice(1)}</button>)}
+          </div>
+          {attention.isPending ? <StateFrame kind="loading" title="Loading attention" detail="Reading your connected sessions." /> : attention.isError ? <StateFrame kind="error" title="Could not load attention" detail={attention.error instanceof Error ? attention.error.message : "Try again."} action={<button type="button" onClick={() => void attention.refetch()}>Try again</button>} /> : items.length ? <QueueRows items={items} selectedId={selectedId} select={select} /> : <StateFrame kind="empty" title="No items in this view" detail="Choose another filter or continue your work." />}
+        </aside>
+
+        <section className="attention-focus" aria-label="Selected attention item">
+          {selected ? (
+            <article className="focus-narrative">
+              <header className={`focus-heading is-${verdictTone(selected)}`}>
+                <div className="focus-heading-meta">
+                  <span>{selected.ecosystem}</span><span>{selected.repository_name}</span><span>{relativeTimeMs(selected.checked_at_ms)}</span>
+                </div>
+                <div className="focus-heading-title">
+                  <div><p className="workflow-eyebrow">Recorded package signal</p><h1>{focusHeadline(selected)}</h1></div>
+                  <Status label={selected.verdict === "block" ? "Blocked" : selected.unavailable ? "Incomplete" : selected.verdict} tone={verdictTone(selected)} />
+                </div>
+                <p>{focusDescription(selected)}</p>
+              </header>
+
+              <section className="focus-journey-card">
+                <p className="workflow-eyebrow">Workflow</p>
+                <WorkflowJourney items={attentionJourney(selected)} label="Attention item journey" />
+              </section>
+
+              <section className="evidence-path" aria-label="Recorded evidence path">
+                <p className="workflow-eyebrow">Evidence path</p>
+                <div>
+                  <span><small>Session</small><code>{selected.session_id}</code></span>
+                  <i aria-hidden="true">→</i>
+                  <span><small>Package</small><strong>{selected.package}{selected.version ? `@${selected.version}` : " · version not recorded"}</strong></span>
+                  <i aria-hidden="true">→</i>
+                  <span><small>Advisories</small><strong>{selected.advisories.length}</strong></span>
+                  <i aria-hidden="true">→</i>
+                  <span><small>Linked code</small><strong>{selected.code_entities.length}</strong></span>
+                  <i aria-hidden="true">→</i>
+                  <span><small>Policy evaluation</small><code>{selected.policy_evaluation_id}</code></span>
+                </div>
+              </section>
+
+              <section className="focus-evidence">
+                <div className="focus-section-heading"><p className="workflow-eyebrow">Evidence graph</p><span>Native HyperMesh projection</span></div>
+                {!selected.run_id ? <StateFrame kind="empty" title="No native graph for this check" detail="The package facts remain available below." /> : graph.isPending ? <StateFrame kind="loading" title="Loading native evidence" detail="Reading the run projection." /> : graph.isError ? <StateFrame kind="error" title={graph.error instanceof ApiError && graph.error.status === 404 ? "Evidence projection is pending" : "Evidence could not be loaded"} detail="The recorded package facts remain available." action={<button type="button" onClick={() => void graph.refetch()}>Try again</button>} /> : graph.data ? <ReviewEvidenceGraph graph={graph.data} label={`Evidence for ${selected.package}`} /> : <StateFrame kind="empty" title="No native evidence is available" />}
+              </section>
+
+              {selected.suggested_version ? (
+                <section className="attention-version-signal is-informational">
+                  <span className="dev-tone-info"><DevIcon name="warning" /></span>
+                  <span><small>Published advisory data</small><strong>Highest fixed-version candidate: {selected.suggested_version}</strong><p>Compatibility and policy status are unverified until the next package evaluation.</p></span>
+                </section>
+              ) : null}
+
+              <div className="focus-disclosures">
+                <details open={Boolean(selected.advisories.length)}><summary>Advisories <span>{selected.advisories.length}</span></summary><div>{selected.advisories.length ? selected.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />) : <p>No published advisories were returned for this check.</p>}</div></details>
+                <details><summary>Linked code <span>{selected.code_entities.length}</span></summary><div>{selected.code_entities.length ? <ul className="dev-compact-list">{selected.code_entities.map((entity) => <li key={entity} className="dev-compact-row"><DevIcon name="code" size={16} /><span className="dev-compact-row-main"><strong>{entity}</strong></span></li>)}</ul> : <p>No linked code entities were returned.</p>}</div></details>
+                <details><summary>Why this needs attention <span>{selected.reasons.length}</span></summary><div>{selected.reasons.length ? <ul className="focus-reason-list">{selected.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>No additional reason was returned.</p>}{selected.unavailable ? <p className="text-risk"><strong>Check incomplete.</strong> {selected.unavailable}</p> : null}</div></details>
+              </div>
+            </article>
+          ) : attention.isPending ? <StateFrame kind="loading" title="Loading attention" /> : <StateFrame kind="empty" title="No selected package signal" detail="Choose an item from the queue." />}
+        </section>
+
+        <ResponsibilityDock
+          responsibility={selected ? (selected.review_request_id ? "Follow the recorded Security review." : `Choose the next step for ${selected.package}.`) : "No action is waiting."}
+          why={selected ? (selected.unavailable || selected.reasons[0] || "The server returned this package check for your attention.") : "New package checks that require your decision will appear in the queue."}
+        >
+          {selected?.review_request_id ? <Link to="/developer/reviews/$requestId" params={{ requestId: selected.review_request_id }} className="dev-action dev-action-primary w-full">Open review <DevIcon name="arrow" size={16} /></Link> : selected ? <button type="button" className="dev-action dev-action-primary w-full" onClick={() => setRequestOpen(true)}>Ask Security <DevIcon name="arrow" size={16} /></button> : null}
+          {selected ? <dl className="responsibility-facts"><div><dt>Package</dt><dd>{selected.package}{selected.version ? `@${selected.version}` : ""}</dd></div><div><dt>Priority</dt><dd>{selected.priority}</dd></div><div><dt>Checked</dt><dd>{relativeTimeMs(selected.checked_at_ms)}</dd></div></dl> : null}
+          <p className="text-xs leading-relaxed text-slate">Only your own sessions and review requests are returned by the server.</p>
+        </ResponsibilityDock>
+      </div>
+      {requestOpen && selected ? <RequestDrawer key={selected.id} item={selected} close={() => setRequestOpen(false)} /> : null}
     </main>
   );
 }

@@ -47,6 +47,7 @@ function NavLink({
   return (
     <Link
       to={to}
+      title={typeof children === "string" ? children : undefined}
       params={params}
       className={`${row} text-rail-ink-dim transition hover:bg-rail-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright`}
       activeProps={{
@@ -56,7 +57,7 @@ function NavLink({
       activeOptions={{ exact: exact ?? false }}
     >
       {icon}
-      {children}
+      <span className="control-nav-label">{children}</span>
     </Link>
   );
 }
@@ -85,7 +86,7 @@ function Unavailable({
 function Group({ label, children }: { label: string; children: ReactNode }) {
   return (
     <>
-      <p className="mx-3 mb-2 mt-5 font-mono text-[10.5px] tracking-widest text-rail-ink-faint">
+      <p className="control-nav-group mx-3 mb-2 mt-5 font-mono text-[10.5px] tracking-widest text-rail-ink-faint">
         {label}
       </p>
       {children}
@@ -306,7 +307,8 @@ export function Sidebar() {
     if (!open || !compact) return;
     const sidebar = sidebarRef.current;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusable = () => Array.from(sidebar?.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled])") ?? []);
+    const focusable = () => Array.from(sidebar?.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), summary, select:not([disabled]), input:not([disabled]), textarea:not([disabled])") ?? [])
+      .filter((element) => element.getClientRects().length > 0 && !element.closest("[inert]"));
     const frame = window.requestAnimationFrame(() => focusable()[0]?.focus());
     const containFocus = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -383,11 +385,11 @@ export function Sidebar() {
             <path d="M12 7v4M12 11l-6 6M12 11l6 6" />
           </svg>
         </div>
-        <span className="font-sans text-[19px] font-semibold tracking-tight text-rail-ink">
+        <span className="control-brand-label font-sans text-[19px] font-semibold tracking-tight text-rail-ink">
           meshAgent
         </span>
       </Link>
-      <nav aria-label="Main" className="flex flex-col md:min-w-[224px]">
+      <nav aria-label="Main" className="flex flex-col">
         {me?.role === "developer" ? (
           <DeveloperNav
             sessionId={latestSession?.id}
@@ -431,12 +433,12 @@ function Identity({ me }: { me: Me | undefined }) {
     ciso: "alex@company.com",
   };
   return (
-    <div className="mt-auto border-t border-rail-line p-2.5">
-      <div className="flex items-center gap-2.5">
+    <details className="control-identity mt-auto border-t border-rail-line p-2.5">
+      <summary aria-label={`${me.name} account`} title={`${me.name} · ${labels[me.primary_role]}`}>
         <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-rail-2 font-mono text-xs text-accent-bright">
           {initials(me.name)}
         </div>
-        <div className="flex min-w-0 flex-col">
+        <div className="control-identity-summary flex min-w-0 flex-col">
           <span className="truncate text-[13px] text-rail-ink-dim">
             {me.name}
           </span>
@@ -444,8 +446,10 @@ function Identity({ me }: { me: Me | undefined }) {
             {labels[me.primary_role]}
           </span>
         </div>
-      </div>
-      {!me.verified ? (
+      </summary>
+      <div className="control-identity-popover">
+        <div className="control-identity-heading"><strong>{me.name}</strong><span>{labels[me.primary_role]}</span></div>
+        {!me.verified ? (
         <>
           <p className="mt-2.5 rounded-md bg-rail-2 px-2.5 py-2 text-[11px] leading-snug text-rail-ink-faint">
             Local identity assertion. No identity provider verified this role.
@@ -484,8 +488,8 @@ function Identity({ me }: { me: Me | undefined }) {
             </button>
           </form>
         </>
-      ) : null}
-      {oidcEnabled ? (
+        ) : null}
+        {oidcEnabled ? (
         <button
           type="button"
           onClick={signOut}
@@ -493,7 +497,8 @@ function Identity({ me }: { me: Me | undefined }) {
         >
           Sign out
         </button>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </details>
   );
 }

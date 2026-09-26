@@ -6,7 +6,8 @@ import { Button } from "@meshagent/ui";
 import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
 import { PageHeader } from "../components/PageHeader";
 import { WorkCollaboration } from "../components/WorkCollaboration";
-import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowHero, WorkflowJourney, WorkflowSection, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
+import { SidePanel } from "../components/DeveloperVisual";
+import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowJourney, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
 import { Field, MutationMessage, Select, SeverityBadge, StatusBadge, TextArea, TextInput, dateInputToEpoch, epochToDateInput } from "../components/WorkflowUI";
 import { ApiError, api, type AssignCaseInput, type CaseRecord, type CaseState, type CaseTransition, type CreateExceptionInput, type TransitionCaseInput } from "../lib/api";
 import { timestamp } from "../lib/format";
@@ -154,6 +155,7 @@ export function AnalystCaseDetail() {
   const { hasCapability } = useIdentity();
   const canWriteCase = hasCapability("case.write");
   const canRequestException = hasCapability("exception.request");
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const detail = useQuery({ queryKey: ["case", caseId], queryFn: () => api.case(caseId) });
   const reviewId = reviewRequestIdFromCaseFinding(detail.data?.finding_id ?? "");
   const reviewEvidence = useQuery({ queryKey: ["review", reviewId, "graph"], queryFn: () => api.reviewGraph(reviewId!), enabled: Boolean(reviewId), retry: false });
@@ -164,62 +166,52 @@ export function AnalystCaseDetail() {
   const refetchEvidence = () => reviewId ? reviewEvidence.refetch() : runEvidence.refetch();
 
   return (
-    <main className="workflow-page">
+    <main className="workflow-page analyst-case-page">
       <PageHeader section="Analyst / Cases" title={caseId} meta={<Link to="/analyst/queue" className="text-accent hover:underline">Back to work</Link>} />
-      <div className="workflow-scroll">
-        {detail.isPending ? <StateFrame kind="loading" title="Reading case" detail="Loading state, evidence links, and history." /> : detail.isError || !detail.data ? <StateFrame kind="error" title="This case could not be opened" detail={detail.error instanceof Error ? detail.error.message : "The record is unavailable."} action={<Link to="/analyst/queue" className="workflow-secondary-action">Back to work</Link>} /> : (() => {
-          const item = detail.data;
-          const sourceReviewId = reviewRequestIdFromCaseFinding(item.finding_id);
-          return (
-            <div className="workflow-layout">
-              <div className="workflow-main">
-                <WorkflowHero
-                  eyebrow={`Analyst case · ${item.id}`}
-                  title={item.title}
-                  tone={item.severity === "critical" || item.severity === "high" ? "danger" : item.overdue ? "warning" : "accent"}
-                  status={<div className="flex flex-wrap gap-2"><SeverityBadge severity={item.severity} /><StatusBadge status={item.state} />{item.overdue ? <StatusBadge status="overdue" /> : null}</div>}
-                  meta={<><span>{item.assignee_name ?? "Unassigned"}</span><span>Updated {timestamp(item.updated_at)}</span><span>Version {item.version}</span></>}
-                />
+      {detail.isPending ? <div className="workflow-scroll"><StateFrame kind="loading" title="Reading case" detail="Loading state, evidence links, and history." /></div> : detail.isError || !detail.data ? <div className="workflow-scroll"><StateFrame kind="error" title="This case could not be opened" detail={detail.error instanceof Error ? detail.error.message : "The record is unavailable."} action={<Link to="/analyst/queue" className="workflow-secondary-action">Back to work</Link>} /></div> : (() => {
+        const item = detail.data;
+        const sourceReviewId = reviewRequestIdFromCaseFinding(item.finding_id);
+        const relationCount = evidenceGraph?.relations.length;
+        const nodeCount = evidenceGraph?.nodes.length;
+        return (
+          <div className="analyst-case-shell">
+            <section className="analyst-case-scroll">
+              <article className="analyst-case-narrative">
+                <Link to="/analyst/queue" className="focus-back-link">← Security operations</Link>
+                <header className="analyst-case-heading">
+                  <div className="analyst-review-meta"><span>{item.id}</span><SeverityBadge severity={item.severity} /><StatusBadge status={item.state} />{item.overdue ? <StatusBadge status="overdue" /> : null}</div>
+                  <h1>{item.title}</h1>
+                  <p>Case tracks finding <code>{item.finding_id}</code> from run <code>{item.run_id}</code>.</p>
+                  <div className="analyst-case-meta"><span>{item.assignee_name ?? "Unassigned"}</span><span>Updated {timestamp(item.updated_at)}</span><span>Record v{item.version}</span></div>
+                </header>
 
-                <WorkflowSection eyebrow="Journey" title="Case lifecycle" description="Only states recorded by the server are marked complete.">
-                  <WorkflowJourney items={caseJourney(item)} label="Case lifecycle" />
-                </WorkflowSection>
+                <section className="focus-journey-card"><p className="workflow-eyebrow">Case lifecycle</p><WorkflowJourney items={caseJourney(item)} label="Case lifecycle" /></section>
 
-                <WorkflowSection eyebrow="Source" title={sourceReviewId ? "Developer review" : "Native finding"} description="Return to the record that opened this investigation.">
-                  <div className="case-source-grid">
-                    <div><span>Source</span>{sourceReviewId ? <Link to="/analyst/reviews/$requestId" params={{ requestId: sourceReviewId }}>Open source review</Link> : <Link to="/analyst/investigate/$runId/$findingId" params={{ runId: item.run_id, findingId: item.finding_id }}>{item.finding_id}</Link>}</div>
-                    <div><span>Run</span><Link to="/runs/$runId/security" params={{ runId: item.run_id }}>{item.run_id}</Link></div>
-                    <div><span>Assignee</span><strong>{item.assignee_name ?? "Unassigned"}</strong></div>
-                    <div><span>Disposition</span><strong>{item.disposition ?? "Not recorded"}</strong></div>
-                  </div>
-                </WorkflowSection>
+                <section className="case-evidence-entry">
+                  <div><p className="workflow-eyebrow">Evidence</p><h2>{sourceReviewId ? "Submitted review snapshot" : "Current native run graph"}</h2><p>{evidencePending ? "Projecting relationships…" : evidenceError ? (evidenceError instanceof ApiError && evidenceError.status === 404 ? "Evidence projection is pending." : "Evidence could not be loaded.") : evidenceGraph ? `${relationCount} recorded relationships · ${nodeCount} entities` : "No source evidence is available."}</p></div>
+                  <button type="button" className="workflow-secondary-action" onClick={() => setEvidenceOpen(true)} disabled={!evidencePending && !evidenceError && !evidenceGraph}>Open evidence</button>
+                </section>
 
-                <WorkflowSection eyebrow="Evidence" title="Relationship map" description={sourceReviewId ? "The immutable evidence snapshot submitted with the source review." : "The current native graph for the source run."}>
-                  {evidencePending ? <StateFrame kind="loading" title="Projecting relationships" /> : evidenceError ? <StateFrame kind={evidenceError instanceof ApiError && evidenceError.status === 404 ? "empty" : "error"} title={evidenceError instanceof ApiError && evidenceError.status === 404 ? "Evidence projection is pending" : "Evidence could not be loaded"} detail={evidenceError instanceof Error ? evidenceError.message : undefined} action={<button type="button" className="workflow-secondary-action" onClick={() => void refetchEvidence()}>Retry map</button>} /> : evidenceGraph ? <ReviewEvidenceGraph graph={evidenceGraph} label="Case source evidence relationship map" /> : <StateFrame kind="empty" title="No source evidence is available" />}
-                </WorkflowSection>
+                <div className="focus-disclosures analyst-case-disclosures">
+                  <details open><summary>Source record</summary><div><div className="case-source-grid"><div><span>Source</span>{sourceReviewId ? <Link to="/analyst/reviews/$requestId" params={{ requestId: sourceReviewId }}>Open source review</Link> : <Link to="/analyst/investigate/$runId/$findingId" params={{ runId: item.run_id, findingId: item.finding_id }}>{item.finding_id}</Link>}</div><div><span>Run</span><Link to="/runs/$runId/security" params={{ runId: item.run_id }}>{item.run_id}</Link></div><div><span>Assignee</span><strong>{item.assignee_name ?? "Unassigned"}</strong></div><div><span>Disposition</span><strong>{item.disposition ?? "Not recorded"}</strong></div></div></div></details>
+                  <details><summary>Team notes</summary><div><WorkCollaboration kind="case" id={item.id} /></div></details>
+                  <details><summary>Case history <span>{item.events.length}</span></summary><div>{item.events.length ? <ol className="workflow-list">{[...item.events].reverse().map((event) => <li key={event.id} className="workflow-list-row"><span className="workflow-update-dot" aria-hidden="true" /><span className="workflow-list-row-main"><strong>{event.action.replace(/\./g, " ")}</strong><small>{event.actor_name} · {event.rationale}</small>{event.evidence_ids.length ? <span className="case-evidence-ids">{event.evidence_ids.map((id) => <code key={id}>{id}</code>)}</span> : null}</span><span className="font-mono text-[10px] text-slate">{timestamp(event.at)}</span></li>)}</ol> : <p>No case events were returned.</p>}</div></details>
+                  <details><summary>Record references</summary><div className="grid gap-2"><IntegrityRef label="Case" value={item.id} /><IntegrityRef label="Finding" value={item.finding_id} /><IntegrityRef label="Run" value={item.run_id} /></div></details>
+                </div>
+              </article>
+            </section>
 
-                <WorkCollaboration kind="case" id={item.id} />
-
-                <WorkflowSection eyebrow="Audit trail" title="Case history">
-                  {item.events.length ? <ol className="workflow-list">{[...item.events].reverse().map((event) => <li key={event.id} className="workflow-list-row"><span className="workflow-update-dot" aria-hidden="true" /><span className="workflow-list-row-main"><strong>{event.action.replace(/\./g, " ")}</strong><small>{event.actor_name} · {event.rationale}</small>{event.evidence_ids.length ? <span className="case-evidence-ids">{event.evidence_ids.map((id) => <code key={id}>{id}</code>)}</span> : null}</span><span className="font-mono text-[10px] text-slate">{timestamp(event.at)}</span></li>)}</ol> : <StateFrame kind="empty" title="No case events were returned" />}
-                </WorkflowSection>
-              </div>
-
-              <ResponsibilityDock
-                responsibility={item.state === "closed" ? "The case is closed." : !item.assignee ? "Assign an owner and due time." : "Move the investigation using recorded evidence."}
-                why="Every assignment and state change is checked against the current server version. Resolution and closure require evidence."
-                deadline={item.sla_due_at ? timestamp(item.sla_due_at) : undefined}
-                overdue={item.overdue}
-              >
-                {canWriteCase ? <><AssignmentForm key={`assign-${item.id}-${item.version}`} item={item} /><TransitionForm key={`transition-${item.id}-${item.version}-${item.state}`} item={item} /></> : null}
-                {canRequestException && item.state !== "closed" ? <ExceptionRequestForm key={`exception-${item.id}-${item.version}`} item={item} /> : null}
-                {!canWriteCase && !canRequestException ? <p className="text-xs leading-relaxed text-slate">Your current capabilities allow case review but no workflow changes.</p> : null}
-                <div className="grid gap-2"><IntegrityRef label="Case" value={item.id} /><IntegrityRef label="Finding" value={item.finding_id} /><IntegrityRef label="Run" value={item.run_id} /></div>
-              </ResponsibilityDock>
-            </div>
-          );
-        })()}
-      </div>
+            <div id="case-actions" className="analyst-case-dock"><ResponsibilityDock responsibility={item.state === "closed" ? "The case is closed." : !item.assignee ? "Assign an owner and due time." : "Move the investigation using recorded evidence."} why="Every assignment and state change is checked against the current server version. Resolution and closure require evidence." deadline={item.sla_due_at ? timestamp(item.sla_due_at) : undefined} overdue={item.overdue}>
+              <button type="button" className="workflow-secondary-action" onClick={() => setEvidenceOpen(true)}>View evidence</button>
+              {canWriteCase ? <><AssignmentForm key={`assign-${item.id}-${item.version}`} item={item} /><TransitionForm key={`transition-${item.id}-${item.version}-${item.state}`} item={item} /></> : null}
+              {canRequestException && item.state !== "closed" ? <ExceptionRequestForm key={`exception-${item.id}-${item.version}`} item={item} /> : null}
+              {!canWriteCase && !canRequestException ? <p className="text-xs leading-relaxed text-slate">Your current capabilities allow case review but no workflow changes.</p> : null}
+            </ResponsibilityDock></div>
+            {item.state !== "closed" && (canWriteCase || canRequestException) ? <a href="#case-actions" className="analyst-mobile-action">Case actions</a> : null}
+            {evidenceOpen ? <SidePanel title="Case evidence" icon="evidence" onClose={() => setEvidenceOpen(false)}>{evidencePending ? <StateFrame kind="loading" title="Projecting relationships" /> : evidenceError ? <StateFrame kind={evidenceError instanceof ApiError && evidenceError.status === 404 ? "empty" : "error"} title={evidenceError instanceof ApiError && evidenceError.status === 404 ? "Evidence projection is pending" : "Evidence could not be loaded"} detail={evidenceError instanceof Error ? evidenceError.message : undefined} action={<button type="button" className="workflow-secondary-action" onClick={() => void refetchEvidence()}>Retry map</button>} /> : evidenceGraph ? <ReviewEvidenceGraph graph={evidenceGraph} label="Case source evidence relationship map" /> : <StateFrame kind="empty" title="No source evidence is available" />}</SidePanel> : null}
+          </div>
+        );
+      })()}
     </main>
   );
 }

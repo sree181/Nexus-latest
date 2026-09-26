@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button } from "@meshagent/ui";
 
 import { GovernanceEvidencePanel } from "../components/GovernanceEvidencePanel";
 import { PageHeader } from "../components/PageHeader";
-import { ConflictRecovery, IntegrityRef, StateFrame, WorkflowHero, WorkflowJourney, WorkflowSection, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
+import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowJourney, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
 import { MutationMessage, StatusBadge, TextArea } from "../components/WorkflowUI";
 import { api, type Approval, type ApprovalDecisionInput, type Policy, type PolicyException } from "../lib/api";
 import { useIdentity } from "../lib/useIdentity";
@@ -41,13 +41,7 @@ export function ApprovalDecisionPanel({ approval }: { approval: Approval }) {
     },
   });
   const ownRequest = me?.subject === approval.requester;
-  const reload = () => {
-    decide.reset();
-    setSuccess(null);
-    void client.invalidateQueries({ queryKey: ["approvals"] });
-    void client.invalidateQueries({ queryKey: ["exceptions"] });
-    void client.invalidateQueries({ queryKey: ["exception", approval.resource_id] });
-  };
+  const reload = () => { decide.reset(); setSuccess(null); void client.invalidateQueries({ queryKey: ["approvals"] }); void client.invalidateQueries({ queryKey: ["exceptions"] }); void client.invalidateQueries({ queryKey: ["exception", approval.resource_id] }); };
 
   if (approval.status !== "pending") return approval.decision_rationale ? <div className="workflow-receipt is-success"><strong>Decision rationale</strong><span>{approval.decision_rationale}</span></div> : null;
   if (approval.expired) return <div className="workflow-receipt is-warning"><strong>Decision window closed</strong><span>The server will not accept a decision for this expired approval.</span></div>;
@@ -66,29 +60,49 @@ export function ApprovalDecisionPanel({ approval }: { approval: Approval }) {
   );
 }
 
-function DecisionDetail({ approval, exception, policy }: { approval: Approval; exception?: PolicyException; policy?: Policy }) {
+function ScopeToken({ label, children }: { label: string; children: ReactNode }) {
+  return <span className="decision-scope-token"><small>{label}</small><strong>{children}</strong></span>;
+}
+
+function DecisionNarrative({ approval, exception, policy, reviewOpen, setReviewOpen }: { approval: Approval; exception?: PolicyException; policy?: Policy; reviewOpen: boolean; setReviewOpen: (value: boolean) => void }) {
   return (
-    <div className="workflow-stack">
-      <WorkflowHero
-        eyebrow={`Decision request · ${approval.id}`}
-        title={exception?.scope ?? approval.resource_id}
-        description={approval.rationale}
-        tone={approval.expired ? "danger" : approval.status === "pending" ? "warning" : approval.status === "approved" ? "success" : "danger"}
-        status={<div className="flex flex-wrap gap-2"><StatusBadge status={approval.status} /><Badge tone="neutral">{approval.kind.replace(/_/g, " ")}</Badge>{approval.expired ? <Badge tone="risk">window closed</Badge> : null}</div>}
-        meta={<><span>Requested by {approval.requester_name}</span><span>Expires {timestamp(approval.expires_at)}</span><span>Version {approval.version}</span></>}
-      />
+    <article className="decision-narrative">
+      <header className="decision-focus-heading">
+        <div className="decision-focus-meta"><span>Decision request · {approval.id}</span><StatusBadge status={approval.status} /><Badge tone="neutral">{approval.kind.replace(/_/g, " ")}</Badge>{approval.expired ? <Badge tone="risk">window closed</Badge> : null}</div>
+        <h1>{exception?.scope ?? approval.resource_id}</h1>
+        <p>{approval.rationale}</p>
+        <div className="decision-focus-submeta"><span>Requested by {approval.requester_name}</span><span>Expires {timestamp(approval.expires_at)}</span><span>Record v{approval.version}</span></div>
+      </header>
 
-      <WorkflowSection eyebrow="Journey" title="Approval path" description="The requester and deciding principal remain separate.">
-        <WorkflowJourney items={approvalJourney(approval)} label="Approval journey" />
-      </WorkflowSection>
+      <section className="focus-journey-card"><p className="workflow-eyebrow">Approval path</p><WorkflowJourney items={approvalJourney(approval)} label="Approval journey" /></section>
 
-      <WorkflowSection eyebrow="Bounded scope" title="What this decision covers" description="Approval applies only to the exact policy, scope, digest, controls, and expiry shown here.">
-        {exception ? <div className="decision-scope-grid"><div><span>Policy</span><Link to="/ciso/policies/$policyId" params={{ policyId: exception.policy_id }}>{policy?.name ?? exception.policy_id} · v{exception.policy_version}</Link></div><div><span>Owner</span><strong>{exception.owner_name || exception.owner}</strong></div><div><span>Expiry</span><strong>{timestamp(exception.expires_at)}</strong></div><div><span>Status</span><StatusBadge status={exception.status} /></div></div> : <StateFrame kind="empty" title="Exception context is unavailable" detail="Do not decide until the linked exception can be loaded." />}
-        {exception ? <dl className="decision-brief"><div><dt>Compensating controls</dt><dd>{exception.compensating_controls}</dd></div><div><dt>Submitted evidence</dt><dd className="flex flex-wrap gap-2">{approval.evidence_ids.length ? approval.evidence_ids.map((value) => <code key={value}>{value}</code>) : "No linked review or case."}</dd></div></dl> : null}
-      </WorkflowSection>
+      <section className="decision-boundary">
+        <div className="decision-boundary-heading"><p className="workflow-eyebrow">Submitted decision bounds</p><span>The server applies the recorded decision only to this request context.</span></div>
+        {exception ? (
+          <div className="decision-scope-chain">
+            <ScopeToken label="Policy"><Link to="/ciso/policies/$policyId" params={{ policyId: exception.policy_id }}>{policy?.name ?? exception.policy_id} · v{exception.policy_version}</Link></ScopeToken><i>→</i>
+            <ScopeToken label="Scope">{exception.scope}</ScopeToken><i>→</i>
+            <ScopeToken label="Owner">{exception.owner_name || exception.owner}</ScopeToken><i>→</i>
+            <ScopeToken label="Controls">{exception.compensating_controls}</ScopeToken><i>→</i>
+            <ScopeToken label="Expires">{timestamp(exception.expires_at)}</ScopeToken>
+          </div>
+        ) : <StateFrame kind="empty" title="Exception context is unavailable" detail="Do not decide until the linked exception can be loaded." />}
+      </section>
 
-      {exception ? <GovernanceEvidencePanel kind="exception" id={exception.id} /> : null}
-    </div>
+      {exception ? (
+        <section className="decision-structured-brief">
+          <div><small>Exact scope</small><strong>{exception.scope}</strong></div><div><small>Owner</small><strong>{exception.owner_name || exception.owner}</strong></div><div><small>Decision window</small><strong>{timestamp(approval.expires_at)}</strong></div><div><small>Request digest</small><code>{approval.request_digest}</code></div>
+          <div className="is-wide"><small>Submitted rationale</small><p>{approval.rationale}</p></div><div className="is-wide"><small>Compensating controls</small><p>{exception.compensating_controls}</p></div><div className="is-wide"><small>Linked evidence</small><p className="decision-evidence-ids">{approval.evidence_ids.length ? approval.evidence_ids.map((value) => <code key={value}>{value}</code>) : "No linked review or case."}</p></div>
+        </section>
+      ) : null}
+
+      {exception ? <section className="decision-native-evidence"><GovernanceEvidencePanel kind="exception" id={exception.id} /></section> : null}
+
+      <section id="decision-panel" className={`decision-review-panel ${reviewOpen ? "is-open" : ""}`}>
+        <button type="button" className="decision-review-summary" aria-expanded={reviewOpen} onClick={() => setReviewOpen(!reviewOpen)}><span><small>Approval {approval.id}</small><strong>{approval.status === "pending" ? "Review and decide" : "Recorded decision"}</strong></span><span>{reviewOpen ? "−" : "+"}</span></button>
+        {reviewOpen || approval.status !== "pending" ? <div className="decision-review-body"><ApprovalDecisionPanel key={`${approval.id}:${approval.version}`} approval={approval} /></div> : null}
+      </section>
+    </article>
   );
 }
 
@@ -98,53 +112,38 @@ export function CisoApprovals() {
   const policies = useQuery({ queryKey: ["policies"], queryFn: api.policies });
   const [view, setView] = useState<"pending" | "all">("pending");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const items = useMemo(() => (approvals.data ?? []).filter((item) => view === "all" || item.status === "pending"), [approvals.data, view]);
   const selected = items.find((item) => item.id === selectedId) ?? items[0];
   const exceptionById = new Map((exceptions.data ?? []).map((item) => [item.id, item]));
   const policyById = new Map((policies.data ?? []).map((item) => [item.id, item]));
   const selectedException = selected ? exceptionById.get(selected.resource_id) : undefined;
-
   const pendingCount = (approvals.data ?? []).filter((item) => item.status === "pending").length;
   const loading = approvals.isPending || exceptions.isPending || policies.isPending;
   const loadError = approvals.error ?? exceptions.error ?? policies.error;
+  const { me } = useIdentity();
+  const ownRequest = Boolean(selected && me?.subject === selected.requester);
+  const focusDecision = () => { setReviewOpen(true); window.requestAnimationFrame(() => document.getElementById("decision-panel")?.scrollIntoView({ behavior: "smooth", block: "center" })); };
 
   return (
-    <main className="workflow-page">
+    <main className="workflow-page ciso-desk-page">
       <PageHeader section="CISO" title="Decision desk" meta={<span>server-enforced independence</span>} />
-      <div className="workflow-scroll">
-        <div className="workflow-main mx-auto w-full max-w-[1500px]">
-          <WorkflowHero
-            eyebrow="CISO decision desk"
-            title={`${pendingCount} request${pendingCount === 1 ? "" : "s"} waiting`}
-            description="Decide time-bounded policy exceptions with their exact request, policy, and native evidence in view."
-            tone={pendingCount ? "warning" : "success"}
-            meta={<><span>Requester self-decision blocked</span><span>Stale writes rejected</span><span>Scope and expiry bound</span></>}
-          />
-
-          {loading ? <StateFrame kind="loading" title="Loading decision context" detail="Joining approvals with their policy and exception records." /> : loadError ? <StateFrame kind="error" title="Decision context could not be loaded" detail={loadError instanceof Error ? loadError.message : "One or more records are unavailable."} action={<button type="button" className="workflow-secondary-action" onClick={() => { void approvals.refetch(); void exceptions.refetch(); void policies.refetch(); }}>Try again</button>} /> : items.length === 0 ? <StateFrame kind="empty" title="Nothing is waiting" detail="New exception requests will appear here with their complete decision context." /> : (
-            <div className="decision-desk-grid">
-              <WorkflowSection className="flush decision-queue" eyebrow="Queue" title="Decision requests" action={<div className="inline-flex rounded-lg bg-surface-2 p-1">{(["pending", "all"] as const).map((value) => <button key={value} type="button" onClick={() => { setView(value); setSelectedId(null); }} className={`rounded-md px-3 py-1.5 text-xs font-medium ${view === value ? "bg-white text-ink shadow-sm" : "text-slate"}`}>{value === "pending" ? "Waiting" : "All"}</button>)}</div>}>
-                <ol className="decision-queue-list">
-                  {items.map((approval) => {
-                    const exception = exceptionById.get(approval.resource_id);
-                    return <li key={approval.id}><button type="button" className={(selected?.id === approval.id) ? "is-selected" : ""} aria-pressed={selected?.id === approval.id} onClick={() => setSelectedId(approval.id)}><span className="decision-queue-top"><StatusBadge status={approval.status} /><small>{timestamp(approval.expires_at)}</small></span><strong>{exception?.scope ?? approval.resource_id}</strong><span>{approval.requester_name} · {approval.kind.replaceAll("_", " ")}</span></button></li>;
-                  })}
-                </ol>
-              </WorkflowSection>
-
-              <div className="decision-detail-column">
-                <DecisionDetail approval={selected} exception={selectedException} policy={selectedException ? policyById.get(selectedException.policy_id) : undefined} />
-                <aside className="decision-action-dock">
-                  <div><p className="workflow-eyebrow">Your responsibility</p><h2>{selected.status === "pending" ? "Decide only within the submitted scope." : "Review the recorded outcome."}</h2><p>{selected.status === "pending" ? "Confirm the controls and evidence, then record a rationale. The API enforces requester separation and version freshness." : "The decision remains linked to the request digest and native evidence."}</p></div>
-                  <ApprovalDecisionPanel key={`${selected.id}:${selected.version}`} approval={selected} />
-                  <div className="grid gap-2"><IntegrityRef label="Approval" value={selected.id} /><IntegrityRef label="Request digest" value={selected.request_digest} /></div>
-                  {selectedException ? <Link to="/ciso/exceptions/$exceptionId" params={{ exceptionId: selectedException.id }} className="workflow-secondary-action text-center">Open complete record</Link> : null}
-                </aside>
-              </div>
-            </div>
-          )}
+      {loading ? <div className="workflow-scroll"><StateFrame kind="loading" title="Loading decision context" detail="Joining approvals with their policy and exception records." /></div> : loadError ? <div className="workflow-scroll"><StateFrame kind="error" title="Decision context could not be loaded" detail={loadError instanceof Error ? loadError.message : "One or more records are unavailable."} action={<button type="button" className="workflow-secondary-action" onClick={() => { void approvals.refetch(); void exceptions.refetch(); void policies.refetch(); }}>Try again</button>} /></div> : items.length === 0 ? <div className="workflow-scroll"><StateFrame kind="empty" title="Nothing is waiting" detail="New exception requests will appear here with their complete decision context." /></div> : (
+        <div className="ciso-decision-shell">
+          <aside className="decision-queue-pane" aria-label="Decision queue">
+            <header><div><p className="workflow-eyebrow">Decision queue</p><h1>{pendingCount} waiting</h1></div><span>{items.length}</span></header>
+            <div className="decision-view-tabs">{(["pending", "all"] as const).map((value) => <button key={value} type="button" onClick={() => { setView(value); setSelectedId(null); setReviewOpen(false); }} aria-pressed={view === value}>{value === "pending" ? "Waiting" : "All"}</button>)}</div>
+            <ol className="decision-queue-list">{items.map((approval) => { const exception = exceptionById.get(approval.resource_id); return <li key={approval.id}><button type="button" className={selected?.id === approval.id ? "is-selected" : ""} aria-pressed={selected?.id === approval.id} onClick={() => { setSelectedId(approval.id); setReviewOpen(false); }}><span className="decision-queue-top"><StatusBadge status={approval.status} /><small>{timestamp(approval.expires_at)}</small></span><strong>{exception?.scope ?? approval.resource_id}</strong><span>{approval.requester_name} · {approval.kind.replaceAll("_", " ")}</span></button></li>; })}</ol>
+          </aside>
+          <section className="decision-focus-scroll"><DecisionNarrative approval={selected} exception={selectedException} policy={selectedException ? policyById.get(selectedException.policy_id) : undefined} reviewOpen={reviewOpen} setReviewOpen={setReviewOpen} /></section>
+          <ResponsibilityDock responsibility={selected.status === "pending" ? "Decide only within the submitted scope." : "Review the recorded outcome."} why={ownRequest ? "You submitted this request. Another CISO must decide it." : selected.status === "pending" ? "Confirm the controls and native evidence, then record a rationale. The API validates requester separation and version freshness." : "The decision remains linked to the request digest and evidence."} deadline={timestamp(selected.expires_at)} overdue={selected.expired}>
+            {selected.status === "pending" && !selected.expired && !ownRequest ? <button type="button" className="workflow-primary-action" onClick={focusDecision}>Review and decide</button> : null}
+            <div className="grid gap-2"><IntegrityRef label="Approval" value={selected.id} /><IntegrityRef label="Request digest" value={selected.request_digest} /></div>
+            {selectedException ? <Link to="/ciso/exceptions/$exceptionId" params={{ exceptionId: selectedException.id }} className="workflow-secondary-action text-center">Open complete record</Link> : null}
+          </ResponsibilityDock>
+          {selected.status === "pending" && !selected.expired && !ownRequest ? <button type="button" className="ciso-mobile-action" onClick={focusDecision}>Review and decide · {timestamp(selected.expires_at)}</button> : null}
         </div>
-      </div>
+      )}
     </main>
   );
 }

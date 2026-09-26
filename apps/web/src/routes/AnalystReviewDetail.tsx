@@ -7,7 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
 import { AdvisoryCard, ReviewStateBadge } from "../components/ReviewUI";
 import { WorkCollaboration } from "../components/WorkCollaboration";
-import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowHero, WorkflowJourney, WorkflowSection, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
+import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowJourney, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
 import { Field, MutationMessage, Select, TextArea, TextInput, dateInputToEpoch, epochToDateInput } from "../components/WorkflowUI";
 import { ApiError, api, type ReviewRequest } from "../lib/api";
 import { timestamp } from "../lib/format";
@@ -18,6 +18,8 @@ const decisions = [
   ["false_positive", "Mark not applicable"],
   ["reject", "Do not approve"],
 ] as const;
+
+type EvidenceLens = "why" | "affected" | "outcome";
 
 function reviewJourney(item: ReviewRequest): JourneyItem[] {
   const assigned = Boolean(item.assignee);
@@ -39,6 +41,7 @@ export function AnalystReviewDetail() {
   const canWriteCase = hasCapability("case.write");
   const client = useQueryClient();
   const [decision, setDecision] = useState<(typeof decisions)[number][0]>("request_changes");
+  const [lens, setLens] = useState<EvidenceLens>("why");
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
@@ -51,116 +54,86 @@ export function AnalystReviewDetail() {
     void client.invalidateQueries({ queryKey: ["work-queue"] });
     void client.invalidateQueries({ queryKey: ["notifications"] });
   };
-  const reload = () => {
-    assign.reset();
-    escalate.reset();
-    decide.reset();
-    setSuccess(null);
-    void review.refetch();
-    void graph.refetch();
-  };
-  const assign = useMutation({
-    mutationFn: (input: Parameters<typeof api.assignReview>[1]) => api.assignReview(requestId, input),
-    onSuccess: (value) => { refresh(value); setSuccess("Owner and due time updated."); },
-  });
-  const escalate = useMutation({
-    mutationFn: (input: Parameters<typeof api.escalateReview>[1]) => api.escalateReview(requestId, input),
-    onSuccess: (value) => { setCaseId(value.id); refresh(); setSuccess("A tracked case was created with this review evidence."); },
-  });
-  const decide = useMutation({
-    mutationFn: (input: Parameters<typeof api.decideReview>[1]) => api.decideReview(requestId, input),
-    onSuccess: (value) => { refresh(value); setSuccess("Decision recorded and returned to the Developer."); },
-  });
+  const reload = () => { assign.reset(); escalate.reset(); decide.reset(); setSuccess(null); void review.refetch(); void graph.refetch(); };
+  const assign = useMutation({ mutationFn: (input: Parameters<typeof api.assignReview>[1]) => api.assignReview(requestId, input), onSuccess: (value) => { refresh(value); setSuccess("Owner and due time updated."); } });
+  const escalate = useMutation({ mutationFn: (input: Parameters<typeof api.escalateReview>[1]) => api.escalateReview(requestId, input), onSuccess: (value) => { setCaseId(value.id); refresh(); setSuccess("A tracked case was created with this review evidence."); } });
+  const decide = useMutation({ mutationFn: (input: Parameters<typeof api.decideReview>[1]) => api.decideReview(requestId, input), onSuccess: (value) => { refresh(value); setSuccess("Decision recorded and returned to the Developer."); } });
   const item = review.data;
   const terminal = item ? ["verified", "false_positive", "not_approved"].includes(item.state) : false;
   const mutationError = assign.error ?? escalate.error ?? decide.error;
 
   return (
-    <main className="workflow-page">
+    <main className="workflow-page analyst-review-page">
       <PageHeader section="Analyst / Operations" title="Developer review" meta={<Link to="/analyst/queue" className="text-accent hover:underline">Back to work</Link>} />
-      <div className="workflow-scroll">
-        {review.isPending ? <StateFrame kind="loading" title="Loading developer review" detail="Reading the submitted snapshot and workflow state." /> : review.isError || !item ? <StateFrame kind="error" title="This review could not be opened" detail={review.error instanceof Error ? review.error.message : "The record is unavailable."} action={<Link to="/analyst/queue" className="workflow-secondary-action">Back to work</Link>} /> : (
-          <div className="workflow-layout">
-            <div className="workflow-main">
-              <WorkflowHero
-                eyebrow={`Analyst review · ${item.id}`}
-                title={`${item.package}@${item.version || "unpinned"}`}
-                description={item.rationale}
-                tone={item.severity === "critical" || item.severity === "high" ? "danger" : item.overdue ? "warning" : "accent"}
-                status={<ReviewStateBadge state={item.state} />}
-                meta={<><span>{item.repository_name}</span><span>{item.ecosystem}</span><span>{item.owner_name}</span><span>Version {item.version_counter}</span></>}
-              />
+      {review.isPending ? <div className="workflow-scroll"><StateFrame kind="loading" title="Loading developer review" detail="Reading the submitted snapshot and workflow state." /></div> : review.isError || !item ? <div className="workflow-scroll"><StateFrame kind="error" title="This review could not be opened" detail={review.error instanceof Error ? review.error.message : "The record is unavailable."} action={<Link to="/analyst/queue" className="workflow-secondary-action">Back to work</Link>} /></div> : (
+        <div className="analyst-review-shell">
+          <section className="analyst-review-scroll">
+            <article className="analyst-review-narrative">
+              <Link to="/analyst/queue" className="focus-back-link">← Security operations</Link>
+              <header className="analyst-review-heading">
+                <div className="analyst-review-meta"><span>{item.id}</span><ReviewStateBadge state={item.state} /><span className={item.overdue ? "text-risk" : ""}>{item.sla_due_at ? `${item.overdue ? "Overdue" : "Due"} ${timestamp(item.sla_due_at)}` : "No SLA due time"}</span></div>
+                <h1>{item.owner_name} asked Security to review {item.package}@{item.version || "unpinned"}</h1>
+                <p>{item.reasons.join(" ") || item.rationale}</p>
+              </header>
 
-              <WorkflowSection eyebrow="Journey" title="Review path" description="Each step reflects the current server state, not a local simulation.">
-                <WorkflowJourney items={reviewJourney(item)} label="Analyst review journey" />
-              </WorkflowSection>
+              <section className="focus-journey-card"><p className="workflow-eyebrow">Review path</p><WorkflowJourney items={reviewJourney(item)} label="Analyst review journey" /></section>
+              <section className="analyst-review-request"><p className="workflow-eyebrow">Submitted context</p><blockquote>{item.rationale}</blockquote><small>{item.owner_name} · {timestamp(item.created_at)}</small></section>
 
-              {item.advisories.length ? <WorkflowSection eyebrow="Package evidence" title="Published advisories" action={<span className="font-mono text-xs text-slate">{item.advisories.length}</span>}>{item.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />)}</WorkflowSection> : <WorkflowSection eyebrow="Evidence state" title="Advisory check incomplete"><p className="text-sm leading-relaxed text-slate">{item.reasons.join(" ") || "No published advisory details were returned with this review."}</p></WorkflowSection>}
+              <div className="evidence-lens-tabs" role="group" aria-label="Evidence questions">
+                <button type="button" aria-pressed={lens === "why"} onClick={() => setLens("why")}>Why blocked</button>
+                <button type="button" aria-pressed={lens === "affected"} onClick={() => setLens("affected")}>What is affected</button>
+                <button type="button" aria-pressed={lens === "outcome"} onClick={() => setLens("outcome")}>What changes the outcome</button>
+              </div>
 
-              <WorkflowSection eyebrow="Evidence" title="Relationship map" description="Select an entity to focus your investigation or draft a case rationale.">
-                {graph.isPending ? <StateFrame kind="loading" title="Projecting relationships" detail="The review record remains available while native evidence is prepared." /> : graph.isError ? <StateFrame kind={graph.error instanceof ApiError && graph.error.status === 404 ? "empty" : "error"} title={graph.error instanceof ApiError && graph.error.status === 404 ? "Evidence projection is pending" : "Relationship map is unavailable"} detail={graph.error instanceof Error ? graph.error.message : "Retry when the evidence service is ready."} action={<button type="button" className="workflow-secondary-action" onClick={() => void graph.refetch()}>Retry map</button>} /> : <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_230px]"><div><ReviewEvidenceGraph graph={graph.data.graph} label="Analyst review evidence graph" selectedId={selectedNode?.id} onSelect={setSelectedNode} /><p className="review-graph-note">{graph.data.note}</p></div><aside className="evidence-selection">{selectedNode ? <><p className="workflow-eyebrow">Selected {selectedNode.kind}</p><h3>{selectedNode.label}</h3><code>{selectedNode.id}</code><p>Use this selection to focus your rationale. The case itself remains bound to the submitted review snapshot.</p></> : <><p className="workflow-eyebrow">Evidence focus</p><h3>Select an entity</h3><p>The same native relations remain available as text beneath the visual field.</p></>}</aside></div>}
-              </WorkflowSection>
+              <section className="analyst-review-graph">
+                {graph.isPending ? <StateFrame kind="loading" title="Projecting relationships" detail="The review record remains available while native evidence is prepared." /> : graph.isError ? <StateFrame kind={graph.error instanceof ApiError && graph.error.status === 404 ? "empty" : "error"} title={graph.error instanceof ApiError && graph.error.status === 404 ? "Evidence projection is pending" : "Relationship map is unavailable"} detail={graph.error instanceof Error ? graph.error.message : "Retry when the evidence service is ready."} action={<button type="button" className="workflow-secondary-action" onClick={() => void graph.refetch()}>Retry map</button>} /> : <><ReviewEvidenceGraph graph={graph.data.graph} label="Analyst review evidence graph" selectedId={selectedNode?.id} onSelect={setSelectedNode} /><p className="review-graph-note">{graph.data.note}</p></>}
+              </section>
 
-              <WorkCollaboration kind="review" id={item.id} />
+              <section className="evidence-lens-answer" aria-live="polite">
+                <p className="workflow-eyebrow">{lens === "why" ? "Why this needs a decision" : lens === "affected" ? "Recorded impact" : "Potential outcome change"}</p>
+                {lens === "why" ? <>{item.reasons.length ? <ul>{item.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>No additional reason was returned.</p>}{item.advisories.length ? <div className="lens-advisories">{item.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />)}</div> : <p>No published advisory details were returned with this review.</p>}</> : null}
+                {lens === "affected" ? item.code_entities.length ? <ul>{item.code_entities.map((entity) => <li key={entity}><code>{entity}</code></li>)}</ul> : <p>No linked code entities were returned in the submitted snapshot.</p> : null}
+                {lens === "outcome" ? <div className="lens-outcome"><div><small>Recorded recommendation</small><strong>{item.recommended_version ?? "None recorded"}</strong></div><div><small>Published fixed versions</small><strong>{Array.from(new Set(item.advisories.flatMap((advisory) => advisory.fixed_versions))).join(", ") || "None returned"}</strong></div><div><small>Verification evidence</small><strong>{item.verification_evidence_id ?? "Not recorded"}</strong></div></div> : null}
+                {selectedNode ? <p className="lens-selection"><strong>Focused entity:</strong> {selectedNode.label} <code>{selectedNode.id}</code></p> : null}
+              </section>
 
-              <WorkflowSection eyebrow="Audit trail" title="Decision history">
-                {item.events.length ? <ol className="workflow-list">{[...item.events].reverse().map((event) => <li key={event.id} className="workflow-list-row"><span className="workflow-update-dot" aria-hidden="true" /><span className="workflow-list-row-main"><strong>{event.action.replace("review.", "").replaceAll("_", " ")}</strong><small>{event.actor_name} · {event.rationale}</small></span><span className="font-mono text-[10px] text-slate">{timestamp(event.at)}</span></li>)}</ol> : <StateFrame kind="empty" title="No review events yet" />}
-              </WorkflowSection>
-            </div>
+              <div className="focus-disclosures analyst-review-disclosures">
+                <details><summary>Collaboration</summary><div><WorkCollaboration kind="review" id={item.id} /></div></details>
+                <details><summary>Decision history <span>{item.events.length}</span></summary><div>{item.events.length ? <ol className="workflow-list">{[...item.events].reverse().map((event) => <li key={event.id} className="workflow-list-row"><span className="workflow-update-dot" aria-hidden="true" /><span className="workflow-list-row-main"><strong>{event.action.replace("review.", "").replaceAll("_", " ")}</strong><small>{event.actor_name} · {event.rationale}</small></span><span className="font-mono text-[10px] text-slate">{timestamp(event.at)}</span></li>)}</ol> : <p>No review events yet.</p>}</div></details>
+              </div>
+            </article>
+          </section>
 
-            <ResponsibilityDock
-              responsibility={terminal ? "The review is complete." : !item.assignee ? "Assign an owner before deciding." : "Resolve the Developer’s request or open a case."}
-              why={terminal ? "The recorded result is visible to the Developer and remains in the audit trail." : "Use the submitted evidence. Durable policy exceptions follow the separate CISO approval workflow."}
-              deadline={item.sla_due_at ? timestamp(item.sla_due_at) : undefined}
-              overdue={item.overdue}
-            >
+          <div id="review-actions" className="analyst-review-dock">
+            <ResponsibilityDock responsibility={terminal ? "The review is complete." : !item.assignee ? "Assign an owner before deciding." : "Resolve the Developer’s request or open a case."} why={terminal ? "The recorded result is visible to the Developer and remains in the audit trail." : "Use the submitted evidence. Durable policy exceptions follow the separate CISO approval workflow."} deadline={item.sla_due_at ? timestamp(item.sla_due_at) : undefined} overdue={item.overdue}>
               <ConflictRecovery error={mutationError} onReload={reload} />
               {!terminal && canWriteReview ? (
                 <details className="workflow-action-disclosure" open={!item.assignee}>
                   <summary>Owner and due time</summary>
                   <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); const due = String(form.get("sla_due_at") ?? ""); assign.mutate({ expected_version: item.version_counter, assignee: String(form.get("assignee") ?? "").trim(), assignee_name: String(form.get("assignee_name") ?? "").trim(), sla_due_at: due ? dateInputToEpoch(due) : null }); }}>
-                    <Field label="Owner email"><TextInput name="assignee" type="email" required defaultValue={item.assignee ?? ""} /></Field>
-                    <Field label="Owner name"><TextInput name="assignee_name" required defaultValue={item.assignee_name ?? ""} /></Field>
-                    <Field label="Due date"><TextInput name="sla_due_at" type="date" defaultValue={item.sla_due_at ? epochToDateInput(item.sla_due_at) : ""} /></Field>
-                    <button className="workflow-primary-action" type="submit" disabled={assign.isPending}>{assign.isPending ? "Saving…" : "Save owner"}</button>
+                    <Field label="Owner email"><TextInput name="assignee" type="email" required defaultValue={item.assignee ?? ""} /></Field><Field label="Owner name"><TextInput name="assignee_name" required defaultValue={item.assignee_name ?? ""} /></Field><Field label="Due date"><TextInput name="sla_due_at" type="date" defaultValue={item.sla_due_at ? epochToDateInput(item.sla_due_at) : ""} /></Field><button className="workflow-primary-action" type="submit" disabled={assign.isPending}>{assign.isPending ? "Saving…" : "Save owner"}</button>
                   </form>
                 </details>
               ) : null}
-
               {!terminal && canWriteReview ? (
                 <details className="workflow-action-disclosure" open={Boolean(item.assignee)}>
                   <summary>Return a decision</summary>
                   <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); decide.mutate({ expected_version: item.version_counter, decision, rationale: String(form.get("rationale") ?? "").trim(), recommended_version: decision === "request_changes" ? String(form.get("recommended_version") ?? "").trim() : null, expires_at: null }); }}>
-                    <Field label="Decision"><Select value={decision} onChange={(event) => setDecision(event.target.value as typeof decision)}>{decisions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
-                    {decision === "request_changes" ? <Field label="Recommended version"><TextInput name="recommended_version" defaultValue={item.advisories.flatMap((advisory) => advisory.fixed_versions)[0] ?? ""} required placeholder="Safe version" /></Field> : null}
-                    <Field label="Message to Developer" hint="Use plain language. Explain the next action and why."><TextArea name="rationale" required maxLength={4096} /></Field>
-                    <button className="workflow-primary-action" type="submit" disabled={decide.isPending}>{decide.isPending ? "Recording…" : "Record decision"}</button>
+                    <Field label="Decision"><Select value={decision} onChange={(event) => setDecision(event.target.value as typeof decision)}>{decisions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>{decision === "request_changes" ? <Field label="Recommended version"><TextInput name="recommended_version" defaultValue={item.advisories.flatMap((advisory) => advisory.fixed_versions)[0] ?? ""} required placeholder="Safe version" /></Field> : null}<Field label="Message to Developer" hint="Use plain language. Explain the next action and why."><TextArea name="rationale" required maxLength={4096} /></Field><button className="workflow-primary-action" type="submit" disabled={decide.isPending}>{decide.isPending ? "Recording…" : "Record decision"}</button>
                   </form>
                 </details>
               ) : null}
-
               {!terminal && canWriteCase ? (
-                <details className="workflow-action-disclosure">
-                  <summary>{item.escalated_case_id || caseId ? "Linked investigation" : "Create a tracked case"}</summary>
-                  {item.escalated_case_id || caseId ? <Link to="/analyst/cases/$caseId" params={{ caseId: item.escalated_case_id ?? caseId! }} className="workflow-primary-action">Open linked case</Link> : <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); escalate.mutate({ expected_version: item.version_counter, title: String(form.get("title") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), assignee: item.assignee, assignee_name: item.assignee_name, sla_due_at: item.sla_due_at }); }}>
-                    <Field label="Case title"><TextInput name="title" required defaultValue={`${item.package} security investigation`} /></Field>
-                    <Field label="Why a case is needed"><TextArea name="rationale" required maxLength={4096} defaultValue={selectedNode ? `Investigate ${selectedNode.label} (${selectedNode.id}) and its relationship to ${item.package}.` : "The submitted evidence needs a tracked investigation."} /></Field>
-                    <button className="workflow-primary-action" type="submit" disabled={escalate.isPending}>{escalate.isPending ? "Creating…" : "Create case"}</button>
-                  </form>}
-                </details>
+                <details className="workflow-action-disclosure"><summary>{item.escalated_case_id || caseId ? "Linked investigation" : "Create a tracked case"}</summary>{item.escalated_case_id || caseId ? <Link to="/analyst/cases/$caseId" params={{ caseId: item.escalated_case_id ?? caseId! }} className="workflow-primary-action">Open linked case</Link> : <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); escalate.mutate({ expected_version: item.version_counter, title: String(form.get("title") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), assignee: item.assignee, assignee_name: item.assignee_name, sla_due_at: item.sla_due_at }); }}><Field label="Case title"><TextInput name="title" required defaultValue={`${item.package} security investigation`} /></Field><Field label="Why a case is needed"><TextArea name="rationale" required maxLength={4096} defaultValue={selectedNode ? `Investigate ${selectedNode.label} (${selectedNode.id}) and its relationship to ${item.package}.` : "The submitted evidence needs a tracked investigation."} /></Field><button className="workflow-primary-action" type="submit" disabled={escalate.isPending}>{escalate.isPending ? "Creating…" : "Create case"}</button></form>}</details>
               ) : null}
-
               {!canWriteReview && !canWriteCase ? <p className="text-xs leading-relaxed text-slate">Your current capabilities allow evidence review but no workflow changes.</p> : null}
               {!isVersionConflict(mutationError) ? <MutationMessage error={mutationError} success={success} /> : success ? <MutationMessage error={null} success={success} /> : null}
-              <div className="grid gap-2">
-                <IntegrityRef label="Review" value={item.id} />
-                <IntegrityRef label="Evidence root" value={item.evidence_root_ulid} />
-                <IntegrityRef label="Evidence digest" value={item.evidence_digest} />
-              </div>
+              <div className="grid gap-2"><IntegrityRef label="Review" value={item.id} /><IntegrityRef label="Evidence root" value={item.evidence_root_ulid} /><IntegrityRef label="Evidence digest" value={item.evidence_digest} /></div>
             </ResponsibilityDock>
           </div>
-        )}
-      </div>
+          {!terminal && (canWriteReview || canWriteCase) ? <a href="#review-actions" className="analyst-mobile-action">Review actions</a> : null}
+        </div>
+      )}
     </main>
   );
 }
