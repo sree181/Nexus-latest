@@ -137,10 +137,9 @@ jobs:
           version: '0.6.3'
       - name: Check Python lock reproducibility
         run: |
-          uv pip compile --generate-hashes services/api/requirements.txt -o /tmp/requirements.lock.txt
-          uv pip compile --generate-hashes services/api/requirements-dev.txt -o /tmp/requirements-dev.lock.txt
-          diff -u services/api/requirements.lock.txt /tmp/requirements.lock.txt
-          diff -u services/api/requirements-dev.lock.txt /tmp/requirements-dev.lock.txt
+          uv pip compile --generate-hashes services/api/requirements.txt -o services/api/requirements.lock.txt
+          uv pip compile --generate-hashes services/api/requirements-dev.txt -o services/api/requirements-dev.lock.txt
+          git diff --exit-code -- services/api/requirements.lock.txt services/api/requirements-dev.lock.txt
       - name: Generate CycloneDX SBOM
         uses: anchore/sbom-action@006b7ce8314066bdf1765b4500370d40fa6917a3 # v0.24.2
         with:
