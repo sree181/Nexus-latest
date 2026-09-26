@@ -1,4 +1,4 @@
-# MeshAgent recorder for Cursor
+# meshAgent recorder for Cursor
 
 The second adapter, and therefore the one that turns "the engine never learns
 which editor it is talking to" from a claim into something a test can check.
@@ -6,6 +6,34 @@ which editor it is talking to" from a claim into something a test can check.
 same developer behaviour.
 
 ## Install
+
+### Stage 1A native recorder (recommended)
+
+Build and install the native per-user service, then point this repository's
+Cursor hooks at the small IPC client:
+
+```bash
+scripts/recorder/install-dev.sh
+scripts/demo/configure_cursor_hooks.py /path/to/repository \
+  --native-hook "$HOME/.local/bin/meshagent-hook" \
+  --local-exclude
+```
+
+Windows PowerShell performs installation, task registration, health verification, and repository configuration in one command:
+
+```powershell
+.\scripts\recorder\Install-Dev.ps1 -Repository C:\path\to\your-repository
+```
+
+The safe configurator writes a `.cmd` wrapper and Windows-native hook commands; `adapters/cursor/hooks.native.windows.json` is the corresponding reference shape.
+
+The native service uses the same endpoint and paired device credential as the
+CLI. It persists ordered batches in an AES-256-GCM encrypted SQLite queue and
+removes a batch only after the existing v1 API explicitly acknowledges its
+final sequence. The installer is for Stage 1A development: signed/notarized
+packages and OS-keystore queue keys belong to Stage 1B.
+
+### Python compatibility mode
 
 Install the CLI once, configure the deployment origin, and pair this machine:
 
@@ -16,7 +44,7 @@ meshagent login --label "work laptop"
 meshagent doctor
 ```
 
-Then merge `hooks.json` into `.cursor/hooks.json`. The packaged hook resolves
+Then merge `hooks.json` into `.cursor/hooks.json`. The compatibility hook resolves
 the endpoint and recording credential from `~/.meshagent`; an explicit
 `MESHAGENT_API` remains available as a validated CI override. Do not place a
 human OIDC token in `MESHAGENT_TOKEN`: only `mesh_...` recording tokens are
@@ -94,18 +122,20 @@ named it — never because of when it was written.
 
 ## Offline recovery
 
-Recorder batches are kept in bounded, locked queues under
-`~/.meshagent/queues/<repository>/<editor>/`. When the service returns, hooks
-replay them in order. A recoverable `.inflight` lease prevents a process crash
-or ambiguous network response from deleting an unacknowledged record. The
-oldest undelivered causal prefix is retained, including the session opener. If
-the configured queue limit is full, new observations are not retained until the
-backlog can advance; unused sequence reservations are rolled back so recovery
-cannot create a permanent server gap. `meshagent status` and `meshagent doctor`
-report the resulting backpressure counter so the omission is not silent.
-Operators can inspect and force replay without exposing credentials:
+In native mode, recorder batches are kept in the encrypted
+`~/.meshagent/recorder.db` queue and replayed by the per-user daemon. In Python
+compatibility mode they remain in bounded JSONL queues under
+`~/.meshagent/queues/<repository>/<editor>/`. Both implementations retain the
+oldest undelivered causal prefix, including the session opener; refuse new
+observations rather than create a sequence gap when full; and remove data only
+after an exact server acknowledgement. Semantic API validation failures remain
+encrypted and visible as `blocked_batches` rather than being hot-retried or
+deleted. Operators can inspect and explicitly retry them after correcting the
+cause without exposing credentials:
 
 ```bash
-meshagent status
-meshagent replay
+meshagent-recorder status  # native mode
+meshagent-recorder replay  # native mode
+meshagent status           # Python compatibility mode
+meshagent replay           # Python compatibility mode
 ```

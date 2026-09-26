@@ -199,6 +199,8 @@ def parse_installs(command: str) -> list[InstallTarget]:
             if parsed is None:
                 continue
             name, version, exact = parsed
+            if len(name) > 256 or len(version) > 128:
+                continue
             key = (ecosystem, name.lower(), version, manager)
             if key in seen:
                 continue

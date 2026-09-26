@@ -1,0 +1,41 @@
+[
+  {
+    "name": "compound install segment",
+    "command": "cd /tmp && head README.md && tail log.txt; git show HEAD | cat && python3 -m pip install httpx==0.27.2 requests",
+    "expected": [
+      {"name":"httpx","version":"0.27.2","ecosystem":"PyPI","manager":"pip","exact":true},
+      {"name":"requests","version":"","ecosystem":"PyPI","manager":"pip","exact":false}
+    ]
+  },
+  {"name":"ordinary commands","command":"head README.md; tail -f app.log; cd src; git show HEAD","expected":[]},
+  {"name":"pip exact","command":"pip install flask==3.0.0","expected":[{"name":"flask","version":"3.0.0","ecosystem":"PyPI","manager":"pip","exact":true}]},
+  {"name":"uv pip exact","command":"uv pip install httpx==0.27.2","expected":[{"name":"httpx","version":"0.27.2","ecosystem":"PyPI","manager":"uv","exact":true}]},
+  {"name":"uv add exact","command":"uv add pydantic==2.9.2","expected":[{"name":"pydantic","version":"2.9.2","ecosystem":"PyPI","manager":"uv","exact":true}]},
+  {"name":"poetry exact","command":"poetry add requests@2.32.3","expected":[{"name":"requests","version":"2.32.3","ecosystem":"PyPI","manager":"poetry","exact":true}]},
+  {"name":"pypi range","command":"pip install 'urllib3>=2,<3'","expected":[{"name":"urllib3","version":"","ecosystem":"PyPI","manager":"pip","exact":false}]},
+  {
+    "name":"npm scoped and unpinned",
+    "command":"npm i react@18.3.1 @scope/pkg@1.2.3 lodash",
+    "expected":[
+      {"name":"react","version":"18.3.1","ecosystem":"npm","manager":"npm","exact":true},
+      {"name":"@scope/pkg","version":"1.2.3","ecosystem":"npm","manager":"npm","exact":true},
+      {"name":"lodash","version":"","ecosystem":"npm","manager":"npm","exact":false}
+    ]
+  },
+  {"name":"yarn exact","command":"yarn add zod@3.23.8","expected":[{"name":"zod","version":"3.23.8","ecosystem":"npm","manager":"yarn","exact":true}]},
+  {"name":"wrappers and option value","command":"sudo env PIP_NO_CACHE_DIR=1 pip install --upgrade --index-url https://example.invalid/simple numpy==1.26.4","expected":[{"name":"numpy","version":"1.26.4","ecosystem":"PyPI","manager":"pip","exact":true}]},
+  {"name":"indirect requirements","command":"pip install -r requirements.txt","expected":[]},
+  {"name":"local path","command":"pip install ./dist/pkg.whl","expected":[]},
+  {"name":"dynamic shell value","command":"pip install $PACKAGE","expected":[]},
+  {"name":"shell inside shell","command":"bash -c 'pip install numpy==1.26.4'","expected":[]},
+  {
+    "name":"only exact post-execution evidence",
+    "command":"pip install requests numpy==1.26.4 && npm i react@18.3.1 react@latest",
+    "expected":[
+      {"name":"requests","version":"","ecosystem":"PyPI","manager":"pip","exact":false},
+      {"name":"numpy","version":"1.26.4","ecosystem":"PyPI","manager":"pip","exact":true},
+      {"name":"react","version":"18.3.1","ecosystem":"npm","manager":"npm","exact":true},
+      {"name":"react","version":"","ecosystem":"npm","manager":"npm","exact":false}
+    ]
+  }
+]

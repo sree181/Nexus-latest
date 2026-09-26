@@ -62,10 +62,34 @@ jobs:
       - name: Build native library and run all native tests
         run: make -C services/engine/hypermesh_core clean native-test
 
+  recorder:
+    name: Native recorder race, vet, and cross-platform build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: recorder/go.mod
+          cache-dependency-path: recorder/go.sum
+      - name: Test and vet native recorder
+        working-directory: recorder
+        run: |
+          go test -race ./...
+          go vet ./...
+          GOTOOLCHAIN=go1.25.13 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+      - name: Cross-compile recorder and hook
+        working-directory: recorder
+        run: |
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -trimpath -o "/tmp/meshagent-recorder-${target%/*}-${target#*/}" ./cmd/meshagent-recorder
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -trimpath -o "/tmp/meshagent-hook-${target%/*}-${target#*/}" ./cmd/meshagent-hook
+          done
+
   containers:
     name: Reproducible container artifacts
     runs-on: ubuntu-24.04
-    needs: [frontend, python, native]
+    needs: [frontend, python, native, recorder]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -129,6 +153,7 @@ jobs:
         with:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
+            --lockfile=recorder/go.mod
             --lockfile=services/api/requirements.lock.txt
             --lockfile=services/api/requirements-dev.lock.txt
       - name: Scan filesystem and Dockerfiles for HIGH/CRITICAL vulnerabilities
