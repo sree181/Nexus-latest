@@ -29,7 +29,7 @@ export function SignInGate({ children }: { children: React.ReactNode }) {
     browserSession()
       .then((session) => setStatus(session.authenticated ? "signed-in" : "signed-out"))
       .catch((exc: unknown) => {
-        setError(exc instanceof Error ? exc.message : "MeshAgent could not verify the browser session.");
+        setError(exc instanceof Error ? exc.message : "meshAgent could not verify the browser session.");
         setStatus("signed-out");
       });
     if (window.location.search.includes("auth_error=")) {
@@ -42,7 +42,7 @@ export function SignInGate({ children }: { children: React.ReactNode }) {
   if (oidcEnabled && status === "signed-out") {
     return (
       <Panel
-        title="Sign in to MeshAgent"
+        title="Sign in to meshAgent"
         body="Use your company identity. Your role and permissions are confirmed by the API before a workspace opens."
         error={error}
       >
@@ -91,7 +91,7 @@ function Panel({
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent shadow-lg shadow-black/20">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><circle cx="19" cy="19" r="2" /><path d="M12 7v4M12 11l-6 6M12 11l6 6" /></svg>
               </div>
-              <div><p className="font-serif text-xl font-semibold">MeshAgent</p><p className="font-mono text-[10px] tracking-[0.18em] text-rail-ink-faint">SECURITY WORKBENCH</p></div>
+              <div><p className="font-sans text-xl font-semibold tracking-tight">meshAgent</p><p className="font-mono text-[10px] tracking-[0.18em] text-rail-ink-faint">POWERED BY HYPERMESH</p></div>
             </div>
             <h2 className="mt-16 max-w-md font-serif text-3xl font-semibold leading-tight sm:text-4xl">One verified entry point for engineering evidence and security decisions.</h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-rail-ink-dim">The workspace shown after sign-in is determined by server-issued capabilities, not by the browser.</p>

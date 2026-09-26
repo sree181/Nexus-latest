@@ -89,7 +89,7 @@ function connectionState(
   devices: { last_used: number }[] | undefined,
   failed: boolean,
 ): { label: string; tone: VisualTone; detail: string } {
-  if (failed) return { label: "Offline", tone: "danger", detail: "MeshAgent could not read connection status." };
+  if (failed) return { label: "Offline", tone: "danger", detail: "meshAgent could not read connection status." };
   if (!devices) return { label: "Waiting", tone: "neutral", detail: "Reading connection status." };
   if (devices.length === 0) return { label: "Setup needed", tone: "warning", detail: "No device is paired." };
   if (sessions.some((session) => ["starting", "active", "ending"].includes(session.status))) {

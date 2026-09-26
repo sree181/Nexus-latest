@@ -19,7 +19,7 @@ const severityTone: Record<Severity, "risk" | "warn" | "neutral"> = {
 /** An analyser's name, said the way a person would say it. */
 function analyser(name: string | null): string {
   if (!name) return "nobody";
-  return name === "builtin" ? "MeshAgent's own walk" : name;
+  return name === "builtin" ? "meshAgent's own walk" : name;
 }
 
 function Tile({
@@ -187,7 +187,7 @@ function Column({
 
 /** Hands the run a scanner's own SARIF output.
  *
- *  This is the only place a developer can replace MeshAgent's guess about
+ *  This is the only place a developer can replace meshAgent's guess about
  *  reachability with somebody's evidence, and the screen has told them to do
  *  it since before there was a control for it. */
 function UploadScan({ runId }: { runId: string }) {
@@ -311,7 +311,7 @@ function Scans({ data, runId }: { data: FindingsOut; runId: string }) {
             No external scanner has read this code
           </h2>
           <p className="text-[13px] leading-snug text-ink">
-            Reachability here rests only on MeshAgent&rsquo;s own AST walk,
+            Reachability here rests only on meshAgent&rsquo;s own AST walk,
             which is intraprocedural and Python-only. Everything it did not
             flag is unassessed rather than safe. Upload a Semgrep or CodeQL
             SARIF run against this run to replace that guess with evidence.

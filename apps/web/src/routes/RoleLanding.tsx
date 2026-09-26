@@ -41,7 +41,7 @@ export function RoleLanding() {
         <h1 className="mt-2 font-serif text-2xl font-semibold text-ink">No workspace was opened</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate">
           {identity.failed
-            ? "MeshAgent could not retrieve your server-managed role and capabilities. Retry after the identity service is available."
+            ? "meshAgent could not retrieve your server-managed role and capabilities. Retry after the identity service is available."
             : "The identity response did not contain one consistent supported role. Ask an administrator to review your role mapping."}
         </p>
       </section>

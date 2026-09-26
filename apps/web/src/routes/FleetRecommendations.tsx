@@ -240,7 +240,7 @@ function Rail({ recs }: { recs: Recommendation[] }) {
                 <span className="font-medium">{confirming.title}</span> will be
                 applied to {confirming.agents} agent{confirming.agents === 1 ? "" : "s"}.
                 The receipt will distinguish governed-memory changes from an
-                accepted decision recorded outside MeshAgent.
+                accepted decision recorded outside meshAgent.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

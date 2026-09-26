@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Async } from "../components/Async";
 import { PageHeader } from "../components/PageHeader";
-import { Metric, Select, SeverityBadge, StatusBadge, TextInput, dateInputToEpoch } from "../components/WorkflowUI";
-import { api, type WorkKind, type WorkflowSeverity } from "../lib/api";
+import { ConflictRecovery, ResponsibilityDock, StateFrame, WorkflowHero, WorkflowSection } from "../components/WorkflowVisual";
+import { Select, SeverityBadge, StatusBadge, TextInput, dateInputToEpoch } from "../components/WorkflowUI";
+import { api, type BulkWorkReceipt, type WorkKind, type WorkflowSeverity } from "../lib/api";
 import { timestamp } from "../lib/format";
 import { useIdentity } from "../lib/useIdentity";
 
@@ -19,9 +19,14 @@ type Filters = {
 
 const EMPTY: Filters = {};
 
+function selectedKey(kind: WorkKind, id: string): string {
+  return `${kind}:${id}`;
+}
+
 export function AnalystOperations() {
-  const { me } = useIdentity();
+  const { me, hasCapability } = useIdentity();
   const mySubject = me?.subject ?? "";
+  const canAssign = hasCapability("review.write") || hasCapability("case.write");
   const client = useQueryClient();
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [viewName, setViewName] = useState("");
@@ -29,6 +34,7 @@ export function AnalystOperations() {
   const [bulkOwner, setBulkOwner] = useState("");
   const [bulkOwnerName, setBulkOwnerName] = useState("");
   const [bulkDue, setBulkDue] = useState("");
+  const [bulkResult, setBulkResult] = useState<BulkWorkReceipt | null>(null);
   const queue = useQuery({
     queryKey: ["work-queue", filters],
     queryFn: () => api.workQueue(filters),
@@ -52,7 +58,7 @@ export function AnalystOperations() {
   });
   const bulkAssign = useMutation({
     mutationFn: () => api.bulkAssignWork({
-      items: (queue.data?.items ?? []).filter((item) => selected.has(`${item.kind}:${item.id}`)).map((item) => ({
+      items: (queue.data?.items ?? []).filter((item) => selected.has(selectedKey(item.kind, item.id))).map((item) => ({
         kind: item.kind,
         id: item.id,
         expected_version: item.version,
@@ -61,8 +67,9 @@ export function AnalystOperations() {
       assignee_name: bulkOwnerName.trim(),
       sla_due_at: bulkDue ? dateInputToEpoch(bulkDue) : null,
     }),
-    onSuccess: () => {
-      setSelected(new Set());
+    onSuccess: (receipt) => {
+      setBulkResult(receipt);
+      setSelected(new Set(receipt.results.filter((result) => !result.ok).map((result) => selectedKey(result.kind, result.id))));
       void client.invalidateQueries({ queryKey: ["work-queue"] });
       void client.invalidateQueries({ queryKey: ["notifications"] });
     },
@@ -71,74 +78,100 @@ export function AnalystOperations() {
     (queue.data?.items ?? []).map((item) => item.repository_name).filter((value): value is string => Boolean(value)),
   )).sort(), [queue.data]);
 
-  const set = (key: keyof Filters, value: string) => setFilters((current) => ({
-    ...current,
-    [key]: value || undefined,
-  }));
+  const set = (key: keyof Filters, value: string) => {
+    setBulkResult(null);
+    setFilters((current) => ({ ...current, [key]: value || undefined }));
+  };
+
+  const counts = queue.data?.counts ?? {};
+  const pending = queue.data?.items[0];
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+    <main className="workflow-page">
       <PageHeader section="Analyst" title="Security operations" meta={<a href="/analyst/activity" className="text-accent hover:underline">Search activity</a>} />
-      <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
-        <Async query={queue} label="Prioritizing work…">
-          {(data) => <>
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <Metric label="Open work" value={data.counts.all ?? 0} detail="Reviews and cases" />
-              <Metric label="Unassigned" value={data.counts.unassigned ?? 0} detail="Needs an owner" tone={(data.counts.unassigned ?? 0) ? "warn" : "ok"} />
-              <Metric label="Overdue" value={data.counts.overdue ?? 0} detail="Past the promised time" tone={(data.counts.overdue ?? 0) ? "risk" : "ok"} />
-              <Metric label="Reviews" value={data.counts.reviews ?? 0} detail="Developer requests" />
-              <Metric label="Cases" value={data.counts.cases ?? 0} detail="Tracked investigations" />
-            </section>
+      <div className="workflow-scroll">
+        <div className="workflow-layout">
+          <div className="workflow-main">
+            <WorkflowHero
+              eyebrow="Analyst operations"
+              title={`${counts.all ?? 0} open item${(counts.all ?? 0) === 1 ? "" : "s"}`}
+              description="One server-ranked queue for developer reviews and tracked investigations. Priority, ownership, and due state come from the control plane."
+              tone={(counts.overdue ?? 0) ? "danger" : (counts.unassigned ?? 0) ? "warning" : "accent"}
+              meta={<><span>{counts.reviews ?? 0} reviews</span><span>{counts.cases ?? 0} cases</span><span>{notifications.data?.unread ?? 0} unread updates</span></>}
+            />
 
-            <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2 className="font-serif text-lg font-semibold text-ink">One queue</h2>
-                  <p className="mt-1 text-sm text-slate">Developer questions and investigations, ranked by impact, age, ownership, and due time.</p>
+            <div className="workflow-kpis" aria-label="Operations summary">
+              <div className="workflow-kpi"><strong>{counts.all ?? 0}</strong><span>Open work</span></div>
+              <div className={(counts.unassigned ?? 0) ? "workflow-kpi is-warning" : "workflow-kpi is-success"}><strong>{counts.unassigned ?? 0}</strong><span>Unassigned</span></div>
+              <div className={(counts.overdue ?? 0) ? "workflow-kpi is-risk" : "workflow-kpi is-success"}><strong>{counts.overdue ?? 0}</strong><span>Overdue</span></div>
+              <div className="workflow-kpi"><strong>{notifications.data?.unread ?? 0}</strong><span>New updates</span></div>
+            </div>
+
+            <WorkflowSection className="flush" eyebrow="Priority queue" title="Work requiring attention" description="Open a record for evidence, collaboration, and allowed next actions." action={<span className="font-mono text-[11px] text-slate">{queue.data?.total ?? 0} matching</span>}>
+              <div className="operations-toolbar">
+                <TextInput aria-label="Search work" placeholder="Search package, project, or person" value={filters.q ?? ""} onChange={(event) => set("q", event.target.value)} />
+                <div className="operations-quick-filters" aria-label="Quick filters">
+                  <button type="button" disabled={!mySubject} aria-pressed={filters.assignee === mySubject} onClick={() => setFilters((current) => ({ ...current, assignee: mySubject }))}>Mine</button>
+                  <button type="button" aria-pressed={filters.assignee === "__unassigned__"} onClick={() => setFilters((current) => ({ ...current, assignee: "__unassigned__" }))}>Unassigned</button>
+                  <button type="button" onClick={() => setFilters(EMPTY)}>Clear</button>
                 </div>
-                <span className="font-mono text-xs text-slate">{data.total} matching</span>
-              </div>
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-                <TextInput aria-label="Search work" placeholder="Search package, project, person…" value={filters.q ?? ""} onChange={(event) => set("q", event.target.value)} className="xl:col-span-2" />
-                <Select aria-label="Work type" value={filters.kind ?? ""} onChange={(event) => set("kind", event.target.value)}><option value="">All work</option><option value="review">Reviews</option><option value="case">Cases</option></Select>
-                <Select aria-label="Severity" value={filters.severity ?? ""} onChange={(event) => set("severity", event.target.value)}><option value="">All severity</option>{["critical", "high", "medium", "low", "unknown"].map((value) => <option key={value} value={value}>{value}</option>)}</Select>
-                <Select aria-label="Repository" value={filters.repository ?? ""} onChange={(event) => set("repository", event.target.value)}><option value="">All projects</option>{repositories.map((value) => <option key={value} value={value}>{value}</option>)}</Select>
-                <Select aria-label="Owner" value={filters.assignee ?? ""} onChange={(event) => set("assignee", event.target.value)}><option value="">Any owner</option>{mySubject ? <option value={mySubject}>Assigned to me</option> : null}</Select>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button type="button" disabled={!mySubject} onClick={() => setFilters({ ...filters, assignee: mySubject })} className="rounded-full border border-line px-3 py-1.5 text-xs text-ink hover:bg-surface-2 disabled:opacity-50">Mine</button>
-                <button type="button" onClick={() => setFilters({ ...filters, assignee: "__unassigned__" })} className="rounded-full border border-line px-3 py-1.5 text-xs text-ink hover:bg-surface-2">Unassigned</button>
-                <button type="button" onClick={() => setFilters(EMPTY)} className="rounded-full border border-line px-3 py-1.5 text-xs text-slate hover:bg-surface-2">Clear</button>
-                <span className="h-5 w-px bg-line" />
-                <TextInput aria-label="Saved view name" value={viewName} onChange={(event) => setViewName(event.target.value)} placeholder="View name" className="max-w-44 py-1.5" />
-                <button type="button" disabled={!viewName.trim() || saveView.isPending} onClick={() => saveView.mutate()} className="rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">Save view</button>
-                {views.data?.map((view) => <button key={view.id} type="button" onClick={() => setFilters(view.filters as Filters)} className="rounded-full border border-accent/30 bg-accent-soft px-3 py-1.5 text-xs text-accent">{view.name}</button>)}
+                <details className="operations-filter-drawer">
+                  <summary>More filters and views</summary>
+                  <div className="operations-filter-grid">
+                    <Select aria-label="Work type" value={filters.kind ?? ""} onChange={(event) => set("kind", event.target.value)}><option value="">All work</option><option value="review">Reviews</option><option value="case">Cases</option></Select>
+                    <Select aria-label="Severity" value={filters.severity ?? ""} onChange={(event) => set("severity", event.target.value)}><option value="">All severity</option>{["critical", "high", "medium", "low", "unknown"].map((value) => <option key={value} value={value}>{value}</option>)}</Select>
+                    <Select aria-label="Repository" value={filters.repository ?? ""} onChange={(event) => set("repository", event.target.value)}><option value="">All projects</option>{repositories.map((value) => <option key={value} value={value}>{value}</option>)}</Select>
+                    <Select aria-label="Owner" value={filters.assignee ?? ""} onChange={(event) => set("assignee", event.target.value)}><option value="">Any owner</option>{mySubject ? <option value={mySubject}>Assigned to me</option> : null}<option value="__unassigned__">Unassigned</option></Select>
+                    <div className="operations-save-view"><TextInput aria-label="Saved view name" value={viewName} onChange={(event) => setViewName(event.target.value)} placeholder="View name" /><button type="button" disabled={!viewName.trim() || saveView.isPending} onClick={() => saveView.mutate()}>{saveView.isPending ? "Saving…" : "Save view"}</button></div>
+                    {views.data?.length ? <div className="operations-saved-views">{views.data.map((view) => <button key={view.id} type="button" onClick={() => setFilters(view.filters as Filters)}>{view.name}</button>)}</div> : null}
+                  </div>
+                </details>
               </div>
 
-              {selected.size ? <div className="mt-4 grid gap-3 rounded-xl border border-accent/30 bg-accent-soft p-4 sm:grid-cols-2 xl:grid-cols-[auto_1fr_1fr_180px_auto] xl:items-end">
-                <div><strong className="text-sm text-ink">{selected.size} selected</strong><p className="text-xs text-slate">Assign together</p></div>
-                <TextInput aria-label="Bulk owner email" type="email" value={bulkOwner} onChange={(event) => setBulkOwner(event.target.value)} placeholder="Owner email" />
-                <TextInput aria-label="Bulk owner name" value={bulkOwnerName} onChange={(event) => setBulkOwnerName(event.target.value)} placeholder="Owner name" />
+              {queue.isPending ? <StateFrame kind="loading" title="Prioritizing work" detail="Reading reviews and cases from the control plane." /> : queue.isError ? <StateFrame kind="error" title="The work queue could not be loaded" detail={queue.error instanceof Error ? queue.error.message : "Try again when the service is available."} action={<button type="button" className="workflow-secondary-action" onClick={() => void queue.refetch()}>Try again</button>} /> : queue.data.items.length ? (
+                <ol className="operations-work-list">
+                  {queue.data.items.map((item) => {
+                    const key = selectedKey(item.kind, item.id);
+                    return (
+                      <li key={key} className="operations-work-item">
+                        {canAssign ? <input type="checkbox" aria-label={`Select ${item.title}`} checked={selected.has(key)} onChange={(event) => { setBulkResult(null); setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(key); else next.delete(key); return next; }); }} /> : null}
+                        <a href={item.route} className="operations-work-link">
+                          <span className={`operations-priority ${item.overdue ? "is-overdue" : ""}`}><strong>{item.priority}</strong><small>priority</small></span>
+                          <span className="operations-work-copy"><span><SeverityBadge severity={item.severity} /><StatusBadge status={item.state} /></span><strong>{item.title}</strong><small>{item.kind} · {item.subtitle}</small><small>{item.repository_name ?? "No repository"} · {item.developer_name ?? `Updated ${timestamp(item.updated_at)}`}</small></span>
+                          <span className="operations-work-owner"><strong>{item.assignee_name ?? "Unassigned"}</strong><small className={item.overdue ? "text-risk" : ""}>{item.sla_due_at ? `${item.overdue ? "Overdue" : "Due"} ${timestamp(item.sla_due_at)}` : "No due time"}</small><small>{item.priority_reasons.join(" · ")}</small></span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : <StateFrame kind="empty" title="Nothing matches this view" detail="Clear a filter or choose another saved view." />}
+            </WorkflowSection>
+
+            <WorkflowSection eyebrow="Activity" title="Recent updates" description="Assignments, reminders, mentions, and decisions." action={<span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">{notifications.data?.unread ?? 0} new</span>}>
+              {notifications.isPending ? <p className="text-sm text-slate">Loading updates…</p> : notifications.isError ? <p role="alert" className="text-sm text-risk">Updates are unavailable.</p> : notifications.data.notifications.length ? <ol className="workflow-list">{notifications.data.notifications.slice(0, 8).map((item) => <li key={item.id} className={item.read ? "opacity-60" : ""}><a href={item.route} onClick={() => !item.read && read.mutate(item.id)} className="workflow-list-row"><span className="workflow-update-dot" aria-hidden="true" /><span className="workflow-list-row-main"><strong>{item.title}</strong><small>{item.message}</small></span><span className="font-mono text-[10px] text-slate">{timestamp(item.created_at)}</span></a></li>)}</ol> : <p className="text-sm text-slate">No new updates.</p>}
+            </WorkflowSection>
+          </div>
+
+          <ResponsibilityDock
+            responsibility={selected.size ? `Assign ${selected.size} selected item${selected.size === 1 ? "" : "s"}.` : pending ? "Open the highest-priority record." : "Monitor the queue."}
+            why={selected.size ? "The server checks each selected record version independently. Partial failures remain selected." : pending ? "Review evidence and choose only an action allowed by the record state and your capabilities." : "New work will be ranked here as it arrives."}
+            deadline={pending?.sla_due_at ? timestamp(pending.sla_due_at) : undefined}
+            overdue={pending?.overdue}
+          >
+            {selected.size && canAssign ? (
+              <form onSubmit={(event) => { event.preventDefault(); setBulkResult(null); bulkAssign.mutate(); }}>
+                <TextInput aria-label="Bulk owner email" type="email" required value={bulkOwner} onChange={(event) => setBulkOwner(event.target.value)} placeholder="Owner email" />
+                <TextInput aria-label="Bulk owner name" required value={bulkOwnerName} onChange={(event) => setBulkOwnerName(event.target.value)} placeholder="Owner name" />
                 <TextInput aria-label="Bulk due date" type="date" value={bulkDue} onChange={(event) => setBulkDue(event.target.value)} />
-                <button type="button" disabled={!bulkOwner.trim() || !bulkOwnerName.trim() || bulkAssign.isPending} onClick={() => bulkAssign.mutate()} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{bulkAssign.isPending ? "Assigning…" : "Assign"}</button>
-              </div> : null}
-
-              {data.items.length ? <div className="responsive-table-wrap mt-5"><table className="w-full border-collapse text-left"><thead><tr className="border-b border-line"><th scope="col" className="pb-2 pr-3"><span className="sr-only">Select</span></th>{["Priority", "Work", "Context", "Owner / SLA", "State"].map((heading) => <th key={heading} scope="col" className="pb-2 pr-4 font-mono text-[10.5px] font-normal tracking-widest text-slate">{heading.toUpperCase()}</th>)}</tr></thead><tbody>{data.items.map((item) => { const key = `${item.kind}:${item.id}`; return <tr key={key} className="border-b border-line align-top">
-                <td className="py-3 pr-3"><input type="checkbox" aria-label={`Select ${item.title}`} checked={selected.has(key)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(key); else next.delete(key); return next; })} /></td>
-                <td className="py-3 pr-4"><span className="font-serif text-xl text-ink">{item.priority}</span><p className="max-w-44 text-[11px] leading-snug text-slate">{item.priority_reasons.join(" · ")}</p></td>
-                <td className="py-3 pr-4"><a href={item.route} className="font-medium text-accent underline-offset-2 hover:underline">{item.title}</a><p className="mt-1 text-xs capitalize text-slate">{item.kind} · {item.subtitle}</p></td>
-                <td className="py-3 pr-4"><div className="flex flex-wrap gap-2"><SeverityBadge severity={item.severity} />{item.repository_name ? <span className="text-xs text-slate">{item.repository_name}</span> : null}</div><p className="mt-1 text-xs text-slate">{item.developer_name ?? `Updated ${timestamp(item.updated_at)}`}</p></td>
-                <td className="py-3 pr-4 text-sm text-ink">{item.assignee_name ?? "Unassigned"}<p className={item.overdue ? "mt-1 text-xs text-risk" : "mt-1 text-xs text-slate"}>{item.sla_due_at ? `${item.overdue ? "Overdue" : "Due"} ${timestamp(item.sla_due_at)}` : "No due time"}</p></td>
-                <td className="py-3"><StatusBadge status={item.state} /></td>
-              </tr>; })}</tbody></table></div> : <div className="mt-5 rounded-xl border border-dashed border-line-2 px-4 py-6 text-center"><p className="font-medium text-ink">Nothing matches</p><p className="mt-1 text-sm text-slate">Clear a filter or choose another saved view.</p></div>}
-            </section>
-          </>}
-        </Async>
-
-        <section className="rounded-2xl border border-line bg-surface p-5">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="font-serif text-lg font-semibold text-ink">Updates</h2><p className="mt-1 text-sm text-slate">Assignments, due-time reminders, mentions, and decisions.</p></div><span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">{notifications.data?.unread ?? 0} new</span></div>
-          {notifications.isPending ? <p className="mt-4 text-sm text-slate">Loading updates…</p> : notifications.data?.notifications.length ? <ol className="mt-4 divide-y divide-line">{notifications.data.notifications.slice(0, 8).map((item) => <li key={item.id} className={`flex flex-wrap items-start justify-between gap-3 py-3 ${item.read ? "opacity-60" : ""}`}><a href={item.route} onClick={() => !item.read && read.mutate(item.id)} className="min-w-0 flex-1"><strong className="text-sm text-ink">{item.title}</strong><p className="mt-1 text-sm text-slate">{item.message}</p></a><span className="font-mono text-[11px] text-slate">{timestamp(item.created_at)}</span></li>)}</ol> : <p className="mt-4 text-sm text-slate">No new updates.</p>}
-        </section>
+                <button type="submit" className="workflow-primary-action" disabled={!bulkOwner.trim() || !bulkOwnerName.trim() || bulkAssign.isPending}>{bulkAssign.isPending ? "Assigning…" : "Assign selected"}</button>
+                {bulkAssign.error ? <p role="alert" className="text-xs text-risk">{bulkAssign.error instanceof Error ? bulkAssign.error.message : "Assignment failed."}</p> : null}
+              </form>
+            ) : pending ? <a href={pending.route} className="workflow-primary-action">Open {pending.kind}</a> : null}
+            {bulkResult ? <div className={bulkResult.failed ? "workflow-receipt is-warning" : "workflow-receipt is-success"} role="status"><strong>{bulkResult.succeeded} updated</strong><span>{bulkResult.failed ? `${bulkResult.failed} need to be refreshed and tried again.` : "All selected records were assigned."}</span></div> : null}
+            <ConflictRecovery error={bulkAssign.error} onReload={() => { bulkAssign.reset(); void queue.refetch(); }} />
+            {!canAssign ? <p className="text-xs leading-relaxed text-slate">Your current capabilities allow queue review but not assignment.</p> : null}
+          </ResponsibilityDock>
+        </div>
       </div>
     </main>
   );

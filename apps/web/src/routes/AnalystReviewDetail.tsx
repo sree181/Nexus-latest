@@ -7,32 +7,57 @@ import { PageHeader } from "../components/PageHeader";
 import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
 import { AdvisoryCard, ReviewStateBadge } from "../components/ReviewUI";
 import { WorkCollaboration } from "../components/WorkCollaboration";
+import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowHero, WorkflowJourney, WorkflowSection, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
 import { Field, MutationMessage, Select, TextArea, TextInput, dateInputToEpoch, epochToDateInput } from "../components/WorkflowUI";
-import { api } from "../lib/api";
+import { ApiError, api, type ReviewRequest } from "../lib/api";
 import { timestamp } from "../lib/format";
+import { useIdentity } from "../lib/useIdentity";
 
 const decisions = [
   ["request_changes", "Ask for a safer version"],
-  ["approve_exception", "Allow temporarily"],
   ["false_positive", "Mark not applicable"],
   ["reject", "Do not approve"],
-  ["escalate", "Send to CISO"],
 ] as const;
+
+function reviewJourney(item: ReviewRequest): JourneyItem[] {
+  const assigned = Boolean(item.assignee);
+  const decided = item.state !== "waiting" && item.state !== "escalated";
+  const verified = item.state === "verified";
+  return [
+    { id: "request", label: "Developer request", detail: timestamp(item.created_at), state: "complete" },
+    { id: "owner", label: "Owner", detail: item.assignee_name ?? "Unassigned", state: assigned ? "complete" : "current" },
+    { id: "review", label: "Evidence review", detail: item.state === "waiting" ? "In progress" : item.state.replaceAll("_", " "), state: decided || verified ? "complete" : assigned ? "current" : "pending" },
+    { id: "case", label: "Investigation", detail: item.escalated_case_id ? "Tracked case" : "If needed", state: item.escalated_case_id ? "current" : "pending" },
+    { id: "result", label: "Developer result", detail: verified ? "Verified" : decided ? "Recorded" : "Pending", state: verified || decided ? "complete" : "pending" },
+  ];
+}
 
 export function AnalystReviewDetail() {
   const { requestId } = useParams({ strict: false }) as { requestId: string };
+  const { hasCapability } = useIdentity();
+  const canWriteReview = hasCapability("review.write");
+  const canWriteCase = hasCapability("case.write");
   const client = useQueryClient();
   const [decision, setDecision] = useState<(typeof decisions)[number][0]>("request_changes");
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const review = useQuery({ queryKey: ["review", requestId], queryFn: () => api.review(requestId), refetchInterval: 10_000 });
-  const graph = useQuery({ queryKey: ["review", requestId, "graph"], queryFn: () => api.reviewGraph(requestId), refetchInterval: 15_000 });
+  const graph = useQuery({ queryKey: ["review", requestId, "graph"], queryFn: () => api.reviewGraph(requestId), refetchInterval: 15_000, retry: false });
   const refresh = (value?: unknown) => {
     if (value) client.setQueryData(["review", requestId], value);
+    void client.invalidateQueries({ queryKey: ["review", requestId, "graph"] });
     void client.invalidateQueries({ queryKey: ["reviews"] });
     void client.invalidateQueries({ queryKey: ["work-queue"] });
     void client.invalidateQueries({ queryKey: ["notifications"] });
+  };
+  const reload = () => {
+    assign.reset();
+    escalate.reset();
+    decide.reset();
+    setSuccess(null);
+    void review.refetch();
+    void graph.refetch();
   };
   const assign = useMutation({
     mutationFn: (input: Parameters<typeof api.assignReview>[1]) => api.assignReview(requestId, input),
@@ -40,7 +65,7 @@ export function AnalystReviewDetail() {
   });
   const escalate = useMutation({
     mutationFn: (input: Parameters<typeof api.escalateReview>[1]) => api.escalateReview(requestId, input),
-    onSuccess: (value) => { setCaseId(value.id); refresh(); setSuccess("A tracked case was created with this evidence."); },
+    onSuccess: (value) => { setCaseId(value.id); refresh(); setSuccess("A tracked case was created with this review evidence."); },
   });
   const decide = useMutation({
     mutationFn: (input: Parameters<typeof api.decideReview>[1]) => api.decideReview(requestId, input),
@@ -48,55 +73,93 @@ export function AnalystReviewDetail() {
   });
   const item = review.data;
   const terminal = item ? ["verified", "false_positive", "not_approved"].includes(item.state) : false;
+  const mutationError = assign.error ?? escalate.error ?? decide.error;
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+    <main className="workflow-page">
       <PageHeader section="Analyst / Operations" title="Developer review" meta={<Link to="/analyst/queue" className="text-accent hover:underline">Back to work</Link>} />
-      <div className="flex flex-1 flex-col gap-5 overflow-auto p-4 sm:p-6">
-        {review.isPending ? <p className="text-sm text-slate">Loading review…</p> : review.isError || !item ? <p role="alert" className="text-sm text-risk">Could not open this review.</p> : <>
-          <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
-            <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="font-mono text-[11px] uppercase tracking-widest text-slate">{item.repository_name} · {item.ecosystem}</p><h2 className="mt-1 font-serif text-2xl font-semibold text-ink">{item.package}@{item.version || "unpinned"}</h2><p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate">{item.rationale}</p></div><div className="flex flex-wrap gap-2"><ReviewStateBadge state={item.state} />{item.overdue ? <span className="rounded-full bg-risk-soft px-2.5 py-1 text-xs font-medium text-risk">Overdue</span> : null}</div></div>
-            <div className="review-context-grid mt-5"><span><small>Developer</small><strong>{item.owner_name}</strong></span><span><small>Owner</small><strong>{item.assignee_name ?? "Unassigned"}</strong></span><span><small>Due</small><strong>{item.sla_due_at ? timestamp(item.sla_due_at) : "Not set"}</strong></span><span><small>Linked code</small><strong>{item.code_entities.length}</strong></span></div>
-            {item.escalated_case_id ? <p className="mt-4 text-sm text-slate">Tracked as <Link to="/analyst/cases/$caseId" params={{ caseId: item.escalated_case_id }} className="font-medium text-accent hover:underline">case {item.escalated_case_id}</Link>.</p> : null}
-          </section>
+      <div className="workflow-scroll">
+        {review.isPending ? <StateFrame kind="loading" title="Loading developer review" detail="Reading the submitted snapshot and workflow state." /> : review.isError || !item ? <StateFrame kind="error" title="This review could not be opened" detail={review.error instanceof Error ? review.error.message : "The record is unavailable."} action={<Link to="/analyst/queue" className="workflow-secondary-action">Back to work</Link>} /> : (
+          <div className="workflow-layout">
+            <div className="workflow-main">
+              <WorkflowHero
+                eyebrow={`Analyst review · ${item.id}`}
+                title={`${item.package}@${item.version || "unpinned"}`}
+                description={item.rationale}
+                tone={item.severity === "critical" || item.severity === "high" ? "danger" : item.overdue ? "warning" : "accent"}
+                status={<ReviewStateBadge state={item.state} />}
+                meta={<><span>{item.repository_name}</span><span>{item.ecosystem}</span><span>{item.owner_name}</span><span>Version {item.version_counter}</span></>}
+              />
 
-          {!terminal ? <section className="grid gap-5 xl:grid-cols-2">
-            <div className="rounded-2xl border border-line bg-surface p-5">
-              <h2 className="font-serif text-lg font-semibold text-ink">Owner and due time</h2>
-              <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); const due = String(form.get("sla_due_at") ?? ""); assign.mutate({ expected_version: item.version_counter, assignee: String(form.get("assignee") ?? "").trim(), assignee_name: String(form.get("assignee_name") ?? "").trim(), sla_due_at: due ? dateInputToEpoch(due) : null }); }}>
-                <Field label="Owner email"><TextInput name="assignee" type="email" required defaultValue={item.assignee ?? ""} placeholder="priya@example.com" /></Field>
-                <Field label="Owner name"><TextInput name="assignee_name" required defaultValue={item.assignee_name ?? ""} /></Field>
-                <Field label="Due date"><TextInput name="sla_due_at" type="date" defaultValue={item.sla_due_at ? epochToDateInput(item.sla_due_at) : ""} /></Field>
-                <div className="flex items-end"><button className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50" type="submit" disabled={assign.isPending}>{assign.isPending ? "Saving…" : "Save owner"}</button></div>
-              </form>
+              <WorkflowSection eyebrow="Journey" title="Review path" description="Each step reflects the current server state, not a local simulation.">
+                <WorkflowJourney items={reviewJourney(item)} label="Analyst review journey" />
+              </WorkflowSection>
+
+              {item.advisories.length ? <WorkflowSection eyebrow="Package evidence" title="Published advisories" action={<span className="font-mono text-xs text-slate">{item.advisories.length}</span>}>{item.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />)}</WorkflowSection> : <WorkflowSection eyebrow="Evidence state" title="Advisory check incomplete"><p className="text-sm leading-relaxed text-slate">{item.reasons.join(" ") || "No published advisory details were returned with this review."}</p></WorkflowSection>}
+
+              <WorkflowSection eyebrow="Evidence" title="Relationship map" description="Select an entity to focus your investigation or draft a case rationale.">
+                {graph.isPending ? <StateFrame kind="loading" title="Projecting relationships" detail="The review record remains available while native evidence is prepared." /> : graph.isError ? <StateFrame kind={graph.error instanceof ApiError && graph.error.status === 404 ? "empty" : "error"} title={graph.error instanceof ApiError && graph.error.status === 404 ? "Evidence projection is pending" : "Relationship map is unavailable"} detail={graph.error instanceof Error ? graph.error.message : "Retry when the evidence service is ready."} action={<button type="button" className="workflow-secondary-action" onClick={() => void graph.refetch()}>Retry map</button>} /> : <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_230px]"><div><ReviewEvidenceGraph graph={graph.data.graph} label="Analyst review evidence graph" selectedId={selectedNode?.id} onSelect={setSelectedNode} /><p className="review-graph-note">{graph.data.note}</p></div><aside className="evidence-selection">{selectedNode ? <><p className="workflow-eyebrow">Selected {selectedNode.kind}</p><h3>{selectedNode.label}</h3><code>{selectedNode.id}</code><p>Use this selection to focus your rationale. The case itself remains bound to the submitted review snapshot.</p></> : <><p className="workflow-eyebrow">Evidence focus</p><h3>Select an entity</h3><p>The same native relations remain available as text beneath the visual field.</p></>}</aside></div>}
+              </WorkflowSection>
+
+              <WorkCollaboration kind="review" id={item.id} />
+
+              <WorkflowSection eyebrow="Audit trail" title="Decision history">
+                {item.events.length ? <ol className="workflow-list">{[...item.events].reverse().map((event) => <li key={event.id} className="workflow-list-row"><span className="workflow-update-dot" aria-hidden="true" /><span className="workflow-list-row-main"><strong>{event.action.replace("review.", "").replaceAll("_", " ")}</strong><small>{event.actor_name} · {event.rationale}</small></span><span className="font-mono text-[10px] text-slate">{timestamp(event.at)}</span></li>)}</ol> : <StateFrame kind="empty" title="No review events yet" />}
+              </WorkflowSection>
             </div>
-            <div className="rounded-2xl border border-line bg-surface p-5">
-              <h2 className="font-serif text-lg font-semibold text-ink">Create a tracked case</h2>
-              <p className="mt-1 text-sm text-slate">Use this when the review needs investigation beyond a package answer.</p>
-              {item.escalated_case_id || caseId ? <p className="mt-4 rounded-xl border border-ok bg-ok-soft px-4 py-3 text-sm text-ok"><Link to="/analyst/cases/$caseId" params={{ caseId: item.escalated_case_id ?? caseId! }} className="font-medium underline">Open the linked case</Link></p> : <form className="mt-4 grid gap-3" onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); escalate.mutate({ expected_version: item.version_counter, title: String(form.get("title") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), assignee: item.assignee, assignee_name: item.assignee_name, sla_due_at: item.sla_due_at }); }}>
-                <Field label="Case title"><TextInput name="title" required defaultValue={`${item.package} security investigation`} /></Field>
-                <Field label="Why a case is needed"><TextArea name="rationale" required maxLength={4096} defaultValue={selectedNode ? `Investigate ${selectedNode.label} and its relationship to ${item.package}.` : "The submitted evidence needs a tracked investigation."} /></Field>
-                <button className="w-fit rounded-lg border border-accent px-4 py-2 text-sm font-medium text-accent hover:bg-accent-soft" type="submit" disabled={escalate.isPending}>{escalate.isPending ? "Creating…" : "Create case"}</button>
-              </form>}
-            </div>
-          </section> : null}
 
-          {item.advisories.length ? <section className="rounded-2xl border border-line bg-surface p-5"><div className="mb-3 flex items-center justify-between"><h2 className="font-serif text-lg font-semibold text-ink">Published advisories</h2><span className="font-mono text-xs text-slate">{item.advisories.length}</span></div>{item.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />)}</section> : <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-medium text-amber-950">The advisory check was incomplete</h2><p className="mt-1 text-sm text-amber-900">{item.reasons.join(" ")}</p></section>}
+            <ResponsibilityDock
+              responsibility={terminal ? "The review is complete." : !item.assignee ? "Assign an owner before deciding." : "Resolve the Developer’s request or open a case."}
+              why={terminal ? "The recorded result is visible to the Developer and remains in the audit trail." : "Use the submitted evidence. Durable policy exceptions follow the separate CISO approval workflow."}
+              deadline={item.sla_due_at ? timestamp(item.sla_due_at) : undefined}
+              overdue={item.overdue}
+            >
+              <ConflictRecovery error={mutationError} onReload={reload} />
+              {!terminal && canWriteReview ? (
+                <details className="workflow-action-disclosure" open={!item.assignee}>
+                  <summary>Owner and due time</summary>
+                  <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); const due = String(form.get("sla_due_at") ?? ""); assign.mutate({ expected_version: item.version_counter, assignee: String(form.get("assignee") ?? "").trim(), assignee_name: String(form.get("assignee_name") ?? "").trim(), sla_due_at: due ? dateInputToEpoch(due) : null }); }}>
+                    <Field label="Owner email"><TextInput name="assignee" type="email" required defaultValue={item.assignee ?? ""} /></Field>
+                    <Field label="Owner name"><TextInput name="assignee_name" required defaultValue={item.assignee_name ?? ""} /></Field>
+                    <Field label="Due date"><TextInput name="sla_due_at" type="date" defaultValue={item.sla_due_at ? epochToDateInput(item.sla_due_at) : ""} /></Field>
+                    <button className="workflow-primary-action" type="submit" disabled={assign.isPending}>{assign.isPending ? "Saving…" : "Save owner"}</button>
+                  </form>
+                </details>
+              ) : null}
 
-          <section className="rounded-2xl border border-line bg-surface p-5"><div className="mb-3 flex items-center justify-between"><div><h2 className="font-serif text-lg font-semibold text-ink">Evidence relationship map</h2><p className="mt-1 text-sm text-slate">Select a node to focus the next note or case.</p></div><span className="font-mono text-xs text-slate">submitted snapshot</span></div>{graph.data ? <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]"><div><ReviewEvidenceGraph graph={graph.data.graph} label="Analyst review evidence graph" selectedId={selectedNode?.id} onSelect={setSelectedNode} /><p className="mt-3 text-xs leading-relaxed text-slate">{graph.data.note}</p></div><aside className="rounded-xl border border-line-2 bg-surface-2 p-4">{selectedNode ? <><span className="text-xs uppercase tracking-wider text-slate">{selectedNode.kind}</span><h3 className="mt-1 font-medium text-ink">{selectedNode.label}</h3><p className="mt-2 break-all font-mono text-[11px] text-slate">{selectedNode.id}</p><p className="mt-4 text-xs text-slate">This exact evidence node will be referenced in the case rationale when you create a case above.</p></> : <p className="text-sm text-slate">Select a package, advisory, code item, contributor, or decision.</p>}</aside></div> : <p className="text-sm text-slate">Loading map…</p>}</section>
+              {!terminal && canWriteReview ? (
+                <details className="workflow-action-disclosure" open={Boolean(item.assignee)}>
+                  <summary>Return a decision</summary>
+                  <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); decide.mutate({ expected_version: item.version_counter, decision, rationale: String(form.get("rationale") ?? "").trim(), recommended_version: decision === "request_changes" ? String(form.get("recommended_version") ?? "").trim() : null, expires_at: null }); }}>
+                    <Field label="Decision"><Select value={decision} onChange={(event) => setDecision(event.target.value as typeof decision)}>{decisions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+                    {decision === "request_changes" ? <Field label="Recommended version"><TextInput name="recommended_version" defaultValue={item.advisories.flatMap((advisory) => advisory.fixed_versions)[0] ?? ""} required placeholder="Safe version" /></Field> : null}
+                    <Field label="Message to Developer" hint="Use plain language. Explain the next action and why."><TextArea name="rationale" required maxLength={4096} /></Field>
+                    <button className="workflow-primary-action" type="submit" disabled={decide.isPending}>{decide.isPending ? "Recording…" : "Record decision"}</button>
+                  </form>
+                </details>
+              ) : null}
 
-          {!terminal ? <section className="rounded-2xl border border-line bg-surface p-5"><h2 className="font-serif text-lg font-semibold text-ink">Record a decision</h2><p className="mt-1 text-sm text-slate">Answer the Developer directly. MeshAgent keeps the decision with the submitted evidence.</p><form className="mt-5 grid gap-4 lg:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); const expires = String(form.get("expires_at") ?? ""); decide.mutate({ expected_version: item.version_counter, decision, rationale: String(form.get("rationale") ?? "").trim(), recommended_version: decision === "request_changes" ? String(form.get("recommended_version") ?? "").trim() : null, expires_at: decision === "approve_exception" && expires ? Math.floor(new Date(expires).getTime() / 1000) : null }); }}>
-            <Field label="Decision"><Select value={decision} onChange={(event) => setDecision(event.target.value as typeof decision)}>{decisions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
-            {decision === "request_changes" ? <Field label="Recommended version"><TextInput name="recommended_version" defaultValue={item.advisories.flatMap((advisory) => advisory.fixed_versions)[0] ?? ""} required placeholder="Safe version" /></Field> : null}
-            {decision === "approve_exception" ? <Field label="Expires"><TextInput type="datetime-local" name="expires_at" required /></Field> : null}
-            <div className="lg:col-span-2"><Field label="Message to Developer" hint="Use plain language. Explain the next action and why."><TextArea name="rationale" required maxLength={4096} /></Field></div>
-            <div className="flex items-center gap-3 lg:col-span-2"><button className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50" type="submit" disabled={decide.isPending}>{decide.isPending ? "Saving…" : "Record decision"}</button><span className="text-xs text-slate">Version {item.version_counter}</span></div>
-          </form></section> : null}
+              {!terminal && canWriteCase ? (
+                <details className="workflow-action-disclosure">
+                  <summary>{item.escalated_case_id || caseId ? "Linked investigation" : "Create a tracked case"}</summary>
+                  {item.escalated_case_id || caseId ? <Link to="/analyst/cases/$caseId" params={{ caseId: item.escalated_case_id ?? caseId! }} className="workflow-primary-action">Open linked case</Link> : <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); escalate.mutate({ expected_version: item.version_counter, title: String(form.get("title") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), assignee: item.assignee, assignee_name: item.assignee_name, sla_due_at: item.sla_due_at }); }}>
+                    <Field label="Case title"><TextInput name="title" required defaultValue={`${item.package} security investigation`} /></Field>
+                    <Field label="Why a case is needed"><TextArea name="rationale" required maxLength={4096} defaultValue={selectedNode ? `Investigate ${selectedNode.label} (${selectedNode.id}) and its relationship to ${item.package}.` : "The submitted evidence needs a tracked investigation."} /></Field>
+                    <button className="workflow-primary-action" type="submit" disabled={escalate.isPending}>{escalate.isPending ? "Creating…" : "Create case"}</button>
+                  </form>}
+                </details>
+              ) : null}
 
-          <MutationMessage error={assign.error ?? escalate.error ?? decide.error} success={success} />
-          <WorkCollaboration kind="review" id={item.id} />
-          <section className="rounded-2xl border border-line bg-surface p-5"><h2 className="font-serif text-lg font-semibold text-ink">Decision history</h2><div className="mt-3">{item.events.map((event) => <div key={event.id} className="border-b border-line py-3 last:border-0"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm text-ink">{event.action.replace("review.", "").replaceAll("_", " ")}</strong><span className="text-xs text-slate">{event.actor_name} · {timestamp(event.at)}</span></div><p className="mt-1 text-sm text-slate">{event.rationale}</p></div>)}</div></section>
-        </>}
+              {!canWriteReview && !canWriteCase ? <p className="text-xs leading-relaxed text-slate">Your current capabilities allow evidence review but no workflow changes.</p> : null}
+              {!isVersionConflict(mutationError) ? <MutationMessage error={mutationError} success={success} /> : success ? <MutationMessage error={null} success={success} /> : null}
+              <div className="grid gap-2">
+                <IntegrityRef label="Review" value={item.id} />
+                <IntegrityRef label="Evidence root" value={item.evidence_root_ulid} />
+                <IntegrityRef label="Evidence digest" value={item.evidence_digest} />
+              </div>
+            </ResponsibilityDock>
+          </div>
+        )}
       </div>
     </main>
   );

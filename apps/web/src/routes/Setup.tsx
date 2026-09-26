@@ -435,7 +435,7 @@ function OptIn({
             className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
           />
           <label htmlFor="gate" className="text-[13px] leading-snug text-ink">
-            Let MeshAgent refuse an install
+            Let meshAgent refuse an install
             <span className="block text-[12.5px] text-slate">
               With this off the hooks still record everything and never block
               the agent. Observing and refusing are different asks, and a team
@@ -462,7 +462,7 @@ function OptIn({
         <p className="text-[12.5px] leading-snug text-slate">
           At the root of <span className="font-medium">the repository you want
           recorded</span> — the one you will be working in — not at the root of
-          the MeshAgent checkout.
+          the meshAgent checkout.
         </p>
       </Block>
     </Section>

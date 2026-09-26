@@ -38,7 +38,7 @@ export function DeveloperSessionEvidence() {
         <header className="dev-panel-heading"><h2>Evidence</h2>{session.run_id ? <Link to="/runs/$runId/memory" params={{ runId: session.run_id }} className="dev-action">Open provenance <DevIcon name="external" size={15} /></Link> : null}</header>
         {activity.isPending ? <EmptyVisual icon="live" title="Loading" /> : events.length ? (
           <div>
-            <div className="dev-compact-row"><DevIcon name="activity" /><span className="dev-compact-row-main"><strong>{events.length} events</strong><small>Ordered by MeshAgent sequence</small></span><Status label="Stored" tone="success" /></div>
+            <div className="dev-compact-row"><DevIcon name="activity" /><span className="dev-compact-row-main"><strong>{events.length} events</strong><small>Ordered by meshAgent sequence</small></span><Status label="Stored" tone="success" /></div>
             <div className="dev-compact-row"><DevIcon name="evidence" /><span className="dev-compact-row-main"><strong>{summary.projected} recorded</strong><small>{summary.pending ? `${summary.pending} syncing` : "Evidence is current"}</small></span><Status label={evidence.label} tone={evidence.tone} /></div>
             <div className="dev-compact-row"><DevIcon name="file" /><span className="dev-compact-row-main"><strong>{files} files</strong><small>{tools} tool events · {packages} packages</small></span></div>
             {events.filter((event) => event.projection_status !== "projected").slice(0, 8).map((event) => {

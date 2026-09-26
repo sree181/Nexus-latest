@@ -130,7 +130,7 @@ function ReferenceBuildNotice({ task }: { task: string }) {
     <div className="flex shrink-0 items-start gap-3 border-b border-warn bg-warn-soft px-6 py-3">
       <Badge tone="warn">reference build</Badge>
       <p className="text-[12.5px] leading-snug text-ink">
-        No model is configured, so MeshAgent did not carry out{" "}
+        No model is configured, so meshAgent did not carry out{" "}
         <span className="font-medium">“{task}”</span>. The memory below is its
         reference shard-loader build, recorded so there is something real to
         govern. Every record went through the write gate and every finding,
