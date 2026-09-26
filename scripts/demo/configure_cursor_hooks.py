@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Install MeshAgent's Cursor recorder into one opted-in Git repository.
+"""Install meshAgent's Cursor recorder into one opted-in Git repository.
 
 The configurator is deliberately local and conservative: it preserves existing
 Cursor hook entries, backs up hooks.json before changing it, refuses to override
-an explicit repository opt-out, and pins the hook wrapper to a chosen Python
-interpreter containing meshagent_cli.
+an explicit repository opt-out, and pins the hook wrapper either to the Stage 1A
+native IPC client or a chosen Python interpreter containing meshagent_cli.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 import shlex
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -73,13 +72,26 @@ def load_json(path: Path) -> dict:
     return value
 
 
-def atomic_json(path: Path, value: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def require_repository_path(repository: Path, path: Path) -> None:
+    try:
+        path.relative_to(repository)
+    except ValueError:
+        fail(f"refusing path outside repository: {path}")
+    current = path
+    while current != repository:
+        if current.is_symlink():
+            fail(f"refusing symlink in managed repository path: {current}")
+        current = current.parent
+
+
+def atomic_text(path: Path, content: str, mode: int = 0o600) -> None:
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
+        fchmod = getattr(os, "fchmod", None)
+        if fchmod is not None:
+            fchmod(fd, mode)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, indent=2)
-            handle.write("\n")
+            handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_name, path)
@@ -88,6 +100,11 @@ def atomic_json(path: Path, value: dict) -> None:
             os.unlink(temp_name)
         except FileNotFoundError:
             pass
+
+
+def atomic_json(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_text(path, json.dumps(value, indent=2) + "\n")
 
 
 def ensure_runtime(python: Path) -> None:
@@ -106,7 +123,26 @@ def ensure_runtime(python: Path) -> None:
         )
 
 
-def merge_hooks(path: Path) -> tuple[bool, Path | None]:
+def configured_events(native: bool, platform: str | None = None) -> dict[str, dict[str, object]]:
+    configured = {event: dict(entry) for event, entry in EVENTS.items()}
+    platform = platform or os.name
+    command = (
+        r".\.meshagent\run_cursor_hook.cmd"
+        if platform == "nt"
+        else "./.meshagent/run_cursor_hook.sh"
+    )
+    for entry in configured.values():
+        entry["command"] = command
+        if native:
+            entry["timeout"] = 3
+    if native:
+        configured["beforeShellExecution"]["timeout"] = 6
+    return configured
+
+
+def merge_hooks(
+    path: Path, wanted_events: dict[str, dict[str, object]] = EVENTS
+) -> tuple[bool, Path | None]:
     if path.exists():
         document = load_json(path)
     else:
@@ -122,39 +158,35 @@ def merge_hooks(path: Path) -> tuple[bool, Path | None]:
         fail(f"{path}: hooks must be a JSON object")
 
     changed = not path.exists()
-    for event, wanted in EVENTS.items():
+    for event, wanted in wanted_events.items():
         entries = hooks.setdefault(event, [])
         if not isinstance(entries, list):
             fail(f"{path}: hooks.{event} must be an array")
 
-        retained = [
-            entry
-            for entry in entries
-            if not (
-                isinstance(entry, dict)
-                and entry.get("type") == "command"
-                and isinstance(entry.get("command"), str)
-                and entry.get("command") != wanted["command"]
-                and (
-                    "meshagent_hook.py" in entry["command"]
-                    or ".meshagent/cursor_hook.py" in entry["command"]
-                    or "run_cursor_hook.sh" in entry["command"]
-                )
-            )
-        ]
+        retained: list[object] = []
+        inserted = False
+        for entry in entries:
+            command = entry.get("command") if isinstance(entry, dict) else None
+            is_command = isinstance(entry, dict) and entry.get("type") == "command"
+            if is_command and isinstance(command, str):
+                if command == wanted["command"]:
+                    if not inserted:
+                        retained.append(dict(wanted))
+                        inserted = True
+                    continue
+                if (
+                    "meshagent_hook.py" in command
+                    or ".meshagent/cursor_hook.py" in command
+                    or "run_cursor_hook.sh" in command
+                    or "run_cursor_hook.cmd" in command
+                ):
+                    continue
+            retained.append(entry)
+        if not inserted:
+            retained.append(dict(wanted))
         if retained != entries:
-            hooks[event] = entries = retained
+            hooks[event] = retained
             changed = True
-
-        if any(
-            isinstance(entry, dict)
-            and entry.get("type") == "command"
-            and entry.get("command") == wanted["command"]
-            for entry in entries
-        ):
-            continue
-        entries.append(dict(wanted))
-        changed = True
 
     backup: Path | None = None
     if changed and path.exists():
@@ -167,6 +199,7 @@ def merge_hooks(path: Path) -> tuple[bool, Path | None]:
 
 def append_local_excludes(repository: Path) -> None:
     exclude = repository / ".git" / "info" / "exclude"
+    require_repository_path(repository, exclude)
     if not exclude.parent.is_dir():
         fail("--local-exclude requires a normal Git worktree with .git/info")
     existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
@@ -180,6 +213,25 @@ def append_local_excludes(repository: Path) -> None:
                 handle.write(f"{item}\n")
 
 
+def require_native_daemon(native_hook: Path) -> None:
+    health = subprocess.run(
+        [str(native_hook), "--health"],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=3,
+    )
+    try:
+        health_body = json.loads(health.stdout)
+    except json.JSONDecodeError:
+        health_body = {}
+    if health.returncode or health_body.get("status") != "ok":
+        fail(
+            "native recorder is not reachable; start meshagent-recorder "
+            "before configuring Cursor"
+        )
+
+
 def smoke(repository: Path, wrapper: Path) -> None:
     payload = {
         "hook_event_name": "beforeShellExecution",
@@ -187,8 +239,11 @@ def smoke(repository: Path, wrapper: Path) -> None:
         "cwd": str(repository),
         "command": "echo hook-ready",
     }
+    command = [str(wrapper)]
+    if os.name == "nt":
+        command = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", str(wrapper)]
     result = subprocess.run(
-        [str(wrapper)],
+        command,
         cwd=repository,
         input=json.dumps(payload),
         text=True,
@@ -224,6 +279,13 @@ def main() -> int:
         help="Python interpreter containing meshagent_cli",
     )
     parser.add_argument(
+        "--native-hook",
+        help=(
+            "absolute path to the installed Stage 1A meshagent-hook binary; "
+            "uses local IPC instead of copying the Python hook"
+        ),
+    )
+    parser.add_argument(
         "--local-exclude",
         action="store_true",
         help="exclude generated hook/config paths through .git/info/exclude",
@@ -238,33 +300,29 @@ def main() -> int:
 
     release_root = Path(__file__).resolve().parents[2]
     source_hook = release_root / "adapters/cursor/meshagent_hook.py"
-    if not source_hook.is_file():
-        fail(f"release hook is missing: {source_hook}")
-
-    # Keep the venv path itself: resolving its `python` symlink would bypass the
-    # environment and lose the installed meshagent_cli package.
-    python = Path(os.path.abspath(Path(args.python).expanduser()))
-    ensure_runtime(python)
+    native_hook = (
+        Path(os.path.abspath(Path(args.native_hook).expanduser()))
+        if args.native_hook
+        else None
+    )
+    if native_hook is not None:
+        if not native_hook.is_file() or not os.access(native_hook, os.X_OK):
+            fail(f"native hook is not executable: {native_hook}")
+        require_native_daemon(native_hook)
+        python = None
+    else:
+        if not source_hook.is_file():
+            fail(f"release hook is missing: {source_hook}")
+        # Keep the venv path itself: resolving its `python` symlink would bypass
+        # the environment and lose the installed meshagent_cli package.
+        python = Path(os.path.abspath(Path(args.python).expanduser()))
+        ensure_runtime(python)
 
     local_dir = repository / ".meshagent"
     cursor_dir = repository / ".cursor"
-    local_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    cursor_dir.mkdir(parents=True, exist_ok=True)
-
-    target_hook = local_dir / "cursor_hook.py"
-    shutil.copy2(source_hook, target_hook)
-
-    wrapper = local_dir / "run_cursor_hook.sh"
-    wrapper.write_text(
-        "#!/bin/sh\n"
-        "set -eu\n"
-        f"PYTHON={shlex.quote(str(python))}\n"
-        "exec \"$PYTHON\" \"$(dirname \"$0\")/cursor_hook.py\"\n",
-        encoding="utf-8",
-    )
-    wrapper.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
     opt_in = repository / ".meshagent.json"
+    for managed_path in (local_dir, cursor_dir, opt_in, cursor_dir / "hooks.json"):
+        require_repository_path(repository, managed_path)
     if opt_in.exists():
         current = load_json(opt_in)
         if current.get("record") is not True:
@@ -272,22 +330,63 @@ def main() -> int:
                 f"{opt_in} does not explicitly set record=true; refusing to "
                 "override the repository's privacy choice"
             )
+
+    local_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    cursor_dir.mkdir(parents=True, exist_ok=True)
+
+    wrapper = local_dir / ("run_cursor_hook.cmd" if os.name == "nt" else "run_cursor_hook.sh")
+    require_repository_path(repository, wrapper)
+    if native_hook is not None:
+        if os.name == "nt":
+            atomic_text(wrapper, f'@echo off\r\n"{native_hook}"\r\n', 0o700)
+        else:
+            atomic_text(
+                wrapper,
+                "#!/bin/sh\n"
+                "set -eu\n"
+                f"exec {shlex.quote(str(native_hook))}\n",
+                0o700,
+            )
     else:
+        target_hook = local_dir / "cursor_hook.py"
+        require_repository_path(repository, target_hook)
+        atomic_text(target_hook, source_hook.read_text(encoding="utf-8"))
+        if os.name == "nt":
+            atomic_text(wrapper, f'@echo off\r\n"{python}" "%~dp0cursor_hook.py"\r\n', 0o700)
+        else:
+            atomic_text(
+                wrapper,
+                "#!/bin/sh\n"
+                "set -eu\n"
+                f"PYTHON={shlex.quote(str(python))}\n"
+                "exec \"$PYTHON\" \"$(dirname \"$0\")/cursor_hook.py\"\n",
+                0o700,
+            )
+
+    if not opt_in.exists():
         atomic_json(opt_in, DEFAULT_OPT_IN)
 
-    changed, backup = merge_hooks(cursor_dir / "hooks.json")
+    changed, backup = merge_hooks(
+        cursor_dir / "hooks.json", configured_events(native_hook is not None)
+    )
     if args.local_exclude:
         append_local_excludes(repository)
 
     smoke(repository, wrapper)
 
     print(f"Repository: {repository}")
-    print(f"Python: {python}")
+    print(
+        f"Recorder mode: native IPC ({native_hook})"
+        if native_hook
+        else f"Recorder mode: Python compatibility ({python})"
+    )
     print(f"Repository opt-in: {opt_in}")
     print(f"Cursor hooks: {cursor_dir / 'hooks.json'}")
     print("Hook entries: " + ("updated" if changed else "already current"))
     if backup:
         print(f"Previous hooks backup: {backup}")
+    if native_hook:
+        print("Native daemon: connected")
     print("Smoke: harmless beforeShellExecution returned allow")
     print("Next: fully quit Cursor, reopen this repository root, and start a new conversation.")
     return 0

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "type": "command",
+        "command": "meshagent-hook",
+        "timeout": 3
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "type": "command",
+        "command": "meshagent-hook",
+        "timeout": 3
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "type": "command",
+        "command": "meshagent-hook",
+        "timeout": 6,
+        "failClosed": false
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "type": "command",
+        "command": "meshagent-hook",
+        "timeout": 3
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "command": "meshagent-hook",
+        "timeout": 3
+      }
+    ]
+  }
+}

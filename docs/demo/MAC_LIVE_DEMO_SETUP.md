@@ -50,7 +50,7 @@ Run the packaged read-only preflight at any time:
 scripts/demo/verify-live-demo.sh http://localhost:8080
 ```
 
-## 4. Install and pair the recorder
+## 4. Install, pair, and start the native recorder
 
 Install the CLI in a dedicated virtual environment so the Cursor hook can import its shared protocol and state modules.
 
@@ -73,6 +73,23 @@ meshagent doctor
 
 `meshagent doctor` must report a durable EngineGateway and no local permission or queue failures.
 
+Build the Stage 1A native binaries and register the per-user LaunchAgent:
+
+```bash
+# Fully quit Cursor first. Preserve and deliver every legacy Python batch.
+meshagent replay --json
+# Continue only when the result reports: "retained": 0
+
+deactivate 2>/dev/null || true
+scripts/recorder/install-dev.sh
+"$HOME/.local/bin/meshagent-recorder" status | python3 -m json.tool
+```
+
+The status output must show the configured API origin, `credentials.device: true`,
+and an empty queue. This development installer uses a private file-protected
+queue key. Enterprise signing, notarization, MDM distribution, and OS-keystore
+binding are deliberately reserved for Stage 1B.
+
 ## 5. Connect a real GitHub repository to Cursor
 
 Use a repository that you are allowed to modify. A small private demonstration repository is safer than a production repository.
@@ -86,13 +103,17 @@ git switch -c meshagent-live-demo
 
 ### Preferred: configure the repository in one command
 
-Run the release configurator from the MeshAgent clone. It validates the dedicated Python runtime, copies the hook, creates the repository opt-in, merges all five MeshAgent entries without removing existing Cursor hooks, backs up an existing `hooks.json` before changing it, and runs a harmless permission-hook smoke test:
+Run the release configurator from the meshAgent clone. In native mode it pins a
+small hook wrapper to the installed IPC client, creates the repository opt-in,
+merges all five meshAgent entries without removing existing Cursor hooks, backs
+up an existing `hooks.json`, and runs a harmless permission-hook smoke test:
 
 ```bash
 cd "$HOME/Documents/YOUR_DEMO_REPOSITORY"
 export MESHAGENT_HOME="$HOME/Documents/meshagent"
 "$MESHAGENT_HOME/scripts/demo/configure_cursor_hooks.py" \
   "$PWD" \
+  --native-hook "$HOME/.local/bin/meshagent-hook" \
   --local-exclude
 ```
 
@@ -100,9 +121,12 @@ export MESHAGENT_HOME="$HOME/Documents/meshagent"
 
 On success, skip to the validation commands below and then fully restart Cursor.
 
-### Manual equivalent
+### Python compatibility fallback
 
-Copy the installed hook script into the demonstration repository. `MESHAGENT_HOME` is the local MeshAgent clone from section 3. Use the wrapper below so Cursor always runs the hook with the dedicated MeshAgent virtual environment, even when Cursor is launched from Finder and does not inherit an activated Terminal environment.
+If the Stage 1A native daemon is not available, copy the Python hook into the
+demonstration repository. `MESHAGENT_HOME` is the local meshAgent clone from
+section 3. Use the wrapper below so Cursor always runs the hook with the
+dedicated virtual environment, even when Cursor is launched from Finder.
 
 ```bash
 export MESHAGENT_HOME="$HOME/path/to/meshagent"

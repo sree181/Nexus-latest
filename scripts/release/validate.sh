@@ -27,6 +27,18 @@ PYTHONPATH="$ROOT/services/api:$ROOT/services/engine" \
   "$VENV/bin/python" -m pytest -q services/api/tests
 make -C services/engine/hypermesh_core clean native-test
 
+command -v go >/dev/null 2>&1 || {
+  echo "Go 1.25.13+ is required for the native recorder release gate." >&2
+  exit 1
+}
+(
+  cd "$ROOT/recorder"
+  go test -race ./...
+  go vet ./...
+  GOTOOLCHAIN=go1.25.13 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+  go build ./cmd/meshagent-recorder ./cmd/meshagent-hook
+)
+
 if [ "${SKIP_CONTAINERS:-0}" = "1" ]; then
   echo "Container validation skipped because SKIP_CONTAINERS=1."
   exit 0
