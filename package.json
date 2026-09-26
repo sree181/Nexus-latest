@@ -18,5 +18,10 @@
     "test:recorder": "cd recorder && go test -race ./... && go vet ./...",
     "build:recorder": "cd recorder && go build ./cmd/meshagent-recorder ./cmd/meshagent-hook",
     "validate:release": "sh scripts/release/validate.sh"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "6.4.3"
+    }
   }
 }
