@@ -11,14 +11,102 @@ import {
   FigmaJourney,
   FigmaMobileDock,
   FigmaResponsibilityDock,
+  type EvidenceLens,
   type FigmaJourneyStage,
 } from "../components/FigmaWorkflowV3";
 import { StateFrame } from "../components/WorkflowVisual";
-import { ApiError, api, type AttentionItem, type ReviewKind } from "../lib/api";
+import {
+  ApiError,
+  api,
+  type AttentionEvidenceAnswer,
+  type AttentionEvidenceQuestion,
+  type AttentionItem,
+  type ReviewKind,
+} from "../lib/api";
 import { relativeTimeMs } from "../lib/format";
 
 type Filter = "open" | "blocked" | "unknown" | "sent" | "all";
 type RequestStep = 1 | 2 | 3;
+
+const evidenceQuestions: Array<{
+  id: AttentionEvidenceQuestion;
+  label: string;
+  lens: EvidenceLens;
+}> = [
+  { id: "why_blocked", label: "Why was this blocked?", lens: "why" },
+  { id: "affected_code", label: "What code is affected?", lens: "affected" },
+  { id: "outcome_change", label: "What changes the outcome?", lens: "outcome" },
+];
+
+function EvidenceAnswerPanel({
+  answer,
+  question,
+  setQuestion,
+  packageName,
+  mobile = false,
+}: {
+  answer: AttentionEvidenceAnswer;
+  question: AttentionEvidenceQuestion;
+  setQuestion: (question: AttentionEvidenceQuestion) => void;
+  packageName: string;
+  mobile?: boolean;
+}) {
+  const selectedQuestion = evidenceQuestions.find((item) => item.id === question)!;
+  return (
+    <div className={`figma3-answer ${mobile ? "is-mobile" : ""}`}>
+      <div className="figma3-server-questions" role="tablist" aria-label="Evidence question">
+        {evidenceQuestions.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={question === item.id}
+            onClick={() => setQuestion(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <section className={`figma3-answer-summary is-${answer.status}`} aria-live="polite">
+        <div>
+          <span>{answer.status}</span>
+          <h2>{answer.headline}</h2>
+        </div>
+        {answer.statements.length ? (
+          <ul>
+            {answer.statements.slice(0, 3).map((statement) => (
+              <li key={`${statement.text}-${statement.relation_ids.join("-")}`}>{statement.text}</li>
+            ))}
+          </ul>
+        ) : <p>No supporting statement was recorded for this question.</p>}
+        {answer.statements.length > 3 ? (
+          <details className="figma3-answer-more">
+            <summary>More recorded statements ({answer.statements.length - 3})</summary>
+            <ul>
+              {answer.statements.slice(3).map((statement) => (
+                <li key={`${statement.text}-${statement.relation_ids.join("-")}`}>{statement.text}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </section>
+      <FigmaEvidenceGraph
+        graph={answer.graph}
+        label={`${selectedQuestion.label} · ${packageName}`}
+        lens={selectedQuestion.lens}
+        showQuestions={false}
+        height={200}
+        mobileEvidenceOnly={mobile}
+      />
+      {answer.limitations.length ? (
+        <details className="figma3-answer-limitations">
+          <summary>Evidence boundary</summary>
+          <ul>{answer.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
 
 export function filterAttention(items: AttentionItem[], filter: Filter): AttentionItem[] {
   if (filter === "open") return items.filter((item) => !item.review_status || !["verified", "false_positive", "not_approved"].includes(item.review_status));
@@ -236,6 +324,7 @@ export function DeveloperAttention() {
   const project = useDeveloperProject();
   const [filter, setFilter] = useState<Filter>("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [evidenceQuestion, setEvidenceQuestion] = useState<AttentionEvidenceQuestion>("why_blocked");
   const [requestOpen, setRequestOpen] = useState(false);
   const attention = useQuery({ queryKey: ["developer-attention"], queryFn: () => api.developerAttention(500), refetchInterval: 8_000 });
   const scopedItems = useMemo(() => project.projectId === "all" ? attention.data?.items ?? [] : (attention.data?.items ?? []).filter((item) => item.repository_id === project.projectId), [attention.data?.items, project.projectId]);
@@ -250,15 +339,19 @@ export function DeveloperAttention() {
   }, [items, selectedId]);
 
   const selected = selectedId ? items.find((item) => item.id === selectedId) ?? null : null;
-  const graph = useQuery({
-    queryKey: ["attention", selected?.id ?? "none", "run-graph", selected?.run_id ?? "none"],
-    queryFn: () => api.runGraph(selected!.run_id!),
-    enabled: Boolean(selected?.run_id),
+  const evidence = useQuery({
+    queryKey: ["developer-attention", selected?.id ?? "none", "evidence"],
+    queryFn: () => api.developerAttentionEvidence(selected!.id),
+    enabled: Boolean(selected),
     retry: false,
     refetchInterval: 15_000,
   });
+  const answer = evidence.data?.[evidenceQuestion];
 
-  const select = (id: string) => setSelectedId(id);
+  const select = (id: string) => {
+    setSelectedId(id);
+    setEvidenceQuestion("why_blocked");
+  };
   const primaryAction = selected?.review_request_id ? (
     <Link to="/developer/reviews/$requestId" params={{ requestId: selected.review_request_id }} className="figma3-primary">Open Security review <DevIcon name="arrow" size={15} /></Link>
   ) : selected?.suggested_version ? (
@@ -275,8 +368,8 @@ export function DeveloperAttention() {
       <section className="figma3-journey-card"><p className="figma3-kicker">Workflow</p><FigmaJourney current={currentJourneyStage(selected)} label="Attention item journey" /></section>
       <section className="figma3-evidence-path"><p className="figma3-kicker">Evidence path</p><EvidencePath item={selected} /></section>
       <section className="figma3-evidence-section">
-        <p className="figma3-kicker">Evidence graph</p>
-        {!selected.run_id ? <StateFrame kind="empty" title="No native graph for this check" detail="The package facts remain available in the recorded evidence." /> : graph.isPending ? <StateFrame kind="loading" title="Loading native evidence" detail="Reading the run projection." /> : graph.isError ? <StateFrame kind="error" title={graph.error instanceof ApiError && graph.error.status === 404 ? "Evidence projection is pending" : "Evidence could not be loaded"} detail="The recorded package facts remain available." action={<button type="button" onClick={() => void graph.refetch()}>Try again</button>} /> : graph.data ? <FigmaEvidenceGraph graph={graph.data} label={`Evidence for ${selected.package}`} height={200} /> : <StateFrame kind="empty" title="No native evidence is available" />}
+        <p className="figma3-kicker">Evidence answers</p>
+        {evidence.isPending ? <StateFrame kind="loading" title="Loading scoped evidence" detail="Resolving this policy evaluation against its native HyperMesh relations." /> : evidence.isError ? <StateFrame kind="error" title={evidence.error instanceof ApiError && evidence.error.status === 404 ? "Evidence projection is pending" : "Evidence could not be loaded"} detail="No run-wide graph is substituted because it could imply relationships that were not recorded for this item." action={<button type="button" onClick={() => void evidence.refetch()}>Try again</button>} /> : answer ? <EvidenceAnswerPanel answer={answer} question={evidenceQuestion} setQuestion={setEvidenceQuestion} packageName={selected.package} /> : <StateFrame kind="empty" title="No scoped evidence is available" />}
       </section>
       <RemediationSignal item={selected} />
       <MoreItems items={items} selectedId={selectedId} filter={filter} setFilter={setFilter} select={select} selected={selected} />
@@ -311,7 +404,7 @@ export function DeveloperAttention() {
               <p className="figma3-attention-lede">{conciseDescription(selected)}</p>
               <div className="figma3-mobile-summary-card"><RemediationSignal item={selected} /></div>
               <section className="figma3-mobile-journey"><p className="figma3-kicker">Journey</p><FigmaJourney current={currentJourneyStage(selected)} vertical label="Attention item journey" /></section>
-              {graph.data ? <FigmaEvidenceGraph graph={graph.data} label={`Evidence for ${selected.package}`} mobileEvidenceOnly /> : <StateFrame kind={graph.isPending ? "loading" : "empty"} title={graph.isPending ? "Loading evidence" : "Evidence trail unavailable"} />}
+              {evidence.isError ? <StateFrame kind="error" title="Evidence could not be loaded" detail="The Attention record remains available while the scoped evidence request is retried." action={<button type="button" onClick={() => void evidence.refetch()}>Try again</button>} /> : answer ? <EvidenceAnswerPanel answer={answer} question={evidenceQuestion} setQuestion={setEvidenceQuestion} packageName={selected.package} mobile /> : <StateFrame kind={evidence.isPending ? "loading" : "empty"} title={evidence.isPending ? "Loading scoped evidence" : "Evidence trail unavailable"} />}
               <MoreItems items={items} selectedId={selectedId} filter={filter} setFilter={setFilter} select={select} selected={selected} />
             </>
           ) : mainContent}

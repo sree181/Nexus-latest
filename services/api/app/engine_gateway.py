@@ -366,6 +366,137 @@ class EngineGateway(Gateway):
         return payload
 
     @_serialized
+    def policy_evaluation_evidence_graph(
+        self, run_id: str, evaluation_id: str,
+    ) -> GraphPayload:
+        """Return current native evidence scoped to one policy evaluation.
+
+        The policy record is the root. Advisory and review records are selected
+        by their exact persisted subjects; source-code relations are selected
+        only when their native member set includes the evaluated package. No
+        label, edge, or relation from another package evaluation is admitted.
+        """
+        store = self._run(run_id).store
+        policy_subject = f"policy:{evaluation_id}"
+        roots = [
+            ulid for ulid in store.find_by_subject(policy_subject)
+            if (record := store.get(ulid)) is not None
+            and not record.tombstoned
+            and _ctype(record) == "policy_evaluation"
+        ]
+        if not roots:
+            raise NotFound(
+                f"native policy-evaluation evidence unavailable for {evaluation_id}"
+            )
+
+        root_records = [store.get(ulid) for ulid in roots]
+        root_records = [record for record in root_records if record is not None]
+        policy_content = dict(root_records[-1].content or {})
+        package = str(policy_content.get("package") or "")
+        package_subject = f"pkg:{package}"
+        advisory_subjects = {
+            f"cve:{value}"
+            for value in policy_content.get("advisory_ids") or []
+        }
+
+        selected: set[str] = set()
+
+        def collect(node: dict[str, Any]) -> None:
+            ulid = str(node["ulid"])
+            if ulid in selected:
+                return
+            record = store.get(ulid)
+            if record is None or record.tombstoned:
+                return
+            selected.add(ulid)
+            for parent in node.get("parents") or []:
+                collect(parent)
+
+        for root in roots:
+            collect(store.why(root, max_depth=8))
+
+        code_relation_kinds = {"module_import", "invocation", "class"}
+        if package:
+            for ulid in store.find_by_subject(package_subject):
+                record = store.get(ulid)
+                if (
+                    record is not None and not record.tombstoned
+                    and _ctype(record) in code_relation_kinds
+                ):
+                    selected.add(ulid)
+
+        for subject in advisory_subjects:
+            for ulid in store.find_by_subject(subject):
+                record = store.get(ulid)
+                if (
+                    record is not None and not record.tombstoned
+                    and _ctype(record) == "cve"
+                ):
+                    selected.add(ulid)
+
+        for ulid in store.find_by_subject(policy_subject):
+            record = store.get(ulid)
+            if (
+                record is not None and not record.tombstoned
+                and _ctype(record) == "review_event"
+            ):
+                collect(store.why(ulid, max_depth=12))
+
+        records = [store.get(ulid) for ulid in sorted(selected)]
+        records = [
+            record for record in records
+            if record is not None and not record.tombstoned
+        ]
+        members = {
+            member for record in records
+            for member in (_members(store, record.ulid) or [])
+        }
+
+        full = _export_to_payload(self._export_graph(store))
+        nodes = {node.id: node for node in full.nodes if node.id in members}
+        for member in sorted(members):
+            if member not in nodes:
+                kind = engine_seed.entity_kind(member)
+                nodes[member] = GraphNode(
+                    id=member,
+                    kind=kind if kind in _ALLOWED_KINDS else "other",
+                    label=_label(member),
+                )
+
+        edges = [
+            edge for edge in full.edges
+            if edge.source in members and edge.target in members
+        ]
+        existing_pairs = {(edge.source, edge.target) for edge in edges}
+        for record in records:
+            relation_members = _members(store, record.ulid) or []
+            if len(relation_members) < 2:
+                continue
+            anchor = relation_members[0]
+            for index, member in enumerate(relation_members[1:]):
+                if (anchor, member) in existing_pairs or (member, anchor) in existing_pairs:
+                    continue
+                edges.append(GraphEdge(
+                    id=f"{record.ulid}:member:{index}", source=anchor,
+                    target=member, rel=_ctype(record) or "member",
+                ))
+                existing_pairs.add((anchor, member))
+
+        relations = [
+            Relation(
+                id=record.ulid,
+                kind=_ctype(record) or "memory",
+                members=_members(store, record.ulid) or [],
+                label=_detail(record),
+                tombstoned=False,
+            )
+            for record in records
+        ]
+        return GraphPayload(
+            nodes=list(nodes.values()), edges=edges, relations=relations,
+        )
+
+    @_serialized
     def project_policy_evaluation(
         self, run_id: str, *, event_id: str, session_id: str,
         repository_id: str, evaluation: dict,
@@ -1983,6 +2114,14 @@ def _detail(rec: Any) -> str:
     if ctype == "module":
         lines = len((c.get("code") or "").strip().splitlines())
         return f"{c.get('name')} · {lines} line{'' if lines == 1 else 's'}"
+    if ctype == "module_import":
+        packages = ", ".join(c.get("packages") or []) or "no packages"
+        return f"{c.get('module')} imports {packages}"
+    if ctype == "invocation":
+        return (
+            f"{c.get('function')} invokes {c.get('api')} "
+            f"through {c.get('package')}"
+        )
     if ctype == "class":
         pkgs = ", ".join(c.get("packages") or []) or "no packages"
         return f"class {c.get('name')} ({pkgs})"
@@ -1994,6 +2133,16 @@ def _detail(rec: Any) -> str:
         return f"{c.get('package')}@{c.get('version')} · {c.get('license')}"
     if ctype == "cve":
         return f"{c.get('id')} {c.get('severity')}: {c.get('summary')}"
+    if ctype == "policy_evaluation":
+        coordinate = str(c.get("package") or "package")
+        if c.get("version"):
+            coordinate += f"@{c['version']}"
+        policy = f" under {c['policy']}" if c.get("policy") else ""
+        return f"{c.get('verdict') or 'unknown'} · {coordinate}{policy}"
+    if ctype == "review_event":
+        action = str(c.get("action") or "review event").replace("_", " ")
+        state = f" → {c['to_state']}" if c.get("to_state") else ""
+        return f"{action}{state}"
     if ctype == "taint":
         rule = f" · {c['rule']}" if c.get("rule") else ""
         return f"{c.get('entry')} reaches {c.get('sink')}{rule}"

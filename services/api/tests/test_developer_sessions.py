@@ -245,6 +245,33 @@ def test_session_list_total_is_not_truncated_by_limit(store):
     assert result.total == 3
 
 
+def test_attention_index_backfills_existing_policy_evaluations(store):
+    session, _ = store.create(
+        SessionStartRequest.model_validate(start_body()), MAYA,
+    )
+    store.ingest(
+        session.id,
+        ActivityBatchRequest.model_validate(activity_batch()),
+        MAYA,
+    )
+    evaluation = store.policy_evaluations(session.id, MAYA).evaluations[0]
+    public_id = developer_sessions.attention_id(evaluation.id)
+    with sqlite3.connect(store.path) as conn:
+        conn.execute(
+            "DELETE FROM attention_index WHERE policy_evaluation_id=?",
+            (evaluation.id,),
+        )
+
+    reopened = developer_sessions.Store(store.base)
+    resolved_session, resolved_evaluation = reopened.attention_evaluation(
+        public_id, MAYA,
+    )
+    assert resolved_session.id == session.id
+    assert resolved_evaluation.id == evaluation.id
+    with pytest.raises(developer_sessions.MissingSession):
+        reopened.attention_evaluation(public_id, OTHER)
+
+
 def test_engine_run_correlation_uses_opaque_session_id_across_repositories(
     store, tmp_path, monkeypatch,
 ):

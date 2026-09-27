@@ -212,6 +212,12 @@ def test_developer_attention_to_analyst_review_to_verified_fix(clients, monkeypa
     assert verified["state"] == "verified"
     assert verified["verification_evidence_id"].startswith("gate:")
     assert verified["events"][-1]["action"] == "review.verified"
+    final_evidence = developer.get(
+        f"/api/v1/developer/attention/{item['id']}/evidence",
+    )
+    assert final_evidence.status_code == 200, final_evidence.text
+    assert final_evidence.json()["outcome_change"]["status"] == "answered"
+    assert "verified" in final_evidence.json()["outcome_change"]["headline"]
     verified_graph = developer.get(
         f"/api/v1/developer/review-requests/{request['id']}/graph",
     ).json()["graph"]
@@ -451,3 +457,162 @@ def test_priority_four_analyst_operations_lifecycle(clients):
          "error": "unknown review request"},
     ]
     assert analyst.get(f"/api/cases/{case['id']}").json()["assignee"] == "priya@example.com"
+
+
+def test_attention_evidence_is_scoped_traceable_and_owner_only(clients):
+    developer, analyst, _, _ = clients
+    session_id, evaluation_id = create_attention(developer)
+    now = int(time.time() * 1000)
+    unrelated = developer.post(
+        f"/api/v1/developer/sessions/{session_id}/events",
+        json={"events": [
+            {
+                "event_id": "evt_otherfile000000001",
+                "source_event_id": "cursor-other-file",
+                "sequence": 4,
+                "occurred_at_ms": now,
+                "type": "file.changed",
+                "payload": {
+                    "path": "src/other.py", "operation": "update",
+                    "code": "import requests\n\ndef fetch(url):\n    return requests.get(url)\n",
+                },
+            },
+            {
+                "event_id": "evt_otherpolicy0000001",
+                "source_event_id": "cursor-other-policy",
+                "sequence": 5,
+                "occurred_at_ms": now + 1,
+                "type": "policy.evaluated",
+                "payload": {
+                    "package": "requests", "version": "2.19.0",
+                    "ecosystem": "PyPI", "verdict": "block",
+                    "worst": "critical", "policy": "block critical advisories",
+                    "reasons": ["An unrelated package is blocked."],
+                    "advisories": [{
+                        "id": "CVE-2024-9999", "severity": "critical",
+                        "summary": "Unrelated request issue.", "cwe": "CWE-79",
+                        "fixed_versions": ["2.32.0"], "references": [],
+                    }],
+                },
+            },
+        ]},
+    )
+    assert unrelated.status_code == 200, unrelated.text
+
+    items = developer.get("/api/v1/developer/attention").json()["items"]
+    item = next(value for value in items if value["policy_evaluation_id"] == evaluation_id)
+    response = developer.get(
+        f"/api/v1/developer/attention/{item['id']}/evidence",
+    )
+    assert response.status_code == 200, response.text
+    evidence = response.json()
+    assert evidence["scope"] == {
+        "attention_id": item["id"],
+        "session_id": session_id,
+        "policy_evaluation_id": evaluation_id,
+        "run_id": item["run_id"],
+        "repository_id": "repo-payments",
+        "repository_name": "payments-api",
+        "package": "httpx",
+        "version": "0.27.2",
+        "ecosystem": "PyPI",
+        "checked_at_ms": item["checked_at_ms"],
+        "review_request_id": None,
+        "review_status": None,
+    }
+    assert evidence["why_blocked"]["status"] == "answered"
+    assert evidence["affected_code"]["status"] == "answered"
+    assert evidence["outcome_change"]["status"] == "partial"
+    assert "0.28.1" in evidence["outcome_change"]["headline"]
+    assert {
+        relation["kind"] for relation in evidence["why_blocked"]["graph"]["relations"]
+    } == {"cve", "policy_evaluation"}
+    assert {
+        relation["kind"] for relation in evidence["affected_code"]["graph"]["relations"]
+    } == {"module_import", "invocation", "class"}
+    assert all(
+        len(relation["id"]) == 26
+        for answer in ("why_blocked", "affected_code", "outcome_change")
+        for relation in evidence[answer]["graph"]["relations"]
+    )
+    assert all(
+        "requests" not in node["id"].casefold()
+        for answer in ("why_blocked", "affected_code", "outcome_change")
+        for node in evidence[answer]["graph"]["nodes"]
+    )
+    assert all(
+        statement["relation_ids"]
+        for answer in ("why_blocked", "affected_code", "outcome_change")
+        for statement in evidence[answer]["statements"]
+    )
+    for answer in ("why_blocked", "affected_code", "outcome_change"):
+        relation_ids = {
+            relation["id"] for relation in evidence[answer]["graph"]["relations"]
+        }
+        assert all(
+            edge["id"].split(":member:", 1)[0] in relation_ids
+            for edge in evidence[answer]["graph"]["edges"]
+        )
+
+    stranger = TestClient(
+        main.app,
+        headers={auth.DEV_USER: "other@example.com", auth.DEV_ROLE: "developer"},
+    )
+    assert stranger.get(
+        f"/api/v1/developer/attention/{item['id']}/evidence",
+    ).status_code == 404
+    assert developer.get(
+        "/api/v1/developer/attention/att_000000000000000000000000/evidence",
+    ).status_code == 404
+    assert analyst.get(
+        f"/api/v1/developer/attention/{item['id']}/evidence",
+    ).status_code == 403
+
+
+def test_attention_evidence_does_not_infer_unrecorded_code(clients):
+    developer, _, _, _ = clients
+    now = int(time.time() * 1000)
+    session_id = "ses_nocode000000000000001"
+    opened = developer.post("/api/v1/developer/sessions", json={
+        "id": session_id,
+        "source_session_id": "cursor-no-code",
+        "source_event_id": "cursor-no-code-open",
+        "adapter": "cursor",
+        "adapter_version": "1.0.0",
+        "repository": {"id": "repo-empty", "name": "empty-api"},
+        "task": "Evaluate a package without source evidence",
+        "started_at_ms": now,
+        "sequence": 1,
+    })
+    assert opened.status_code == 201, opened.text
+    recorded = developer.post(
+        f"/api/v1/developer/sessions/{session_id}/events",
+        json={"events": [{
+            "event_id": "evt_nocodepolicy000001",
+            "source_event_id": "cursor-no-code-policy",
+            "sequence": 2,
+            "occurred_at_ms": now + 1,
+            "type": "policy.evaluated",
+            "payload": {
+                "package": "urllib3", "version": "1.25.0",
+                "ecosystem": "PyPI", "verdict": "unknown",
+                "reasons": [], "advisories": [],
+                "unavailable": "The advisory provider did not respond.",
+                "policy": "block when advisory data is unavailable",
+            },
+        }]},
+    )
+    assert recorded.status_code == 200, recorded.text
+    item = next(
+        value for value in developer.get("/api/v1/developer/attention").json()["items"]
+        if value["session_id"] == session_id
+    )
+    evidence = developer.get(
+        f"/api/v1/developer/attention/{item['id']}/evidence",
+    ).json()
+    assert evidence["affected_code"]["status"] == "unavailable"
+    assert evidence["affected_code"]["graph"] == {
+        "nodes": [], "edges": [], "relations": [],
+    }
+    assert "does not infer" in evidence["affected_code"]["limitations"][0]
+    assert evidence["outcome_change"]["status"] == "unavailable"

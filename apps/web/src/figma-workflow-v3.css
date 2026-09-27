@@ -246,6 +246,25 @@
 .figma3-evidence-token.is-action strong { color: var(--figma3-teal-dark); }
 .figma3-evidence-verb { flex: 0 0 auto; padding: 0 7px; color: var(--figma3-muted); font-size: 9px; font-style: italic; white-space: nowrap; }
 .figma3-evidence-section { margin-bottom: 24px; }
+.figma3-server-questions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; margin-bottom: 10px; border-radius: 8px; background: var(--figma3-subtle); padding: 3px; }
+.figma3-server-questions button { min-width: 0; min-height: 30px; border: 0; border-radius: 6px; background: transparent; padding: 5px 8px; color: var(--figma3-muted); font-size: 10px; line-height: 1.3; }
+.figma3-server-questions button[aria-selected="true"] { background: white; box-shadow: 0 1px 3px rgba(15,23,42,.1); color: var(--figma3-ink); font-weight: 700; }
+.figma3-answer-summary { display: grid; gap: 8px; margin-bottom: 10px; border: 1px solid var(--figma3-border); border-left: 3px solid var(--figma3-green); border-radius: 8px; background: white; padding: 11px 13px; }
+.figma3-answer-summary.is-partial { border-left-color: var(--figma3-amber); }
+.figma3-answer-summary.is-unavailable { border-left-color: var(--figma3-muted); }
+.figma3-answer-summary > div { display: grid; gap: 3px; }
+.figma3-answer-summary > div > span { width: max-content; border-radius: 99px; background: var(--figma3-green-bg); padding: 2px 7px; color: var(--figma3-green-dark); font: 700 8px/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.figma3-answer-summary.is-partial > div > span { background: var(--figma3-amber-bg); color: var(--figma3-amber-dark); }
+.figma3-answer-summary.is-unavailable > div > span { background: var(--figma3-subtle); color: var(--figma3-muted); }
+.figma3-answer-summary h2 { margin: 0; color: var(--figma3-ink); font-size: 13px; line-height: 1.4; }
+.figma3-answer-summary > ul { display: grid; gap: 4px; margin: 0; padding-left: 16px; color: var(--figma3-copy); font-size: 10px; line-height: 1.45; }
+.figma3-answer-summary > p { margin: 0; color: var(--figma3-muted); font-size: 10px; }
+.figma3-answer-more { color: var(--figma3-muted); font-size: 10px; }
+.figma3-answer-more summary { cursor: pointer; font-weight: 700; }
+.figma3-answer-more ul { display: grid; gap: 3px; margin: 6px 0 0; padding-left: 16px; line-height: 1.45; }
+.figma3-answer-limitations { margin-top: 8px; border-top: 1px solid var(--figma3-border); padding-top: 7px; color: var(--figma3-muted); font-size: 10px; }
+.figma3-answer-limitations summary { cursor: pointer; font-weight: 700; }
+.figma3-answer-limitations ul { display: grid; gap: 3px; margin: 6px 0 0; padding-left: 16px; line-height: 1.45; }
 .figma3-remediation { display: flex; gap: 11px; margin-bottom: 24px; border: 1px solid #bae6fd; border-radius: 8px; background: #f0f9ff; padding: 13px 17px; }
 .figma3-remediation.is-verified { border-color: #bbf7d0; background: var(--figma3-green-bg); }
 .figma3-remediation-icon { display: grid; width: 26px; height: 26px; flex: 0 0 26px; place-items: center; border-radius: 50%; background: white; color: var(--figma3-blue); }
@@ -295,6 +314,9 @@
   .figma3-mobile-only { display: flex !important; }
   .figma3-lenses > div { display: grid; width: 100%; grid-template-columns: repeat(3,minmax(0,1fr)); }
   .figma3-lenses button { min-width: 0; padding-inline: 5px; font-size: 8px; white-space: normal; }
+  .figma3-server-questions button { padding-inline: 4px; font-size: 9px; }
+  .figma3-answer.is-mobile { margin-bottom: 14px; }
+  .figma3-answer-summary { padding: 10px 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

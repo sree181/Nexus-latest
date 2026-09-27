@@ -140,6 +140,12 @@ class Gateway(ABC):
     def run_graph(self, run_id: str) -> GraphPayload: ...
 
     @abstractmethod
+    def policy_evaluation_evidence_graph(
+        self, run_id: str, evaluation_id: str,
+    ) -> GraphPayload:
+        """Return native evidence rooted at one recorded policy evaluation."""
+
+    @abstractmethod
     def project_policy_evaluation(
         self, run_id: str, *, event_id: str, session_id: str,
         repository_id: str, evaluation: dict,
@@ -343,6 +349,13 @@ class SampleGateway(Gateway):
 
     def run_graph(self, run_id: str) -> GraphPayload:
         return sample.run_graph(run_id)
+
+    def policy_evaluation_evidence_graph(
+        self, run_id: str, evaluation_id: str,
+    ) -> GraphPayload:
+        raise NotFound(
+            "native policy-evaluation evidence is unavailable in sample mode"
+        )
 
     def project_policy_evaluation(
         self, run_id: str, *, event_id: str, session_id: str,
