@@ -42,4 +42,21 @@ describe("FigmaWorkflowV3", () => {
     fireEvent.click(screen.getByRole("button", { name: "cve: CVE-2026-123" }));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "cve:123" }));
   });
+
+  it("renders a server-selected evidence question without client-only lens tabs", () => {
+    render(
+      <FigmaEvidenceGraph
+        graph={graph}
+        label="Affected code answer"
+        lens="affected"
+        showQuestions={false}
+      />,
+    );
+
+    expect(screen.queryByRole("tablist", { name: "Evidence question" })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", {
+      name: "Affected code answer: What code is affected?",
+    })).toBeInTheDocument();
+    expect(screen.getByText("requests · 2.32.0 · CVE-2026-123")).toBeInTheDocument();
+  });
 });

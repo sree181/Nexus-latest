@@ -272,7 +272,7 @@ Only the seven route components below import Figma v3 primitives. Keep their rec
 
 | Route component | URL | Router capability | Data / polling | Evidence source and action boundary | Route-local CSS |
 |---|---|---:|---|---|---|
-| `DeveloperAttention.tsx` | `/developer/attention` | `review.own` | `developerAttention(500)`; selected run graph only with `run_id`; attention 8 s, graph 15 s | project-filtered attention; creates review using `session_id`, `policy_evaluation_id`, kind, and UI-required ≥20-character rationale; journey comes from returned review state | shared Figma v3 attention styles |
+| `DeveloperAttention.tsx` | `/developer/attention` | `review.own` | `developerAttention(500)` plus `developerAttentionEvidence(attentionId)`; attention 8 s, scoped evidence 15 s | project-filtered attention; backend answers why/affected/outcome from the selected evaluation and native relation ULIDs; creates review using `session_id`, `policy_evaluation_id`, kind, and UI-required ≥20-character rationale; journey comes from returned review state | shared Figma v3 attention styles |
 | `DeveloperReviewDetail.tsx` | `/developer/reviews/$requestId` | `review.own` | developer review/graph; record 8 s, graph 12 s | developer-scoped endpoints; requester view is read-only; next-step copy derives only from `ReviewRequest` state | `routes/developer-result.css` |
 | `AnalystOperations.tsx` | `/analyst/queue` | `case.read` | work queue 10 s, notifications 15 s, selected evidence 15 s | review work uses review graph; case work uses review graph only when `finding_id` starts `review:`, otherwise run graph; bulk assignment uses per-item expected version | `routes/analyst-operations.css` |
 | `AnalystReviewDetail.tsx` | `/analyst/reviews/$requestId` | `review.read` | review record 10 s, graph 15 s | Analyst endpoint can expose owner assignment/decision/escalation only where `review.write`/`case.write`; every mutation carries `version_counter` | `routes/analyst-review.css` |
@@ -314,7 +314,7 @@ Stage 1B adds a fourth, non-composable role: **Platform Administrator**. It is i
 `FigmaEvidenceGraph` is intentionally **not** a complete graph renderer. It:
 
 - excludes tombstoned nodes;
-- ranks nodes for a selected `why`, `affected`, or `outcome` lens;
+- ranks nodes for a selected `why`, `affected`, or `outcome` display lens; Developer Attention supplies that lens from the server-answer question and hides the component's legacy internal tabs;
 - shows at most six nodes;
 - uses direct edges when available, otherwise relation-member fallback edges;
 - presents the first three readable relation rows plus a native `<details>` list for all relations;
@@ -366,7 +366,7 @@ Methods below are defined in `apps/web/src/lib/api.ts`. The helper prepends `/ap
 
 | Browser surface | Typed client methods | Public FastAPI endpoints |
 |---|---|---|
-| Developer Attention | `developerAttention`, `runGraph`, `createDeveloperReviewRequest` | `GET /api/v1/developer/attention`; `GET /api/runs/{runId}/graph`; `POST /api/v1/developer/review-requests` |
+| Developer Attention | `developerAttention`, `developerAttentionEvidence`, `createDeveloperReviewRequest` | `GET /api/v1/developer/attention`; `GET /api/v1/developer/attention/{attentionId}/evidence`; `POST /api/v1/developer/review-requests` |
 | Developer Review Result | `developerReviewRequest`, `developerReviewGraph` | `GET /api/v1/developer/review-requests/{requestId}`; `GET /api/v1/developer/review-requests/{requestId}/graph` |
 | Analyst Operations | `workQueue`, `savedWorkViews`, `notifications`, `bulkAssignWork`, plus selected `reviewGraph` or `runGraph` | `GET /api/operations/work`; `GET/POST/DELETE /api/operations/views…`; `GET /api/notifications`; `POST /api/operations/work/bulk-assign`; selected evidence endpoint |
 | Analyst Review | `review`, `reviewGraph`, `assignReview`, `decideReview`, `escalateReview` | `GET /api/reviews/{requestId}`; `GET /api/reviews/{requestId}/graph`; `POST /api/reviews/{requestId}/assign`; `POST /api/reviews/{requestId}/decision`; `POST /api/reviews/{requestId}/escalate` |

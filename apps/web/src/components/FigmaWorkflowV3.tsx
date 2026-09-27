@@ -50,7 +50,7 @@ export function FigmaJourney({
   );
 }
 
-type EvidenceLens = "why" | "affected" | "outcome";
+export type EvidenceLens = "why" | "affected" | "outcome";
 
 const lensCopy: Record<EvidenceLens, string> = {
   why: "Why was this blocked?",
@@ -108,6 +108,9 @@ export function FigmaEvidenceGraph({
   onSelect,
   height = 200,
   mobileEvidenceOnly = false,
+  lens: controlledLens,
+  showQuestions = true,
+  onLensChange,
 }: {
   graph: GraphPayload;
   label: string;
@@ -115,8 +118,16 @@ export function FigmaEvidenceGraph({
   onSelect?: (node: GraphNode) => void;
   height?: number;
   mobileEvidenceOnly?: boolean;
+  lens?: EvidenceLens;
+  showQuestions?: boolean;
+  onLensChange?: (lens: EvidenceLens) => void;
 }) {
-  const [lens, setLens] = useState<EvidenceLens>("why");
+  const [localLens, setLocalLens] = useState<EvidenceLens>("why");
+  const lens = controlledLens ?? localLens;
+  const selectLens = (value: EvidenceLens) => {
+    if (controlledLens === undefined) setLocalLens(value);
+    onLensChange?.(value);
+  };
   const markerId = useId().replaceAll(":", "");
   const nodes = useMemo(() => selectNodes(graph, lens, 6), [graph, lens]);
   const nodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes]);
@@ -147,14 +158,16 @@ export function FigmaEvidenceGraph({
 
   return (
     <figure className={`figma3-evidence ${mobileEvidenceOnly ? "is-evidence-only" : ""}`}>
-      <div className="figma3-lenses" role="tablist" aria-label="Evidence question">
-        <span>Evidence question</span>
-        <div>
-          {(Object.entries(lensCopy) as Array<[EvidenceLens, string]>).map(([value, copy]) => (
-            <button key={value} type="button" role="tab" aria-selected={lens === value} onClick={() => setLens(value)}>{copy}</button>
-          ))}
+      {showQuestions ? (
+        <div className="figma3-lenses" role="tablist" aria-label="Evidence question">
+          <span>Evidence question</span>
+          <div>
+            {(Object.entries(lensCopy) as Array<[EvidenceLens, string]>).map(([value, copy]) => (
+              <button key={value} type="button" role="tab" aria-selected={lens === value} onClick={() => selectLens(value)}>{copy}</button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
       {!mobileEvidenceOnly ? (
         <div className="figma3-graph-canvas" style={{ height }}>
           <svg viewBox="0 0 860 240" preserveAspectRatio="xMidYMid meet" role="img" aria-label={`${label}: ${lensCopy[lens]}`}>

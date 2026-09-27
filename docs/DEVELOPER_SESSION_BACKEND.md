@@ -35,13 +35,15 @@ The adapter uses short authenticated HTTP requests rather than a permanent edito
 | `POST` | `/api/v1/developer/sessions/{session_id}/events`             | Commit and project an ordered event batch                   | Session owner or their paired recorder          |
 | `GET`  | `/api/v1/developer/sessions/{session_id}/events`             | Read ordered activity and projection state                  | Session owner                                   |
 | `GET`  | `/api/v1/developer/sessions/{session_id}/policy-evaluations` | Read policy decisions attached to the session               | Session owner                                   |
+| `GET`  | `/api/v1/developer/attention`                               | List actionable owner-scoped package-policy evaluations     | Session owner                                   |
+| `GET`  | `/api/v1/developer/attention/{attention_id}/evidence`       | Answer why, affected-code, and outcome questions with scoped native evidence | Session owner                    |
 | `POST` | `/api/gate/package`                                          | Obtain the synchronous package decision used before install | Paired recording device or authenticated person |
 
 All session reads are owner scoped. Looking up another developer's session returns `404`, which does not reveal whether the identifier exists. Event sequence gaps return `409` with `expected_sequence` and `received_sequence`. Reusing an event or session identity with different immutable content also returns `409`.[1] [5]
 
 ## 4. Exact database schema
 
-The schema below is the effective schema after migrations `001` and `002`, not a conceptual model.[6] [8]
+The schema below is the effective schema after migrations `001` through `005`, not a conceptual model.[6] [8] [9] [13] [14]
 
 ```sql
 PRAGMA foreign_keys = ON;
@@ -299,6 +301,8 @@ The global Developer navigation now includes **Attention** between Sessions and 
 
 Policy evaluations preserve the **PyPI or npm ecosystem**. The gate queries OSV using that ecosystem, merges duplicate records for the same CVE, retains bounded source links and fixed releases, and recommends the highest published semantic fix across all returned advisories. Developer Security and Attention screens show the package version, CVE, severity, CWE where supplied, released fixes, source link, and directly linked code. Raw OSV commit hashes remain in the evidence snapshot but are not presented as released versions.
 
+`GET /api/v1/developer/attention/{attention_id}/evidence` resolves the opaque Attention identifier only within the authenticated developer's indexed policy rows. A foreign identifier and an unknown identifier both return `404`. The response contains three independent answer objects: **why the policy returned its verdict**, **which code is natively linked to the evaluated package**, and **which recorded review or fixed-version evidence could change the outcome**. Each statement carries the node IDs and native HyperMesh relation ULIDs that support it, plus a question-scoped `GraphPayload`. A code relationship is returned only when a persisted `module_import`, `invocation`, or `class` relation contains that exact package member. The endpoint does not infer exploitability, treat a fixed version as an allow decision, or substitute the run-wide graph when the evaluation projection is absent; incomplete evidence is returned as `partial` or `unavailable` with an explicit limitation.
+
 A Developer may create one durable review request per policy evaluation for a safe version, security guidance, temporary approval, or false-positive review. The request freezes the session, repository, package/version, ecosystem, CVEs, reasons, and proven code links. Analysts receive the request in a unified review/case queue, where they can assign an owner and due time, collaborate through durable notes, escalate it to a tracked case, request changes, reject, mark a false positive, or approve a time-bounded exception. The Developer cannot decide their own request or access Security-office operations; updates use optimistic concurrency and append immutable review events. When a later package-gate check for the same session and package returns clean, an outstanding change request is automatically marked **verified** with the gate evidence identifier. The complete queue, notification, collaboration, and scaling contract is documented in [Analyst Operations and Collaboration](ANALYST_OPERATIONS.md).
 
 The review relationship map is role scoped rather than universally hidden. A Developer sees only their selected review, contributor identity, repository, session, linked code, package/version, advisories, and recorded reviewer decision. Analysts and CISOs see the submitted evidence and named participants necessary to decide the request. Organization-wide and cross-session graph exploration remains limited to Security-office capabilities.
@@ -312,6 +316,8 @@ Every durable `policy.evaluated` activity is projected in sequence into a policy
 Creating a review freezes an immutable canonical snapshot containing native code entity IDs, policy evaluation ID, package/version, ecosystem, and advisory IDs. Its SHA-256 digest is stored with the mutable workflow row. The same database transaction appends the workflow event and a projection-outbox record. The reconciler writes each request, Analyst/CISO decision, and automatic verification as an idempotent HyperMesh episode, then stores the resulting native ULID as the evidence root. Interrupted or transiently failed projections are retried with bounded backoff; an event is acknowledged only after the engine returns its ULID.
 
 Review graph endpoints require the existing owner or Security-office capability and start from the review's sealed native subject. They return only that review's HyperMesh episodes and recursive evidence ancestors. They do not perform free-form fleet traversal and no longer reconstruct relations from SQLite labels. The relational ledgers remain authoritative for ordered ingestion and mutable workflow state; HyperMesh is authoritative for governed evidence and provenance.
+
+The Developer Attention evidence endpoint follows the same boundary but roots its native traversal at `policy:{evaluation_id}`. It admits the exact policy relation, the advisory relations named by that record, code relations containing the evaluated package, and any review episodes linked to that policy. Relation membership is preserved in full; pairwise edges remain a drawing projection only.
 
 For large deployments, move this SQLite ledger behind the same single-writer service boundary or migrate it to PostgreSQL before horizontal API scaling. Multi-tenant partitioning, event-bus fan-out, cross-region replication, and organization-wide retention policy are not claimed by this single-tenant v1 implementation.
 
@@ -329,3 +335,5 @@ For large deployments, move this SQLite ledger behind the same single-writer ser
 [10]: ../services/api/app/review_service.py "Native Attention derivation and sealed review graph query service"
 [11]: ../services/engine/meshagent/codegraph.py "Native HyperMesh code, advisory, policy, and review relations"
 [12]: ../services/api/app/control_plane.py "Transactional review snapshot and projection outbox"
+[13]: ../services/api/app/migrations/004_attention_owner_lookup.sql "Owner/time policy-evaluation index"
+[14]: ../services/api/app/migrations/005_attention_index.sql "Durable opaque Attention identifier index"

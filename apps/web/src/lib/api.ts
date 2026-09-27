@@ -213,6 +213,50 @@ export interface AttentionList {
   total: number;
 }
 
+export type AttentionEvidenceQuestion =
+  | "why_blocked"
+  | "affected_code"
+  | "outcome_change";
+
+export type AttentionEvidenceStatus = "answered" | "partial" | "unavailable";
+
+export interface AttentionEvidenceScope {
+  attention_id: string;
+  session_id: string;
+  policy_evaluation_id: string;
+  run_id: string;
+  repository_id: string;
+  repository_name: string;
+  package: string;
+  version: string;
+  ecosystem: "PyPI" | "npm";
+  checked_at_ms: number;
+  review_request_id: string | null;
+  review_status: ReviewState | null;
+}
+
+export interface AttentionEvidenceStatement {
+  text: string;
+  node_ids: string[];
+  relation_ids: string[];
+}
+
+export interface AttentionEvidenceAnswer {
+  question: AttentionEvidenceQuestion;
+  status: AttentionEvidenceStatus;
+  headline: string;
+  statements: AttentionEvidenceStatement[];
+  graph: GraphPayload;
+  limitations: string[];
+}
+
+export interface AttentionEvidence {
+  scope: AttentionEvidenceScope;
+  why_blocked: AttentionEvidenceAnswer;
+  affected_code: AttentionEvidenceAnswer;
+  outcome_change: AttentionEvidenceAnswer;
+}
+
 export interface ReviewEvent {
   id: string;
   request_id: string;
@@ -1762,6 +1806,10 @@ export const api = {
   developerAttention: (limit = 200) =>
     get<AttentionList>(
       `/v1/developer/attention?limit=${Math.max(1, Math.min(limit, 500))}`,
+    ),
+  developerAttentionEvidence: (attentionId: string) =>
+    get<AttentionEvidence>(
+      `/v1/developer/attention/${encodeURIComponent(attentionId)}/evidence`,
     ),
   developerReviewRequests: () =>
     get<ReviewRequestList>("/v1/developer/review-requests"),

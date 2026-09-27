@@ -87,6 +87,11 @@ def _policy_id(event_id: str) -> str:
     return "pol_" + hashlib.sha256(event_id.encode()).hexdigest()[:32]
 
 
+def attention_id(evaluation_id: str) -> str:
+    """Stable opaque public id for one durable policy evaluation."""
+    return "att_" + hashlib.sha256(evaluation_id.encode()).hexdigest()[:24]
+
+
 def _projection_retry_delay_ms(attempts: int) -> int:
     try:
         base_seconds = float(os.environ.get(
@@ -108,6 +113,7 @@ class Store:
         self._projection_lock = threading.RLock()
         os.makedirs(self.base, mode=0o700, exist_ok=True)
         self._migrate()
+        self._backfill_attention_index()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=30, isolation_level=None)
@@ -178,6 +184,25 @@ class Store:
         except OSError:
             pass
 
+    def _backfill_attention_index(self) -> None:
+        """Index policy evaluations created before the Attention detail API existed."""
+        with self._write() as conn:
+            rows = conn.execute(
+                "SELECT id,owner_subject,created_at_ms FROM policy_evaluations"
+            ).fetchall()
+            conn.executemany(
+                "INSERT OR IGNORE INTO attention_index "
+                "(attention_id,policy_evaluation_id,owner_subject,created_at_ms) "
+                "VALUES (?,?,?,?)",
+                [
+                    (
+                        attention_id(row["id"]), row["id"],
+                        row["owner_subject"], row["created_at_ms"],
+                    )
+                    for row in rows
+                ],
+            )
+
     @staticmethod
     def _session(row: sqlite3.Row) -> DeveloperSessionOut:
         repository = RepositoryContext(
@@ -216,6 +241,19 @@ class Store:
             projection_next_attempt_at_ms=row["projection_next_attempt_at_ms"],
             projected_at_ms=row["projected_at_ms"],
             projection_error=row["projection_error"], run_id=row["run_id"],
+        )
+
+    @staticmethod
+    def _policy(row: sqlite3.Row) -> PolicyEvaluationOut:
+        return PolicyEvaluationOut(
+            id=row["id"], session_id=row["session_id"],
+            activity_event_id=row["activity_event_id"], package=row["package"],
+            version=row["version"], ecosystem=row["ecosystem"],
+            verdict=row["verdict"], reasons=json.loads(row["reasons_json"]),
+            advisories=json.loads(row["advisories_json"]), worst=row["worst"],
+            unavailable=row["unavailable"], policy=row["policy"],
+            evaluated_at_ms=row["evaluated_at_ms"],
+            owner_subject=row["owner_subject"], device_id=row["device_id"],
         )
 
     def create(self, req: SessionStartRequest, who: Principal) -> tuple[DeveloperSessionOut, bool]:
@@ -390,6 +428,7 @@ class Store:
         self, conn: sqlite3.Connection, session: sqlite3.Row,
         event: ActivityEventIn, payload: dict[str, Any], now: int,
     ) -> None:
+        evaluation_id = _policy_id(event.event_id)
         conn.execute(
             """INSERT INTO policy_evaluations (
                 id, session_id, activity_event_id, package, version, ecosystem, verdict,
@@ -397,7 +436,7 @@ class Store:
                 evaluated_at_ms, owner_subject, device_id, created_at_ms
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                _policy_id(event.event_id), session["id"], event.event_id,
+                evaluation_id, session["id"], event.event_id,
                 payload["package"], payload.get("version", ""),
                 payload.get("ecosystem", "PyPI"), payload["verdict"],
                 _canonical(payload.get("reasons", [])),
@@ -405,6 +444,15 @@ class Store:
                 payload.get("unavailable"), payload.get("policy", ""),
                 event.occurred_at_ms, session["owner_subject"],
                 session["device_id"], now,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO attention_index "
+            "(attention_id,policy_evaluation_id,owner_subject,created_at_ms) "
+            "VALUES (?,?,?,?)",
+            (
+                attention_id(evaluation_id), evaluation_id,
+                session["owner_subject"], now,
             ),
         )
 
@@ -600,20 +648,7 @@ class Store:
                 "SELECT * FROM policy_evaluations WHERE session_id=? "
                 "ORDER BY evaluated_at_ms DESC LIMIT ?", (session_id, limit),
             ).fetchall()
-        values = [
-            PolicyEvaluationOut(
-                id=row["id"], session_id=row["session_id"],
-                activity_event_id=row["activity_event_id"], package=row["package"],
-                version=row["version"], ecosystem=row["ecosystem"],
-                verdict=row["verdict"],
-                reasons=json.loads(row["reasons_json"]),
-                advisories=json.loads(row["advisories_json"]), worst=row["worst"],
-                unavailable=row["unavailable"], policy=row["policy"],
-                evaluated_at_ms=row["evaluated_at_ms"],
-                owner_subject=row["owner_subject"], device_id=row["device_id"],
-            )
-            for row in rows
-        ]
+        values = [self._policy(row) for row in rows]
         return PolicyEvaluationListOut(evaluations=values, total=len(values))
 
     def policy_evaluation(
@@ -627,16 +662,32 @@ class Store:
             ).fetchone()
         if row is None:
             raise MissingSession("unknown policy evaluation")
-        return PolicyEvaluationOut(
-            id=row["id"], session_id=row["session_id"],
-            activity_event_id=row["activity_event_id"], package=row["package"],
-            version=row["version"], ecosystem=row["ecosystem"],
-            verdict=row["verdict"], reasons=json.loads(row["reasons_json"]),
-            advisories=json.loads(row["advisories_json"]), worst=row["worst"],
-            unavailable=row["unavailable"], policy=row["policy"],
-            evaluated_at_ms=row["evaluated_at_ms"],
-            owner_subject=row["owner_subject"], device_id=row["device_id"],
-        )
+        return self._policy(row)
+
+    def attention_evaluation(
+        self, public_id: str, who: Principal,
+    ) -> tuple[DeveloperSessionOut, PolicyEvaluationOut]:
+        """Resolve a public Attention id without exposing another owner's rows.
+
+        Attention ids are deterministic opaque hashes of policy-evaluation ids.
+        SQLite does not provide the application hash function, so this scans only
+        the authenticated owner's indexed evaluation rows and compares digests in
+        constant time. A foreign id and an unknown id deliberately return the same
+        error.
+        """
+        with self._read() as conn:
+            selected = conn.execute(
+                "SELECT policy_evaluations.* FROM attention_index "
+                "JOIN policy_evaluations ON "
+                "policy_evaluations.id=attention_index.policy_evaluation_id "
+                "WHERE attention_index.attention_id=? "
+                "AND attention_index.owner_subject=?",
+                (public_id, who.subject),
+            ).fetchone()
+            if selected is None:
+                raise MissingSession("unknown attention item")
+            session = self._owned(conn, selected["session_id"], who)
+        return self._session(session), self._policy(selected)
 
     def policy_evaluation_for_event(self, event_id: str) -> PolicyEvaluationOut:
         """Internal projection lookup for the policy row created with an event."""
@@ -647,16 +698,7 @@ class Store:
             ).fetchone()
         if row is None:
             raise MissingSession("unknown policy evaluation event")
-        return PolicyEvaluationOut(
-            id=row["id"], session_id=row["session_id"],
-            activity_event_id=row["activity_event_id"], package=row["package"],
-            version=row["version"], ecosystem=row["ecosystem"],
-            verdict=row["verdict"], reasons=json.loads(row["reasons_json"]),
-            advisories=json.loads(row["advisories_json"]), worst=row["worst"],
-            unavailable=row["unavailable"], policy=row["policy"],
-            evaluated_at_ms=row["evaluated_at_ms"],
-            owner_subject=row["owner_subject"], device_id=row["device_id"],
-        )
+        return self._policy(row)
 
 
 def load(base: str) -> Store:

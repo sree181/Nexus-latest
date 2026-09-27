@@ -92,6 +92,7 @@ from .workflow_models import (
     AssignReviewRequest,
     BulkAssignRequest,
     BulkWorkReceipt,
+    AttentionEvidenceOut,
     AttentionListOut,
     CaseListOut,
     CaseOut,
@@ -2011,6 +2012,20 @@ def developer_attention(
     return review_service.attention_items(
         developer_session_store, gateway, workflow_store, who,
         limit=max(1, min(limit, 500)),
+    )
+
+
+@app.get(
+    "/api/v1/developer/attention/{attention_id}/evidence",
+    response_model=AttentionEvidenceOut,
+)
+def developer_attention_evidence(
+    attention_id: str,
+    who: Principal = Depends(require_capability("review.own")),
+) -> AttentionEvidenceOut:
+    """Three traceable answers scoped to one caller-owned policy evaluation."""
+    return review_service.attention_evidence(
+        developer_session_store, gateway, workflow_store, who, attention_id,
     )
 
 

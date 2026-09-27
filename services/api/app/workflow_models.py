@@ -407,6 +407,47 @@ class AttentionListOut(BaseModel):
     total: int
 
 
+EvidenceQuestion = Literal["why_blocked", "affected_code", "outcome_change"]
+EvidenceAnswerStatus = Literal["answered", "partial", "unavailable"]
+
+
+class AttentionEvidenceScopeOut(BaseModel):
+    attention_id: str
+    session_id: str
+    policy_evaluation_id: str
+    run_id: str
+    repository_id: str
+    repository_name: str
+    package: str
+    version: str
+    ecosystem: Literal["PyPI", "npm"]
+    checked_at_ms: int
+    review_request_id: str | None = None
+    review_status: ReviewState | None = None
+
+
+class EvidenceStatementOut(BaseModel):
+    text: str = Field(min_length=1, max_length=2_048)
+    node_ids: list[str] = Field(default_factory=list, max_length=100)
+    relation_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class AttentionEvidenceAnswerOut(BaseModel):
+    question: EvidenceQuestion
+    status: EvidenceAnswerStatus
+    headline: str = Field(min_length=1, max_length=2_048)
+    statements: list[EvidenceStatementOut] = Field(default_factory=list, max_length=100)
+    graph: GraphPayload
+    limitations: list[str] = Field(default_factory=list, max_length=20)
+
+
+class AttentionEvidenceOut(BaseModel):
+    scope: AttentionEvidenceScopeOut
+    why_blocked: AttentionEvidenceAnswerOut
+    affected_code: AttentionEvidenceAnswerOut
+    outcome_change: AttentionEvidenceAnswerOut
+
+
 class CreateReviewRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=128)
     policy_evaluation_id: str = Field(min_length=1, max_length=128)
