@@ -21,23 +21,37 @@ docker compose version
 
 ## 3. Clone and start MeshAgent
 
-Use the Figma-fidelity branch from `sree181/Nexus-latest`. Keep each command on one line:
+Use the Figma-fidelity branch from `sree181/Nexus-latest`. Existing clones may
+have an `origin` that points to `sree181/meshagent`, where this branch does not
+exist. Configure a dedicated `nexus-latest` remote so the commands do not depend
+on what `origin` means in that clone. Keep each command on one line:
+
+For a new installation, create and enter the clone first. Existing installations
+should skip these two commands and run the remaining commands from their current
+meshAgent repository:
 
 ```bash
 git clone https://github.com/sree181/Nexus-latest.git meshagent
 cd meshagent
-git fetch origin refs/heads/manus/figma-fidelity-correction-v2:refs/remotes/origin/manus/figma-fidelity-correction-v2
-git switch manus/figma-fidelity-correction-v2 2>/dev/null || git switch --track -c manus/figma-fidelity-correction-v2 origin/manus/figma-fidelity-correction-v2
+```
+
+```bash
+git remote get-url nexus-latest >/dev/null 2>&1 && git remote set-url nexus-latest https://github.com/sree181/Nexus-latest.git || git remote add nexus-latest https://github.com/sree181/Nexus-latest.git
+git fetch nexus-latest refs/heads/manus/figma-fidelity-correction-v2:refs/remotes/nexus-latest/manus/figma-fidelity-correction-v2
+git show-ref --verify refs/remotes/nexus-latest/manus/figma-fidelity-correction-v2
+git switch manus/figma-fidelity-correction-v2 2>/dev/null || git switch --track -c manus/figma-fidelity-correction-v2 nexus-latest/manus/figma-fidelity-correction-v2
+git branch --set-upstream-to=nexus-latest/manus/figma-fidelity-correction-v2 manus/figma-fidelity-correction-v2
 git pull --ff-only
 git rev-parse --short HEAD
-git rev-parse --short origin/manus/figma-fidelity-correction-v2
+git rev-parse --short nexus-latest/manus/figma-fidelity-correction-v2
 
 docker compose down
 docker compose build --no-cache web api
 docker compose up -d --force-recreate
 ```
 
-The two `git rev-parse` commands must print the same SHA. `docker compose down`
+The two `git rev-parse` commands must both print `624b802` or a newer commit on
+this branch. `docker compose down`
 preserves the named data volume; do **not** add `-v` unless you intend to erase
 the demonstration state. The uncached build is deliberate: the web image copies
 the Vite bundle at image-build time, so restarting an older image cannot reveal
