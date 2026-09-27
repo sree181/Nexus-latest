@@ -174,10 +174,14 @@ def test_starting_a_run_is_recorded_against_its_developer(maya, fresh_log):
     assert created and created[0].actor == "maya@example.com"
 
 
-def test_being_refused_someone_elses_run_leaves_a_trace(maya, priya, fresh_log):
+def test_being_refused_someone_elses_run_leaves_a_trace(maya, fresh_log):
     """Someone walking run ids should be visible afterwards, even though
     they are told nothing at the time."""
-    theirs = priya.post("/api/runs", json={"task": "Theirs"}).json()["id"]
+    other_developer = TestClient(
+        main.app,
+        headers={auth.DEV_USER: "sam@example.com", auth.DEV_ROLE: "developer"},
+    )
+    theirs = other_developer.post("/api/runs", json={"task": "Theirs"}).json()["id"]
     assert maya.get(f"/api/runs/{theirs}/findings").status_code == 404
 
     denied = [e for e in fresh_log.read() if e.action == "access.denied"]

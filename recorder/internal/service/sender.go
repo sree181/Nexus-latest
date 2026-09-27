@@ -66,6 +66,15 @@ func (s *Sender) DrainOnce(ctx context.Context) error {
 			response, postErr := s.Client.Post(requestCtx, record.Envelope)
 			cancel()
 			if postErr != nil {
+				if protocol.IsTrustError(postErr) {
+					if blockErr := s.Store.Block(ctx, *record); blockErr != nil {
+						return blockErr
+					}
+					if s.Logger != nil {
+						s.Logger.Printf("recorder delivery diagnostic=blocked_trust kind=%s", record.Envelope.Kind)
+					}
+					break
+				}
 				if protocol.IsPermanentValidationError(postErr) {
 					if blockErr := s.Store.Block(ctx, *record); blockErr != nil {
 						return blockErr

@@ -28,6 +28,7 @@ from . import (
     control_plane,
     developer_sessions,
     devices,
+    recorders,
     paths,
     review_service,
     session_projection,
@@ -128,6 +129,22 @@ from .workflow_models import (
     WorkCommentRequest,
     WorkQueueOut,
 )
+from .recorder_models import (
+    EnrollmentApproveRequest,
+    EnrollmentPending,
+    EnrollmentRequest,
+    EnrollmentStart,
+    HeartbeatReceipt,
+    HeartbeatRequest,
+    RecorderDetail,
+    RecorderList,
+    RecorderOnboardingStatus,
+    RecorderToken,
+    RecorderTokenRequest,
+    RecorderTrustReceipt,
+    RecorderTrustRequest,
+    SignedRecorderConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +159,8 @@ def validate_startup() -> None:
     problems: list[str] = []
     if os.environ.get("MESHAGENT_ENGINE", "").strip() != "1":
         problems.append("MESHAGENT_ENGINE=1")
-    if not cfg.issuer:
-        problems.append("MESHAGENT_OIDC_ISSUER")
+    if not cfg.issuer or urlparse(cfg.issuer).scheme != "https":
+        problems.append("MESHAGENT_OIDC_ISSUER (must be an HTTPS URL)")
     if not cfg.audience:
         problems.append("MESHAGENT_OIDC_AUDIENCE")
     if not os.environ.get("MESHAGENT_OIDC_CLIENT_ID", "").strip():
@@ -152,8 +169,24 @@ def validate_startup() -> None:
         problems.append("MESHAGENT_ANALYST_GROUPS")
     if not cfg.ciso_groups:
         problems.append("MESHAGENT_CISO_GROUPS")
-    if set(cfg.analyst_groups) & set(cfg.ciso_groups):
-        problems.append("MESHAGENT role groups (Analyst and CISO must not overlap)")
+    if not cfg.platform_admin_groups:
+        problems.append("MESHAGENT_PLATFORM_ADMIN_GROUPS")
+    if not os.environ.get("MESHAGENT_DEPLOYMENT_ID", "").strip():
+        problems.append("MESHAGENT_DEPLOYMENT_ID")
+    privileged = (
+        ("Analyst", set(cfg.analyst_groups)),
+        ("CISO", set(cfg.ciso_groups)),
+        ("Platform Administrator", set(cfg.platform_admin_groups)),
+    )
+    if any(
+        left & right
+        for index, (_, left) in enumerate(privileged)
+        for _, right in privileged[index + 1:]
+    ):
+        problems.append("MESHAGENT role groups (privileged groups must not overlap)")
+    signing_key = os.environ.get("MESHAGENT_RECORDER_SIGNING_KEY_FILE", "").strip()
+    if not signing_key or not Path(signing_key).is_file():
+        problems.append("MESHAGENT_RECORDER_SIGNING_KEY_FILE")
     db_raw = os.environ.get("MESHAGENT_DB_DIR", "").strip()
     if not db_raw:
         problems.append("MESHAGENT_DB_DIR")
@@ -244,6 +277,31 @@ def _not_found(_: Request, exc: NotFound) -> JSONResponse:
 def _unauthenticated(_: Request, exc: AuthError) -> JSONResponse:
     return JSONResponse(status_code=401, content={"detail": str(exc)},
                         headers={"WWW-Authenticate": "Bearer"})
+
+
+@app.exception_handler(recorders.TrustDenied)
+def _recorder_trust_denied(_: Request, exc: recorders.TrustDenied) -> JSONResponse:
+    return JSONResponse(
+        status_code=401,
+        content={"detail": str(exc), "code": "recorder_trust_denied"},
+        headers={"WWW-Authenticate": "DPoP"},
+    )
+
+
+@app.exception_handler(recorders.Missing)
+def _recorder_missing(_: Request, exc: recorders.Missing) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(recorders.VersionConflict)
+def _recorder_version(_: Request, exc: recorders.VersionConflict) -> JSONResponse:
+    return JSONResponse(status_code=412, content={"detail": str(exc)})
+
+
+@app.exception_handler(recorders.Conflict)
+@app.exception_handler(recorders.RecorderError)
+def _recorder_conflict(_: Request, exc: recorders.RecorderError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.exception_handler(Forbidden)
@@ -378,10 +436,33 @@ def machine(request: Request) -> Principal | None:
     deployment with no identity provider still wants a hook's writes
     attributed to the developer who ran `meshagent login`, rather than to
     whatever name the hook felt like putting in a header."""
-    token = _optional_bearer(request.headers.get("authorization"))
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("dpop "):
+        token = authorization.split(" ", 1)[1].strip()
+        proof = request.headers.get("dpop", "").strip()
+        if not token or not proof:
+            raise AuthError("recorder credential rejected")
+        return recorder_store.authenticate(
+            token=token,
+            proof=proof,
+            method=request.method,
+            target=_dpop_target(request),
+        )
+    token = _optional_bearer(authorization)
     if not token or not token.startswith(devices.PREFIX):
         return None
-    return device_store.verify(token)
+    principal = device_store.verify(token)
+    if principal.device:
+        try:
+            state = recorder_store.trust_state(principal.device)
+        except recorders.Missing:
+            recorder_store.import_legacy(device_store.devices.values())
+            state = recorder_store.trust_state(principal.device)
+        if state != "active":
+            raise recorders.TrustDenied(
+                "recorder trust does not permit delivery"
+            )
+    return principal
 
 
 def caller(request: Request) -> Principal:
@@ -414,7 +495,13 @@ def recorder(request: Request) -> Principal:
 
     People are still permitted because the built-in loop and the tests post
     here as themselves. What a person cannot do is the reverse."""
-    return machine(request) or caller(request)
+    device = machine(request)
+    if device is not None:
+        return device
+    who = caller(request)
+    if not who.has("recorder.write"):
+        raise Forbidden("this action requires recorder.write")
+    return who
 
 
 def analyst(who: Principal = Depends(caller)) -> Principal:
@@ -452,8 +539,10 @@ def _may_read(run_id: str, who: Principal) -> None:
 
     404 rather than 403 for someone else's run: whether a colleague has a run
     by that id is itself something a developer should not learn here."""
-    if who.analyst:
+    if who.has("fleet.read"):
         return
+    if not who.has("run.own"):
+        raise Forbidden("this action requires run.own or fleet.read")
     run = gateway.run(run_id)
     if run.seeded:
         return
@@ -604,6 +693,12 @@ browser_session_store = browser_sessions.Store(paths.base_dir())
 #: the memory holds, and `forget` must not be able to reach it.
 device_store = devices.load(paths.base_dir())
 
+# Enterprise recorder trust is separate from governed evidence and the legacy
+# bearer registry. Import creates visibility only; it never copies a secret or
+# silently upgrades a bearer credential into DPoP.
+recorder_store = recorders.load(paths.base_dir())
+recorder_store.import_legacy(device_store.devices.values())
+
 
 def note(who: Principal, action: str, target: str, detail: str = "",
          *, require_commit: bool = False) -> None:
@@ -627,6 +722,16 @@ def _web_url() -> str:
     it and the setup screen generates commands against it, and the two
     disagreeing sends a developer to a port nothing is listening on."""
     return os.environ.get("MESHAGENT_WEB_URL", "http://localhost:5173")
+
+
+def _dpop_target(request: Request) -> str:
+    """The public URI the recorder signed, independent of proxy internals."""
+    if not auth.is_production():
+        return str(request.url)
+    suffix = request.url.path
+    if request.url.query:
+        suffix += "?" + request.url.query
+    return _web_url().rstrip("/") + suffix
 
 
 def _cookie(response: JSONResponse | RedirectResponse, name: str, value: str,
@@ -764,6 +869,182 @@ def me(who: Principal = Depends(caller)) -> Me:
               capabilities=sorted(who.capabilities), verified=who.verified)
 
 
+# -- enterprise recorder enrollment and trust ---------------------------------
+
+def enterprise_recorder(request: Request) -> Principal:
+    """Authenticate only a DPoP-bound enterprise recorder.
+
+    Browser principals and legacy bearer devices deliberately cannot reach the
+    token-bound configuration and heartbeat surface.
+    """
+    if not request.headers.get("authorization", "").lower().startswith("dpop "):
+        raise AuthError("this endpoint requires a DPoP recorder credential")
+    who = machine(request)
+    if who is None or not who.device:
+        raise AuthError("recorder credential rejected")
+    return who
+
+
+@app.post(
+    "/api/v2/recorders/enrollments",
+    response_model=EnrollmentStart,
+    status_code=201,
+)
+def recorder_enrollment_start(req: EnrollmentRequest) -> EnrollmentStart:
+    return recorder_store.start_enrollment(
+        req, _web_url() + "/connect/recorder",
+    )
+
+
+@app.get(
+    "/api/v2/recorders/enrollments/{user_code}",
+    response_model=EnrollmentPending,
+)
+def recorder_enrollment_pending(
+    user_code: str,
+    who: Principal = Depends(caller),
+) -> EnrollmentPending:
+    if who.role != "developer":
+        raise Forbidden("only a Developer may review their recorder enrollment")
+    return recorder_store.pending(user_code)
+
+
+@app.post(
+    "/api/v2/recorders/enrollments/approve",
+    response_model=EnrollmentPending,
+)
+def recorder_enrollment_approve(
+    req: EnrollmentApproveRequest,
+    who: Principal = Depends(caller),
+) -> EnrollmentPending:
+    # The corporate user enrolling their own recorder authorizes the device.
+    # Platform administrators see fleet readiness but do not impersonate users.
+    if who.role != "developer":
+        raise Forbidden("only a Developer may approve their recorder enrollment")
+    pending = recorder_store.approve(req.user_code, who)
+    note(who, "recorder.enrollment.approve", pending.enrollment_id, pending.label)
+    return pending
+
+
+@app.post("/api/v2/recorders/token", response_model=RecorderToken)
+def recorder_token(req: RecorderTokenRequest, request: Request) -> RecorderToken:
+    proof = request.headers.get("dpop", "").strip()
+    if not proof:
+        raise AuthError("recorder proof rejected")
+    if req.device_code:
+        token = recorder_store.claim(
+            req.device_code, proof=proof, method=request.method,
+            target=_dpop_target(request),
+        )
+        note(
+            Principal(
+                subject="enterprise-enrollment", name="enterprise enrollment",
+                email="", role="developer", verified=True, device=token.device_id,
+            ),
+            "recorder.enrollment.claim", token.device_id,
+        )
+        return token
+    assert req.device_id is not None
+    return recorder_store.refresh_token(
+        req.device_id, proof=proof, method=request.method,
+        target=_dpop_target(request),
+    )
+
+
+@app.get("/api/v2/recorders/config", response_model=SignedRecorderConfig)
+def recorder_configuration(
+    who: Principal = Depends(enterprise_recorder),
+) -> SignedRecorderConfig:
+    assert who.device is not None
+    return recorder_store.signed_config(who.device)
+
+
+@app.post("/api/v2/recorders/heartbeat", response_model=HeartbeatReceipt)
+def recorder_heartbeat(
+    req: HeartbeatRequest,
+    who: Principal = Depends(enterprise_recorder),
+) -> HeartbeatReceipt:
+    assert who.device is not None
+    return recorder_store.heartbeat(who.device, req)
+
+
+@app.get(
+    "/api/v2/recorders/onboarding",
+    response_model=RecorderOnboardingStatus,
+)
+def recorder_onboarding_status(
+    _: Principal = Depends(require_capability("recorder.admin.read")),
+) -> RecorderOnboardingStatus:
+    recorder_store.import_legacy(device_store.devices.values())
+    return recorder_store.onboarding(auth.config().enabled)
+
+
+@app.get("/api/v2/recorders", response_model=RecorderList)
+def recorder_inventory(
+    _: Principal = Depends(require_capability("recorder.admin.read")),
+) -> RecorderList:
+    recorder_store.import_legacy(device_store.devices.values())
+    return recorder_store.list()
+
+
+@app.get("/api/v2/recorders/{device_id}", response_model=RecorderDetail)
+def recorder_detail(
+    device_id: str,
+    _: Principal = Depends(require_capability("recorder.admin.read")),
+) -> RecorderDetail:
+    recorder_store.import_legacy(device_store.devices.values())
+    return recorder_store.detail(device_id)
+
+
+def _recorder_trust_transition(
+    *, device_id: str, action: str, req: RecorderTrustRequest,
+    request: Request, who: Principal,
+) -> RecorderTrustReceipt:
+    idempotency_key = request.headers.get("idempotency-key", "")
+    note(
+        who, f"recorder.{action}.request", device_id, req.reason,
+        require_commit=True,
+    )
+    return recorder_store.transition(
+        device_id=device_id, action=action,
+        expected_version=req.expected_version, reason=req.reason,
+        actor=who, idempotency_key=idempotency_key,
+        correlation_id=_correlation(request),
+    )
+
+
+@app.post(
+    "/api/v2/recorders/{device_id}/quarantine",
+    response_model=RecorderTrustReceipt,
+)
+def quarantine_recorder(
+    device_id: str,
+    req: RecorderTrustRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("recorder.trust.write")),
+) -> RecorderTrustReceipt:
+    return _recorder_trust_transition(
+        device_id=device_id, action="quarantine", req=req,
+        request=request, who=who,
+    )
+
+
+@app.post(
+    "/api/v2/recorders/{device_id}/revoke",
+    response_model=RecorderTrustReceipt,
+)
+def revoke_enterprise_recorder(
+    device_id: str,
+    req: RecorderTrustRequest,
+    request: Request,
+    who: Principal = Depends(require_capability("recorder.trust.write")),
+) -> RecorderTrustReceipt:
+    return _recorder_trust_transition(
+        device_id=device_id, action="revoke", req=req,
+        request=request, who=who,
+    )
+
+
 # -- device tokens: logging in a thing that has no browser --------------------
 
 def _device_out(d: devices.Device) -> DeviceOut:
@@ -789,9 +1070,11 @@ def pair_start(req: PairRequest) -> PairStart:
 
 
 @app.get("/api/devices/pending/{user_code}", response_model=PairPending)
-def pair_pending(user_code: str, _: Principal = Depends(caller)) -> PairPending:
+def pair_pending(user_code: str, who: Principal = Depends(caller)) -> PairPending:
     """What the human is about to approve, so they can recognise whether it
     is their own login. Shown before the approve button, not after."""
+    if who.role != "developer" or not who.has("device.own"):
+        raise Forbidden("only a Developer may approve their recorder")
     try:
         p = device_store.pending(user_code)
     except AuthError as exc:
@@ -809,6 +1092,8 @@ def pair_approve(req: ApproveRequest,
     Audited, and audited as the person rather than the machine, because
     this is the moment a credential that can write memory in their name
     comes into existence."""
+    if who.role != "developer" or not who.has("device.own"):
+        raise Forbidden("only a Developer may approve their recorder")
     p = device_store.approve(req.user_code, who)
     note(who, "device.approve", p.user_code, p.label)
     return PairPending(user_code=p.user_code, label=p.label,
@@ -825,6 +1110,7 @@ def pair_token(req: dict[str, str]) -> PairToken:
     if got is None:
         return PairToken(status="pending", grants=list(devices.SCOPE))
     device, token = got
+    recorder_store.import_legacy(device_store.devices.values())
     note(device.principal(), "device.mint", device.id, device.label)
     return PairToken(status="granted", token=token,
                      device=_device_out(device), grants=list(devices.SCOPE))
@@ -833,6 +1119,8 @@ def pair_token(req: dict[str, str]) -> PairToken:
 @app.get("/api/devices", response_model=list[DeviceOut])
 def list_devices(who: Principal = Depends(caller)) -> list[DeviceOut]:
     """A person's own machines; every machine only for the CISO role."""
+    if not who.has("device.own") and not who.has("device.fleet"):
+        raise Forbidden("this action requires device.own")
     return [_device_out(d) for d in device_store.owned_by(who)]
 
 
@@ -841,10 +1129,13 @@ def revoke_device(device_id: str, who: Principal = Depends(caller)) -> DeviceOut
     """Retire a machine. Takes effect on the next request it makes; there is
     no token lifetime to wait out, which is the point of keeping the hashes
     here rather than issuing self-contained JWTs."""
+    if not who.has("device.own") and not who.has("device.fleet"):
+        raise Forbidden("this action requires device.own")
     try:
         device = device_store.revoke(device_id, who)
     except AuthError as exc:
         raise NotFound(str(exc)) from exc
+    recorder_store.import_legacy(device_store.devices.values())
     note(who, "device.revoke", device.id, device.label)
     return _device_out(device)
 
@@ -1560,7 +1851,11 @@ def run_graph(run_id: str, who: Principal = Depends(caller)) -> GraphPayload:
 @app.get("/api/runs", response_model=list[RunSummary])
 def runs(who: Principal = Depends(caller)) -> list[RunSummary]:
     """Oldest first. A developer's own runs; every run for the analyst."""
-    return gateway.runs(owner=None if who.analyst else who.subject)
+    if who.has("fleet.read"):
+        return gateway.runs(owner=None)
+    if not who.has("run.own"):
+        raise Forbidden("this action requires run.own or fleet.read")
+    return gateway.runs(owner=who.subject)
 
 
 @app.get("/api/runs/{run_id}", response_model=RunSummary)
@@ -1572,7 +1867,7 @@ def run_summary(run_id: str, who: Principal = Depends(caller)) -> RunSummary:
 
 @app.post("/api/runs", response_model=RunSummary, status_code=201)
 def create_run(req: CreateRunRequest,
-               who: Principal = Depends(caller)) -> RunSummary:
+               who: Principal = Depends(require_capability("run.create"))) -> RunSummary:
     """Accept a task. The engine records it as the run's first governed
     memory (USER origin) and returns the run id."""
     task = req.task.strip()
@@ -1617,7 +1912,7 @@ def start_developer_session(
 @app.get("/api/v1/developer/sessions", response_model=SessionListOut)
 def list_developer_sessions(
     limit: int = 100,
-    who: Principal = Depends(caller),
+    who: Principal = Depends(require_capability("run.own")),
 ) -> SessionListOut:
     """List only the authenticated developer's connected-agent sessions."""
     return developer_session_store.list(who, limit=max(1, min(limit, 200)))
@@ -1629,7 +1924,7 @@ def list_developer_sessions(
 )
 def developer_session(
     session_id: str,
-    who: Principal = Depends(caller),
+    who: Principal = Depends(require_capability("run.own")),
 ) -> DeveloperSessionOut:
     return developer_session_store.get(session_id, who)
 
@@ -1683,7 +1978,7 @@ def developer_activity(
     session_id: str,
     after_sequence: int = 0,
     limit: int = 200,
-    who: Principal = Depends(caller),
+    who: Principal = Depends(require_capability("run.own")),
 ) -> ActivityListOut:
     return developer_session_store.events(
         session_id,
@@ -1700,7 +1995,7 @@ def developer_activity(
 def developer_policy_evaluations(
     session_id: str,
     limit: int = 200,
-    who: Principal = Depends(caller),
+    who: Principal = Depends(require_capability("run.own")),
 ) -> PolicyEvaluationListOut:
     return developer_session_store.policy_evaluations(
         session_id, who, limit=max(1, min(limit, 500)),
@@ -1993,6 +2288,8 @@ def list_notifications(
     limit: int = 100,
     who: Principal = Depends(caller),
 ) -> NotificationListOut:
+    if who.platform_admin:
+        raise Forbidden("Platform Administrators do not access workflow notifications")
     values = workflow_store.notifications(
         subject=who.subject, role=who.role, limit=limit,
     )
@@ -2007,6 +2304,8 @@ def read_notification(
     notification_id: str,
     who: Principal = Depends(caller),
 ) -> dict[str, bool]:
+    if who.platform_admin:
+        raise Forbidden("Platform Administrators do not access workflow notifications")
     workflow_store.read_notification(
         notification_id, subject=who.subject, role=who.role,
     )

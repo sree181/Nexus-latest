@@ -69,13 +69,13 @@ export function handleUnauthorized(): void {
 
 // -- local, explicitly unverified development identity -----------------------
 
-export type LocalRole = "developer" | "analyst" | "ciso";
+export type LocalRole = "developer" | "analyst" | "ciso" | "platform_admin";
 
 export function localIdentity(): { user: string; role: LocalRole } {
   const role = localStorage.getItem(LOCAL_ROLE);
   return {
     user: localStorage.getItem(LOCAL_USER) ?? "dev@localhost",
-    role: role === "analyst" || role === "ciso" ? role : "developer",
+    role: role === "analyst" || role === "ciso" || role === "platform_admin" ? role : "developer",
   };
 }
 

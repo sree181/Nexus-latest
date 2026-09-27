@@ -8,6 +8,7 @@ describe("role-aware product entry", () => {
     expect(landingForIdentity({ role: "developer", primary_role: "developer" })).toBe("/developer/sessions");
     expect(landingForIdentity({ role: "analyst", primary_role: "analyst" })).toBe("/analyst/queue");
     expect(landingForIdentity({ role: "ciso", primary_role: "ciso" })).toBe("/ciso/overview");
+    expect(landingForIdentity({ role: "platform_admin", primary_role: "platform_admin" })).toBe("/admin/onboarding/recorder");
   });
 
   it("refuses an inconsistent identity response", () => {

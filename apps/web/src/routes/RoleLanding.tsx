@@ -4,10 +4,11 @@ import { useNavigate } from "@tanstack/react-router";
 import type { Me, Role } from "../lib/api";
 import { useIdentity } from "../lib/useIdentity";
 
-export const roleDestination: Record<Role, "/developer/sessions" | "/analyst/queue" | "/ciso/overview"> = {
+export const roleDestination: Record<Role, "/developer/sessions" | "/analyst/queue" | "/ciso/overview" | "/admin/onboarding/recorder"> = {
   developer: "/developer/sessions",
   analyst: "/analyst/queue",
   ciso: "/ciso/overview",
+  platform_admin: "/admin/onboarding/recorder",
 };
 
 export function landingForIdentity(me: Pick<Me, "role" | "primary_role">): string | null {

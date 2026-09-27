@@ -57,7 +57,7 @@ Windows PowerShell:
 
 The Windows installer builds both `.exe` files, registers and starts the least-privilege logon task, waits for a real daemon health response, writes a native `.cmd` Cursor wrapper, safely merges the hook configuration, and smoke-tests the selected repository. It does not require the binaries to be on `PATH`.
 
-These are explicitly **development** installers. Stage 1B must replace the file-protected development queue key with OS-keystore binding and must code-sign/notarize the binaries before managed enterprise rollout.
+These are explicitly **development** installers. Stage 1B replaces bearer recording credentials with corporate enrollment, proof-bound short-lived credentials, signed policy, and OS-keystore binding. Stage 1C owns code signing, notarization, and managed packages.
 
 On macOS or Linux, configure a repository after the daemon is running:
 
@@ -89,7 +89,7 @@ meshagent-recorder status
 meshagent-recorder replay
 ```
 
-Status reports paths, endpoint source, credential presence, queue counts, queue bytes, validation-blocked batches, and backpressure counters. It never prints tokens, queue keys, prompts, source, commands, package names, or policy details. A semantic API validation failure remains encrypted and visible instead of being deleted or hot-retried; after correcting the cause, `meshagent-recorder replay` explicitly retries retained blocked batches.
+Status reports paths, endpoint source, credential presence, queue counts, queue bytes, validation-blocked batches, backpressure counters, and the last configuration version actually applied. It never prints tokens, queue keys, prompts, source, commands, package names, or policy details. A semantic API validation failure remains encrypted and visible instead of being deleted or hot-retried; after correcting the cause, `meshagent-recorder replay` explicitly retries retained blocked batches.
 
 ## Security and failure behavior
 
@@ -101,6 +101,6 @@ Status reports paths, endpoint source, credential presence, queue counts, queue 
 - Queue bounds preserve the oldest causal prefix. A rejected observation does not consume a sequence number and is counted as backpressure.
 - Queue leases survive daemon termination and are eligible for replay after expiry.
 
-## Stage 1B boundary
+## Enterprise trust boundary
 
-Stage 1A does **not** claim enterprise distribution or signing. Stage 1B adds Apple Developer ID signing/notarization, Windows Authenticode, managed deployment artifacts, OS keystore-backed queue keys, enrollment certificates, policy bundles, rotation, and administrator fleet telemetry.
+The current Stage 1B milestone implements corporate browser enrollment, ten-minute DPoP-bound credentials, signed configuration, wrapped queue-key migration, content-free heartbeat, and immediate quarantine/revocation. Signed policy fetched in the background is stored as verified but is not reported as applied until a safe daemon start activates every effective setting; the administrator UI therefore shows honest desired-versus-applied drift. Development enterprise mode uses an explicitly labelled software P-256 key. Production enterprise mode refuses that adapter without an override. Verified macOS, Windows, and Linux OS-backed key adapters remain the Stage 1B completion gate. Apple Developer ID/notarization, Windows Authenticode, signed Linux packages, SBOM provenance, and managed deployment artifacts belong to Stage 1C.

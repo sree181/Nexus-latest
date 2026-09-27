@@ -4,7 +4,7 @@
 
 Stage 1A implements the native local recording path for Cursor while preserving the existing FastAPI, server-owned identity and authorization, Developer session state machine, and HyperMesh projection semantics.
 
-The implementation intentionally does **not** claim production code signing, notarization, MDM distribution, enrollment certificates, or OS-keystore queue keys. Those are Stage 1B release controls.
+The implementation intentionally does **not** claim corporate enrollment, DPoP device trust, OS-keystore queue keys, production code signing, notarization, or MDM distribution. Enrollment and OS-backed key trust belong to Stage 1B; signed packages and managed distribution begin in Stage 1C.
 
 ## Runtime architecture
 
@@ -113,12 +113,8 @@ The committed gates cover:
 
 A live Stage 1A acceptance test additionally exercises Cursor-shaped events through native IPC, the encrypted queue, the real FastAPI API, and projected HyperMesh records, including a real OSV-backed `requests==2.19.0` block and encrypted offline replay.
 
-## Stage 1B required before enterprise rollout
+## Enterprise controls after Stage 1A
 
-- Apple Developer ID signing and notarization;
-- Windows Authenticode signing;
-- signed package/repository provenance and release manifests;
 - macOS Keychain, Windows DPAPI/CNG, and Linux secret-service/TPM queue-key binding;
-- managed enrollment certificates and tenant/device attestation;
-- MDM deployment and uninstall packages;
-- device policy bundles, credential rotation telemetry, and administrator fleet controls.
+- corporate device enrollment, proof-bound short-lived credentials, signed device policy, credential rotation telemetry, and administrator trust controls (Stage 1B);
+- Apple Developer ID/notarization, Windows Authenticode, signed Linux packages, release provenance, MDM deployment, and uninstall packages (Stage 1C).

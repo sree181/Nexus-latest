@@ -1487,3 +1487,127 @@ button.dev-session-row { width: 100%; border-top: 0; border-right: 0; border-lef
   .control-identity-popover { display: block; }
   .control-identity-heading { display: none; }
 }
+
+
+/* Stage 1B — enterprise recorder trust. These surfaces intentionally expose
+   device health and trust metadata, never developer content or repository data. */
+.admin-page, .recorder-enrollment-page { min-width: 0; flex: 1; overflow: auto; padding: 28px; }
+.admin-page { display: flex; flex-direction: column; gap: 20px; }
+.admin-onboarding-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, .72fr); gap: 20px; align-items: start; }
+.admin-onboarding-steps { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.admin-onboarding-step { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 14px; min-height: 90px; position: relative; }
+.admin-onboarding-step:not(:last-child)::after { position: absolute; top: 36px; bottom: 0; left: 17px; width: 1px; background: var(--line-2); content: ""; }
+.admin-onboarding-step > span { position: relative; z-index: 1; display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface); color: var(--slate); font: 600 12px/1 var(--font-mono); }
+.admin-onboarding-step.is-complete > span { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+.admin-onboarding-step strong { display: block; color: var(--ink); font-size: 15px; }
+.admin-onboarding-step p { max-width: 620px; margin: 5px 0 0; color: var(--slate); font-size: 13px; line-height: 1.55; }
+.admin-command-panel { position: sticky; top: 24px; border: 1px solid var(--line-2); border-radius: 16px; background: var(--surface); padding: 22px; box-shadow: var(--shadow); }
+.admin-command-panel h2 { margin: 6px 0 8px; color: var(--ink); font-family: var(--font-serif); font-size: 22px; line-height: 1.2; }
+.admin-command-panel > p:not(.workflow-eyebrow) { color: var(--slate); font-size: 13px; line-height: 1.55; }
+.admin-command-panel code { display: block; overflow-wrap: anywhere; margin-top: 16px; border-radius: 9px; background: var(--rail); padding: 12px; color: var(--rail-ink); font: 11px/1.6 var(--font-mono); }
+.admin-primary-link { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; margin-top: 16px; border-radius: 9px; background: var(--accent); padding: 0 16px; color: white; font-size: 13px; font-weight: 600; text-decoration: none; }
+.admin-migration-notice { display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1px solid var(--warning); border-radius: 12px; background: var(--warning-soft); padding: 14px 16px; color: var(--ink); }
+.admin-migration-notice div { display: flex; flex-direction: column; gap: 2px; }
+.admin-migration-notice span, .admin-migration-notice time { color: var(--slate); font-size: 12px; }
+.admin-status { display: inline-flex; min-height: 24px; align-items: center; border: 1px solid currentColor; border-radius: 999px; padding: 2px 9px; font: 600 11px/1.2 var(--font-mono); text-transform: capitalize; white-space: nowrap; }
+.admin-status.is-active { color: var(--success); }
+.admin-status.is-pending { color: var(--accent); }
+.admin-status.is-warning { color: var(--warning); }
+.admin-status.is-danger { color: var(--risk); }
+
+.admin-fleet-page { display: flex; min-width: 0; flex: 1; flex-direction: column; overflow: hidden; background: var(--paper); }
+.admin-fleet-header { display: flex; min-height: 108px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); background: var(--surface); padding: 20px 28px; }
+.admin-fleet-header h1 { margin: 4px 0; color: var(--ink); font-family: var(--font-serif); font-size: 27px; line-height: 1.15; }
+.admin-fleet-header > div > p:last-child { margin: 0; color: var(--slate); font-size: 13px; }
+.admin-fleet-workspace { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(270px, 32%) minmax(0, 1fr); }
+.admin-recorder-list { min-height: 0; overflow: auto; border-right: 1px solid var(--line); background: var(--surface); }
+.admin-filter-row { display: flex; gap: 6px; border-bottom: 1px solid var(--line); padding: 12px 14px; }
+.admin-filter-row button { min-height: 30px; border: 1px solid var(--line-2); border-radius: 999px; background: transparent; padding: 0 11px; color: var(--slate); font-size: 11px; text-transform: capitalize; }
+.admin-filter-row button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.admin-recorder-list ul { margin: 0; padding: 0; list-style: none; }
+.admin-recorder-list li { border-bottom: 1px solid var(--line); }
+.admin-recorder-list li > a { display: grid; width: 100%; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 0; background: transparent; padding: 14px; color: var(--ink); text-align: left; text-decoration: none; }
+.admin-recorder-list li > a:hover, .admin-recorder-list li > a.is-selected { background: var(--surface-2); }
+.admin-recorder-list li > a.is-selected { box-shadow: inset 3px 0 var(--accent); }
+.admin-recorder-list li span { min-width: 0; }
+.admin-recorder-list strong, .admin-recorder-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-recorder-list strong { font-size: 13px; }
+.admin-recorder-list small { margin-top: 3px; color: var(--slate); font-size: 10.5px; }
+.admin-recorder-list li span:last-child { text-align: right; }
+.admin-recorder-list b { color: var(--slate); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+.admin-recorder-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--slate); }
+.admin-recorder-dot.is-active { background: var(--success); }
+.admin-recorder-dot.is-warning, .admin-recorder-dot.is-pending { background: var(--warning); }
+.admin-recorder-dot.is-danger { background: var(--risk); }
+.admin-recorder-focus { min-width: 0; overflow: auto; padding: 24px; }
+.admin-recorder-inspector { display: grid; max-width: 920px; gap: 20px; margin: 0 auto; }
+.admin-recorder-inspector > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.admin-recorder-inspector h2 { margin: 4px 0; color: var(--ink); font-family: var(--font-serif); font-size: 28px; }
+.admin-recorder-inspector header p:last-child { margin: 0; color: var(--slate); font-size: 13px; }
+.admin-recorder-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--line); }
+.admin-recorder-facts div { min-width: 0; background: var(--surface); padding: 14px; }
+.admin-recorder-facts dt { color: var(--slate); font: 10px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: .08em; }
+.admin-recorder-facts dd { margin: 6px 0 0; overflow-wrap: anywhere; color: var(--ink); font-size: 13px; }
+.admin-integrity-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-config-drift { margin: 0; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); padding: 10px 12px; color: var(--ink); font-size: 11.5px; line-height: 1.5; }
+.admin-history { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.admin-history summary { cursor: pointer; padding: 14px 16px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.admin-history summary span { margin-left: 6px; color: var(--slate); }
+.admin-history ol { margin: 0; padding: 0 16px 16px; list-style: none; }
+.admin-history li { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 10px; border-top: 1px solid var(--line); padding: 12px 0; }
+.admin-history p { margin: 3px 0; color: var(--ink); font-size: 12px; }
+.admin-history small { color: var(--slate); font-size: 10.5px; }
+.admin-history-mark { width: 8px; height: 8px; margin-top: 5px; border-radius: 99px; background: var(--slate); }
+.admin-history-mark.is-quarantined { background: var(--warning); }
+.admin-history-mark.is-revoked { background: var(--risk); }
+.admin-responsibility { border: 1px solid var(--line-2); border-radius: 14px; background: var(--surface); padding: 18px; box-shadow: var(--shadow); }
+.admin-responsibility h3 { margin: 5px 0; color: var(--ink); font-size: 17px; }
+.admin-responsibility > p:not(.workflow-eyebrow) { max-width: 620px; margin: 0; color: var(--slate); font-size: 12px; line-height: 1.55; }
+.admin-trust-actions { margin-top: 16px; }
+.admin-read-only { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 12px 14px; display: grid; gap: 4px; color: var(--slate); font-size: 11px; }
+.admin-read-only strong { color: var(--ink); font-size: 12px; }
+.admin-action-row { display: flex; gap: 8px; }
+.admin-action-row button, .admin-action-row a, .admin-trust-actions form button, .recorder-enrollment-card button { min-height: 38px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); padding: 0 14px; color: var(--ink); font-size: 12px; font-weight: 600; }
+.admin-action-row a { display: inline-flex; align-items: center; text-decoration: none; }
+.admin-action-row button.is-danger, .admin-trust-actions form button.is-danger { border-color: var(--risk); background: var(--risk-soft); color: var(--risk); }
+.admin-trust-actions form { display: grid; gap: 8px; max-width: 620px; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.admin-trust-actions label { color: var(--ink); font-size: 12px; font-weight: 600; }
+.admin-trust-actions textarea { min-height: 84px; resize: vertical; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); padding: 10px; color: var(--ink); }
+.admin-trust-actions form > p, .admin-action-quiet { color: var(--slate); font-size: 11px; line-height: 1.5; }
+.admin-trust-actions form > div { display: flex; justify-content: flex-end; gap: 8px; }
+.admin-action-error { color: var(--risk); font-size: 12px; }
+
+.recorder-enrollment-page { display: grid; align-content: start; gap: 20px; }
+.recorder-enrollment-page > * { width: min(760px, 100%); margin-right: auto; margin-left: auto; }
+.recorder-enrollment-card { border: 1px solid var(--line-2); border-radius: 16px; background: var(--surface); padding: 24px; box-shadow: var(--shadow); }
+.recorder-enrollment-card form { display: grid; max-width: 420px; gap: 10px; }
+.recorder-enrollment-card label { color: var(--ink); font-size: 13px; font-weight: 600; }
+.recorder-enrollment-card input { min-height: 48px; border: 1px solid var(--line-2); border-radius: 9px; padding: 0 14px; color: var(--ink); font: 600 18px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.recorder-enrollment-card form button, .recorder-enrollment-actions button:last-child { border-color: var(--accent); background: var(--accent); color: white; }
+.recorder-enrollment-review { display: grid; gap: 18px; }
+.recorder-enrollment-review h2 { margin: 4px 0; color: var(--ink); font-family: var(--font-serif); font-size: 25px; }
+.recorder-enrollment-review header p:last-child, .recorder-enrollment-review aside p { margin: 0; color: var(--slate); font-size: 12px; }
+.recorder-enrollment-review dl { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin: 0; }
+.recorder-enrollment-review dl div { border-radius: 9px; background: var(--surface-2); padding: 12px; }
+.recorder-enrollment-review dt { color: var(--slate); font: 10px/1.2 var(--font-mono); text-transform: uppercase; }
+.recorder-enrollment-review dd { margin: 5px 0 0; color: var(--ink); font-size: 12px; }
+.recorder-enrollment-review aside { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 14px; }
+.recorder-enrollment-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 900px) {
+  .admin-onboarding-grid { grid-template-columns: 1fr; }
+  .admin-command-panel { position: static; }
+  .admin-fleet-workspace { grid-template-columns: minmax(230px, 40%) minmax(0, 1fr); }
+  .admin-recorder-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .admin-page, .recorder-enrollment-page { padding: 16px; }
+  .admin-fleet-header { min-height: auto; align-items: flex-start; padding: 16px; }
+  .admin-fleet-header h1 { font-size: 23px; }
+  .admin-fleet-workspace { display: block; overflow: auto; }
+  .admin-recorder-list { max-height: 43vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .admin-recorder-focus { overflow: visible; padding: 16px; }
+  .admin-recorder-facts, .recorder-enrollment-review dl { grid-template-columns: 1fr; }
+  .admin-migration-notice { align-items: flex-start; flex-direction: column; }
+}

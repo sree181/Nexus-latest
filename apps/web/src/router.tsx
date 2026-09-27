@@ -52,6 +52,9 @@ import { DeveloperConnectionsEditors } from "./routes/DeveloperConnectionsEditor
 import { DeveloperConnectionsRepositories } from "./routes/DeveloperConnectionsRepositories";
 import { DeveloperConnectionsDevices } from "./routes/DeveloperConnectionsDevices";
 import { AnalystReviewDetail } from "./routes/AnalystReviewDetail";
+import { AdminOnboarding } from "./routes/AdminOnboarding";
+import { AdminRecorders } from "./routes/AdminRecorders";
+import { RecorderEnrollment } from "./routes/RecorderEnrollment";
 import { useIdentity } from "./lib/useIdentity";
 
 /** The banner sits above the rail rather than inside a screen: what it reports
@@ -283,6 +286,30 @@ const cisoReportsRoute = createRoute({
   component: () => <RequiresCapability capability="report.generate"><CisoReports /></RequiresCapability>,
 });
 
+const adminOnboardingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/onboarding/recorder",
+  component: () => <RequiresCapability capability="recorder.admin.read"><AdminOnboarding /></RequiresCapability>,
+});
+
+const adminRecordersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/recorders",
+  component: () => <RequiresCapability capability="recorder.admin.read"><AdminRecorders /></RequiresCapability>,
+});
+
+const adminRecorderDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/recorders/$deviceId",
+  component: () => <RequiresCapability capability="recorder.admin.read"><AdminRecorders /></RequiresCapability>,
+});
+
+const recorderEnrollmentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/connect/recorder",
+  component: RecorderEnrollment,
+});
+
 const auditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/audit",
@@ -431,6 +458,10 @@ const routeTree = rootRoute.addChildren([
   cisoApprovalsRoute,
   cisoRemediationRoute,
   cisoReportsRoute,
+  adminOnboardingRoute,
+  adminRecordersRoute,
+  adminRecorderDetailRoute,
+  recorderEnrollmentRoute,
   structureRoute,
   auditRoute,
   devicesRoute,
