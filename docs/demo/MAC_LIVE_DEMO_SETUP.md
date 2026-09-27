@@ -1,6 +1,6 @@
-# MeshAgent Mac Setup for a Live Cursor and GitHub Demo
+# meshAgent Mac Setup for a Live Cursor and GitHub Demo
 
-**Purpose:** Run the real EngineGateway locally, connect a real GitHub clone to Cursor, and generate new Developer, Analyst, and CISO records during the presentation.
+**Purpose:** Run the real EngineGateway locally, connect a real GitHub clone to Cursor, and generate new Developer, Analyst, and CISO records during the presentation with the approved seven-screen Figma workflow.
 
 ## 1. What this setup proves
 
@@ -19,21 +19,45 @@ docker version
 docker compose version
 ```
 
-## 3. Clone and start MeshAgent
+## 3. Clone and start meshAgent
 
-Use the release branch supplied with the demo package. From Terminal:
+Use the Figma-fidelity branch from `sree181/Nexus-latest`. Existing clones may
+have an `origin` that points to `sree181/meshagent`, where this branch does not
+exist. Configure a dedicated `nexus-latest` remote so the commands do not depend
+on what `origin` means in that clone. Keep each command on one line:
+
+For a new installation, create and enter the clone first. Existing installations
+should skip these two commands and run the remaining commands from their current
+meshAgent repository:
 
 ```bash
 git clone https://github.com/sree181/Nexus-latest.git meshagent
 cd meshagent
-git switch manus/figma-workflow-integration-v1
-git pull --ff-only
-git rev-parse --short HEAD
-
-docker compose up --build -d
 ```
 
-For the redesigned seven-screen release, the expected commit is `bf0d3bc`.
+```bash
+git remote get-url nexus-latest >/dev/null 2>&1 && git remote set-url nexus-latest https://github.com/sree181/Nexus-latest.git || git remote add nexus-latest https://github.com/sree181/Nexus-latest.git
+git fetch nexus-latest refs/heads/manus/figma-exact-v3:refs/remotes/nexus-latest/manus/figma-exact-v3
+git show-ref --verify refs/remotes/nexus-latest/manus/figma-exact-v3
+git switch manus/figma-exact-v3 2>/dev/null || git switch --track -c manus/figma-exact-v3 nexus-latest/manus/figma-exact-v3
+git branch --set-upstream-to=nexus-latest/manus/figma-exact-v3 manus/figma-exact-v3
+git pull --ff-only
+git rev-parse --short HEAD
+git rev-parse --short nexus-latest/manus/figma-exact-v3
+
+docker compose down
+docker compose build --no-cache web api
+docker compose up -d --force-recreate
+```
+
+The two `git rev-parse` commands must print the same commit. This v3 branch is a
+direct descendant of the completed Stage 1B release, so it contains the native
+recorder, corporate enrollment, device trust, DPoP control plane, and the exact
+workflow reconstruction. `docker compose down`
+preserves the named data volume; do **not** add `-v` unless you intend to erase
+the demonstration state. The uncached build is deliberate: the web image copies
+the Vite bundle at image-build time, so restarting an older image cannot reveal
+the new interface.
 
 Wait until the API is healthy, then open `http://localhost:8080`.
 
@@ -43,6 +67,11 @@ docker compose ps
 ```
 
 The health payload must report `"status": "ok"`, `"gateway": "EngineGateway"`, and `"durable": true`. Local role switching is intentionally visible in this development configuration. It is not the production identity path.
+
+If Chrome was already open on the old interface, use **Reload this page → Hard
+Reload** or open `http://localhost:8080` in a new private window. meshAgent does
+not register a service worker; the hashed JavaScript and CSS asset names should
+change after the uncached image rebuild.
 
 Run the packaged read-only preflight at any time:
 
@@ -73,7 +102,7 @@ meshagent doctor
 
 `meshagent doctor` must report a durable EngineGateway and no local permission or queue failures.
 
-Build the Stage 1A native binaries and register the per-user LaunchAgent:
+Build the native recorder binaries and register the per-user LaunchAgent:
 
 ```bash
 # Fully quit Cursor first. Preserve and deliver every legacy Python batch.
@@ -86,9 +115,11 @@ scripts/recorder/install-dev.sh
 ```
 
 The status output must show the configured API origin, `credentials.device: true`,
-and an empty queue. This development installer uses a private file-protected
-queue key. Enterprise signing, notarization, MDM distribution, and OS-keystore
-binding are deliberately reserved for Stage 1B.
+and an empty queue. Stage 1B adds corporate enrollment, device trust, DPoP, signed
+configuration, and recorder administration. The development installer still
+uses a private file-protected queue key; production endpoint rollout remains
+gated on OS-backed keystore adapters, signing/notarization, MDM distribution,
+and real-OS lifecycle acceptance.
 
 ## 5. Connect a real GitHub repository to Cursor
 

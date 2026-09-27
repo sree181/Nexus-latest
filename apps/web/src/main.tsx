@@ -6,6 +6,7 @@ import { SignInGate } from "./components/SignInGate";
 import { queryClient } from "./lib/queryClient";
 import { router } from "./router";
 import "./index.css";
+import "./figma-workflow-v3.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

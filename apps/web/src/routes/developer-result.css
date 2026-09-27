@@ -1,0 +1,351 @@
+/* Developer Review Result — route-only v3 staging styles. */
+.figma3-result-page {
+  width: 100%;
+  background: var(--figma3-canvas);
+}
+
+.figma3-result-state {
+  display: grid;
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 48px 28px;
+}
+
+.figma3-result-desktop {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  overflow: hidden;
+}
+
+.figma3-result-main {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--figma3-canvas);
+}
+
+.figma3-result-narrative {
+  width: min(820px, 100%);
+  padding: 24px 28px 52px;
+}
+
+.figma3-result-back,
+.figma3-result-mobile-back {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  color: var(--figma3-copy);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.figma3-result-back svg,
+.figma3-result-mobile-back svg {
+  transform: rotate(180deg);
+}
+
+.figma3-result-readonly {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 18px;
+  border: 1px solid var(--figma3-border);
+  border-radius: 7px;
+  background: #fff;
+  padding: 9px 12px;
+  color: var(--figma3-copy);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.figma3-result-readonly svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--figma3-muted);
+}
+
+.figma3-result-hero {
+  --figma3-result-accent: var(--figma3-teal);
+  --figma3-result-accent-dark: var(--figma3-teal-dark);
+  --figma3-result-tint: var(--figma3-teal-bg);
+  --figma3-result-line: #99f6e4;
+  display: grid;
+  gap: 13px;
+  margin-bottom: 16px;
+  border: 1px solid var(--figma3-result-line);
+  border-left: 4px solid var(--figma3-result-accent);
+  border-radius: 0 10px 10px 0;
+  background: var(--figma3-result-tint);
+  padding: 17px 20px 15px;
+}
+
+.figma3-result-hero.is-warning {
+  --figma3-result-accent: var(--figma3-amber);
+  --figma3-result-accent-dark: var(--figma3-amber-dark);
+  --figma3-result-tint: var(--figma3-amber-bg);
+  --figma3-result-line: #fde68a;
+}
+
+.figma3-result-hero.is-danger {
+  --figma3-result-accent: var(--figma3-red);
+  --figma3-result-accent-dark: var(--figma3-red-dark);
+  --figma3-result-tint: var(--figma3-red-bg);
+  --figma3-result-line: #fecaca;
+}
+
+.figma3-result-hero.is-success {
+  --figma3-result-accent: var(--figma3-green);
+  --figma3-result-accent-dark: var(--figma3-green-dark);
+  --figma3-result-tint: var(--figma3-green-bg);
+  --figma3-result-line: #bbf7d0;
+}
+
+.figma3-result-hero.is-info {
+  --figma3-result-accent: var(--figma3-violet);
+  --figma3-result-accent-dark: var(--figma3-violet);
+  --figma3-result-tint: var(--figma3-violet-bg);
+  --figma3-result-line: #ddd6fe;
+}
+
+.figma3-result-hero-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.figma3-result-hero-status > code {
+  overflow: hidden;
+  color: var(--figma3-muted);
+  font: 500 10px/1.3 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma3-result-hero-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.figma3-result-hero-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--figma3-result-accent);
+  color: white;
+}
+
+.figma3-result-hero-copy > div { min-width: 0; }
+.figma3-result-hero-copy p {
+  margin: 0 0 3px;
+  color: var(--figma3-result-accent-dark);
+  font: 700 9px/1.3 var(--font-mono);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.figma3-result-hero-copy h1 {
+  margin: 0 0 6px;
+  color: var(--figma3-ink);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.22;
+}
+.figma3-result-hero-copy > div > div {
+  max-width: 660px;
+  color: var(--figma3-copy);
+  font-size: 12px;
+  line-height: 1.62;
+}
+
+.figma3-result-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 13px;
+  border-top: 1px solid color-mix(in srgb, var(--figma3-result-line), transparent 24%);
+  padding-top: 10px;
+  color: var(--figma3-copy);
+  font-size: 10px;
+}
+.figma3-result-hero-meta code { color: var(--figma3-ink); font: 600 10px/1.35 var(--font-mono); }
+
+.figma3-result-action-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  border-radius: 9px;
+  background: var(--figma3-navy);
+  padding: 14px 17px;
+}
+.figma3-result-action-dock > div { display: grid; min-width: 0; gap: 2px; }
+.figma3-result-action-dock p { margin: 0; color: rgba(255,255,255,.5); font-size: 10px; }
+.figma3-result-action-dock strong { color: white; font-size: 13px; }
+.figma3-result-action-dock span { color: rgba(255,255,255,.58); font-size: 11px; line-height: 1.4; }
+.figma3-result-action-dock .figma3-primary,
+.figma3-result-action-dock .figma3-secondary {
+  flex: 0 0 auto;
+  border-color: rgba(255,255,255,.22);
+  background: rgba(255,255,255,.12);
+  color: white;
+  white-space: nowrap;
+}
+
+.figma3-result-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.figma3-result-facts > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--figma3-border);
+  border-radius: 7px;
+  background: white;
+  padding: 9px 12px;
+}
+.figma3-result-facts small { color: var(--figma3-muted); font: 700 9px/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.figma3-result-facts strong { overflow: hidden; color: var(--figma3-ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.figma3-result-facts .is-risk { border-color: #fecaca; background: var(--figma3-red-bg); }
+.figma3-result-facts .is-risk small,
+.figma3-result-facts .is-risk strong { color: var(--figma3-red-dark); }
+
+.figma3-result-journey-card,
+.figma3-result-mobile-journey {
+  margin-bottom: 18px;
+  border: 1px solid var(--figma3-border);
+  border-radius: 8px;
+  background: white;
+  padding: 12px 16px;
+}
+.figma3-result-journey-card .figma3-kicker,
+.figma3-result-mobile-journey .figma3-kicker { margin-bottom: 10px; }
+
+.figma3-result-response { margin-bottom: 18px; }
+.figma3-result-response .figma3-kicker { margin-bottom: 9px; }
+.figma3-result-response blockquote {
+  display: flex;
+  gap: 9px;
+  margin: 0;
+  border-left: 3px solid var(--figma3-teal);
+  border-radius: 0 7px 7px 0;
+  background: white;
+  padding: 11px 13px;
+  color: var(--figma3-copy);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.55;
+}
+.figma3-result-response blockquote svg { flex: 0 0 auto; margin-top: 1px; color: var(--figma3-teal); }
+
+.figma3-result-evidence-path,
+.figma3-result-evidence-section,
+.figma3-result-mobile-evidence { margin-bottom: 20px; }
+.figma3-result-evidence-path > .figma3-kicker,
+.figma3-result-evidence-section > .figma3-kicker,
+.figma3-result-mobile-evidence > .figma3-kicker { margin-bottom: 10px; }
+.figma3-result-evidence-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding-bottom: 3px;
+}
+.figma3-result-evidence-token {
+  display: grid;
+  min-width: 120px;
+  flex: 0 0 auto;
+  gap: 2px;
+  border: 1px solid var(--figma3-border);
+  border-radius: 7px;
+  background: white;
+  padding: 7px 10px;
+}
+.figma3-result-evidence-token.is-action { border-color: #99f6e4; background: var(--figma3-teal-bg); }
+.figma3-result-evidence-token code,
+.figma3-result-evidence-token strong { overflow: hidden; color: var(--figma3-ink); font: 600 10px/1.35 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.figma3-result-evidence-token.is-action code { color: var(--figma3-teal-dark); }
+.figma3-result-evidence-token small { color: var(--figma3-muted); font-size: 9px; }
+.figma3-result-evidence-verb { flex: 0 0 auto; padding: 0 7px; color: var(--figma3-muted); font-size: 9px; font-style: italic; white-space: nowrap; }
+.figma3-result-graph-note { margin: 8px 0 0; color: var(--figma3-muted); font-size: 10px; line-height: 1.45; }
+
+.figma3-result-disclosures { border-top: 1px solid var(--figma3-border); }
+.figma3-result-disclosures details { border-bottom: 1px solid var(--figma3-border); }
+.figma3-result-disclosures summary {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto auto;
+  min-height: 43px;
+  cursor: pointer;
+  align-items: center;
+  gap: 8px;
+  color: var(--figma3-copy);
+  font-size: 11px;
+  font-weight: 650;
+  list-style: none;
+}
+.figma3-result-disclosures summary::-webkit-details-marker { display: none; }
+.figma3-result-disclosures summary > span:nth-child(2) { min-width: 19px; border-radius: 4px; background: var(--figma3-subtle); padding: 2px 5px; color: var(--figma3-muted); font: 700 9px/1.2 var(--font-mono); text-align: center; }
+.figma3-result-disclosures summary svg { transition: transform 150ms var(--figma3-ease); }
+.figma3-result-disclosures details[open] summary svg { transform: rotate(180deg); }
+.figma3-result-disclosures details > div { display: grid; gap: 7px; padding: 0 0 13px; color: var(--figma3-copy); font-size: 11px; line-height: 1.55; }
+.figma3-result-disclosures details > div > p { margin: 0; }
+
+.figma3-result-history { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.figma3-result-history li { display: grid; grid-template-columns: 25px minmax(0,1fr) auto; gap: 8px; align-items: start; border: 1px solid var(--figma3-border); border-radius: 6px; background: white; padding: 7px; }
+.figma3-result-history-icon { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: var(--figma3-teal-bg); color: var(--figma3-teal); }
+.figma3-result-history-copy { display: grid; gap: 2px; min-width: 0; }
+.figma3-result-history-copy strong { color: var(--figma3-ink); font-size: 10px; text-transform: capitalize; }
+.figma3-result-history-copy small { color: var(--figma3-copy); font-size: 10px; line-height: 1.4; }
+.figma3-result-history time { color: var(--figma3-muted); font-size: 9px; white-space: nowrap; }
+
+.figma3-result-dock { width: 300px; }
+.figma3-result-dock .figma3-dock-actions .figma3-secondary { background: var(--figma3-subtle); }
+.figma3-result-dock-facts { display: grid; gap: 9px; margin: 0 0 14px; }
+.figma3-result-dock-facts div { display: grid; grid-template-columns: 84px minmax(0,1fr); gap: 7px; }
+.figma3-result-dock-facts dt { color: var(--figma3-muted); font: 700 9px/1.4 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.figma3-result-dock-facts dd { overflow: hidden; margin: 0; color: var(--figma3-ink); font: 500 10px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.figma3-result-integrity { display: grid; gap: 6px; margin-bottom: 14px; }
+.figma3-result-integrity .workflow-integrity-ref { width: 100%; }
+.figma3-result-dock-notice { margin: 0; border-top: 1px solid var(--figma3-border); padding-top: 12px; color: var(--figma3-muted); font-size: 10px; line-height: 1.5; }
+
+.figma3-result-mobile { width: 100%; min-width: 0; min-height: 0; flex-direction: column; background: var(--figma3-canvas); }
+.figma3-result-mobile-scroll { min-height: 0; flex: 1; overflow-y: auto; padding: 16px; }
+.figma3-result-mobile .figma3-result-readonly { margin-top: 11px; }
+.figma3-result-mobile .figma3-result-hero { margin-bottom: 14px; padding: 14px 15px 13px; }
+.figma3-result-mobile .figma3-result-hero-copy h1 { font-size: 16px; }
+.figma3-result-mobile .figma3-result-hero-copy > div > div { font-size: 11px; }
+.figma3-result-mobile .figma3-result-hero-meta { padding-top: 8px; }
+.figma3-result-mobile-journey .figma3-journey { max-height: 230px; overflow-y: auto; }
+.figma3-result-mobile .figma3-evidence-trail > ol li { grid-template-columns: 7px minmax(76px,98px) minmax(0,1fr); }
+
+@media (max-width: 1080px) and (min-width: 769px) {
+  .figma3-result-desktop { grid-template-columns: minmax(0, 1fr) 280px; }
+  .figma3-result-dock { width: 280px; }
+  .figma3-result-narrative { padding-inline: 22px; }
+  .figma3-result-journey-card .figma3-journey li:not(:last-child) { margin-right: 15px; }
+  .figma3-result-journey-card .figma3-journey-line { width: 15px; }
+}
+
+@media (max-width: 768px) {
+  .figma3-result-state { padding: 32px 16px; }
+  .figma3-result-facts { grid-template-columns: 1fr; }
+  .figma3-result-action-dock { align-items: flex-start; flex-direction: column; }
+  .figma3-result-action-dock .figma3-primary,
+  .figma3-result-action-dock .figma3-secondary { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .figma3-result-disclosures summary svg { transition: none; }
+}

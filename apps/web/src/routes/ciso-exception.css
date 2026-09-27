@@ -1,0 +1,159 @@
+/* CISO Exception v3 — route-scoped staging styles. */
+.figma3-exception-page { background: var(--figma3-canvas); }
+.figma3-exception-page a { color: inherit; }
+.figma3-exception-page button { cursor: pointer; font: inherit; }
+.figma3-exception-page button:focus-visible,
+.figma3-exception-page a:focus-visible,
+.figma3-exception-page summary:focus-visible { outline: 2px solid var(--figma3-teal); outline-offset: 2px; }
+
+.figma3-exception-desktop { display: grid; width: 100%; min-width: 0; min-height: 0; grid-template-columns: minmax(0, 1fr) 300px; overflow: hidden; }
+.figma3-exception-main { min-width: 0; min-height: 0; overflow-y: auto; background: var(--figma3-canvas); }
+.figma3-exception-body { width: min(820px, 100%); padding: 24px 28px 52px; }
+.figma3-exception-state { display: grid; width: 100%; min-height: 0; flex: 1; place-items: center; padding: 24px; overflow: auto; }
+.figma3-exception-state .workflow-state { width: min(540px, 100%); }
+
+.figma3-exception-back-link { display: inline-flex; align-items: center; margin-bottom: 18px; color: var(--figma3-copy); font-size: 12px; font-weight: 550; text-decoration: none; }
+.figma3-exception-back-link:hover { color: var(--figma3-teal-dark); }
+.figma3-exception-heading { margin-bottom: 20px; }
+.figma3-exception-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 8px; }
+.figma3-exception-meta > code { border-radius: 4px; background: var(--figma3-amber-bg); padding: 3px 7px; color: var(--figma3-amber-dark); font: 700 10px/1.25 var(--font-mono); }
+.figma3-exception-meta .badge { font-size: 10px; }
+.figma3-exception-renewal { border-radius: 4px; background: var(--figma3-subtle); padding: 3px 7px; color: var(--figma3-copy); font-size: 10px; font-weight: 650; }
+.figma3-exception-heading h1 { margin: 0 0 4px; color: var(--figma3-ink); font-size: 22px; font-weight: 800; letter-spacing: -.03em; line-height: 1.2; }
+.figma3-exception-scope { max-width: 100%; margin: 0; overflow-wrap: anywhere; color: var(--figma3-copy); font: 12px/1.5 var(--font-mono); }
+.figma3-exception-policy-link { display: inline-block; margin-top: 7px; color: var(--figma3-teal-dark); font-size: 11px; font-weight: 600; text-decoration: none; }
+.figma3-exception-policy-link:hover { text-decoration: underline; }
+
+.figma3-exception-journey-card,
+.figma3-exception-mobile-journey { margin-bottom: 20px; border: 1px solid var(--figma3-border); border-radius: 9px; background: var(--figma3-surface); padding: 12px 16px; }
+.figma3-exception-journey-card .figma3-kicker,
+.figma3-exception-mobile-journey .figma3-kicker { margin-bottom: 10px; }
+.figma3-exception-journey-card .figma3-journey { justify-content: space-between; }
+
+.figma3-exception-status-banner { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; border: 1px solid #99f6e4; border-left: 4px solid var(--figma3-teal); border-radius: 0 9px 9px 0; background: var(--figma3-teal-bg); padding: 13px 16px; }
+.figma3-exception-status-icon { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 7px; background: var(--figma3-teal); color: white; font-size: 15px; font-weight: 800; }
+.figma3-exception-status-banner > div { display: grid; gap: 2px; min-width: 0; }
+.figma3-exception-status-banner p { margin: 0; color: var(--figma3-teal-dark); font: 700 9px/1.3 var(--font-mono); letter-spacing: .09em; text-transform: uppercase; }
+.figma3-exception-status-banner strong { color: var(--figma3-ink); font-size: 13px; line-height: 1.35; }
+.figma3-exception-status-banner span:last-child { color: var(--figma3-copy); font-size: 11px; line-height: 1.45; }
+
+.figma3-exception-receipt { display: grid; gap: 14px; margin-bottom: 16px; border: 1px solid var(--figma3-border); border-radius: 10px; background: white; padding: 16px 18px; }
+.figma3-exception-receipt.is-active { border-top: 3px solid var(--figma3-teal); }
+.figma3-exception-receipt.is-terminal { border-top: 3px solid var(--figma3-border-strong); }
+.figma3-exception-receipt > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.figma3-exception-receipt > header > span { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.figma3-exception-receipt > header strong { color: var(--figma3-ink); font-size: 13px; line-height: 1.35; }
+.figma3-exception-receipt > header small { flex: 0 0 auto; color: var(--figma3-amber-dark); font: 700 10px/1.3 var(--font-mono); }
+.figma3-exception-receipt-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.figma3-exception-receipt-grid > div { display: grid; min-width: 0; gap: 4px; border-top: 3px solid var(--figma3-border-strong); border-radius: 6px; background: var(--figma3-subtle); padding: 8px 10px; }
+.figma3-exception-receipt-grid > div:first-child { border-top-color: var(--figma3-teal); }
+.figma3-exception-receipt-grid > div:last-child { border-top-color: var(--figma3-amber); }
+.figma3-exception-receipt-grid small { color: var(--figma3-muted); font: 700 8px/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.figma3-exception-receipt-grid strong { overflow: hidden; color: var(--figma3-ink); font-size: 11px; font-weight: 650; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.figma3-exception-receipt blockquote { display: grid; gap: 6px; margin: 0; border: 1px solid #ddd6fe; border-radius: 7px; background: var(--figma3-violet-bg); padding: 11px 13px; }
+.figma3-exception-receipt blockquote.is-risk { border-color: #fecaca; background: var(--figma3-red-bg); }
+.figma3-exception-receipt blockquote .figma3-kicker { color: var(--figma3-violet); }
+.figma3-exception-receipt blockquote.is-risk .figma3-kicker { color: var(--figma3-red); }
+.figma3-exception-receipt blockquote > span { color: var(--figma3-ink); font-size: 12px; line-height: 1.55; }
+.figma3-exception-receipt blockquote > small { color: var(--figma3-muted); font-size: 10px; }
+.figma3-exception-receipt-note { margin: -2px 0 0; color: var(--figma3-copy); font-size: 11px; line-height: 1.5; }
+
+.figma3-exception-current-action { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; border: 1px solid var(--figma3-border); border-radius: 9px; background: var(--figma3-surface); padding: 14px 16px; }
+.figma3-exception-current-action > div:first-child { display: grid; min-width: 0; gap: 4px; }
+.figma3-exception-current-action .figma3-kicker { margin-bottom: 1px; }
+.figma3-exception-current-action strong { color: var(--figma3-ink); font-size: 12px; }
+.figma3-exception-current-action span { color: var(--figma3-copy); font-size: 11px; line-height: 1.5; }
+.figma3-exception-inline-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 7px; }
+.figma3-exception-inline-actions .figma3-primary,
+.figma3-exception-inline-actions .figma3-danger { min-height: 36px; font-size: 12px; }
+
+.figma3-exception-disclosures { margin-top: 6px; border: 1px solid var(--figma3-border); border-radius: 10px; background: var(--figma3-surface); padding: 0 17px; }
+.figma3-exception-disclosures details { border-bottom: 1px solid var(--figma3-border); }
+.figma3-exception-disclosures details:last-child { border-bottom: 0; }
+.figma3-exception-disclosures summary { display: flex; min-height: 44px; cursor: pointer; align-items: center; justify-content: space-between; gap: 12px; color: var(--figma3-copy); font-size: 12px; font-weight: 650; }
+.figma3-exception-disclosures summary::marker { color: var(--figma3-muted); }
+.figma3-exception-disclosures summary > span { border-radius: 999px; background: var(--figma3-subtle); padding: 2px 7px; color: var(--figma3-muted); font: 700 9px/1.3 var(--font-mono); }
+.figma3-exception-disclosures details > :not(summary) { margin-bottom: 14px; }
+.figma3-exception-evidence-body { display: grid; gap: 12px; }
+.figma3-exception-evidence-ids { display: flex; flex-wrap: wrap; gap: 6px; }
+.figma3-exception-evidence-ids p { margin: 0; color: var(--figma3-muted); font-size: 11px; }
+.figma3-exception-evidence-link { border: 1px solid #99f6e4; border-radius: 5px; background: var(--figma3-teal-bg); padding: 4px 7px; color: var(--figma3-teal-dark) !important; font: 600 10px/1.3 var(--font-mono); text-decoration: none; }
+.figma3-exception-evidence-link:not(.is-static):hover { background: white; text-decoration: underline; }
+.figma3-exception-brief { display: grid; gap: 10px; margin: 0; }
+.figma3-exception-brief > div { display: grid; gap: 4px; }
+.figma3-exception-brief dt { color: var(--figma3-muted); font: 700 9px/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.figma3-exception-brief dd { margin: 0; overflow-wrap: anywhere; color: var(--figma3-copy); font-size: 11px; line-height: 1.55; }
+.figma3-exception-lineage,
+.figma3-exception-integrity,
+.figma3-exception-dock-integrity { display: grid; gap: 7px; }
+.figma3-exception-lineage .workflow-integrity-ref,
+.figma3-exception-integrity .workflow-integrity-ref,
+.figma3-exception-dock-integrity .workflow-integrity-ref { width: 100%; }
+.figma3-exception-events { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.figma3-exception-events li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: start; gap: 9px; }
+.figma3-exception-events li > span { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--figma3-teal); }
+.figma3-exception-events li > div { display: grid; min-width: 0; gap: 2px; }
+.figma3-exception-events strong { color: var(--figma3-ink); font-size: 11px; text-transform: capitalize; }
+.figma3-exception-events small { overflow-wrap: anywhere; color: var(--figma3-copy); font-size: 10px; line-height: 1.45; }
+.figma3-exception-events time { color: var(--figma3-muted); font: 9px/1.35 var(--font-mono); text-align: right; }
+
+.figma3-exception-dock { width: 300px; }
+.figma3-exception-dock .figma3-dock-extra { display: grid; align-content: start; gap: 16px; }
+.figma3-exception-dock-buttons,
+.figma3-exception-form-buttons { display: grid; gap: 8px; }
+.figma3-exception-dock-buttons > *,
+.figma3-exception-form-buttons > * { width: 100%; }
+.figma3-exception-separation { margin: 0; border: 1px solid #fde68a; border-radius: 7px; background: var(--figma3-amber-bg); padding: 10px 11px; color: var(--figma3-amber-dark); font-size: 11px; line-height: 1.5; }
+.figma3-exception-action-form { display: grid; gap: 10px; border: 1px solid #ddd6fe; border-radius: 9px; background: var(--figma3-violet-bg); padding: 12px; }
+.figma3-exception-action-form .figma3-kicker { color: var(--figma3-violet); }
+.figma3-exception-form-note { margin: -4px 0 1px; color: var(--figma3-copy); font-size: 11px; line-height: 1.5; }
+.figma3-exception-action-form label { color: var(--figma3-copy); }
+.figma3-exception-action-form input,
+.figma3-exception-action-form textarea { border-color: var(--figma3-border-strong); }
+.figma3-exception-approved-by { display: grid; gap: 4px; border-top: 1px solid var(--figma3-border); padding-top: 14px; }
+.figma3-exception-approved-by strong { color: var(--figma3-ink); font-size: 11px; }
+.figma3-exception-approved-by small { color: var(--figma3-muted); font-size: 10px; }
+
+.figma3-exception-mobile { width: 100%; min-width: 0; min-height: 0; flex-direction: column; background: var(--figma3-canvas); }
+.figma3-exception-mobile-bar { display: flex; min-height: 56px; flex: 0 0 auto; align-items: center; gap: 10px; background: var(--figma3-navy); padding: 8px 16px; }
+.figma3-exception-mobile-bar > a { display: grid; width: 38px; height: 38px; flex: 0 0 38px; place-items: center; color: rgba(255,255,255,.72); font-size: 19px; text-decoration: none; }
+.figma3-exception-mobile-bar > div { display: grid; gap: 2px; min-width: 0; }
+.figma3-exception-mobile-bar strong { overflow: hidden; color: white; font: 700 12px/1.25 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.figma3-exception-mobile-bar small { color: rgba(255,255,255,.55); font-size: 10px; text-transform: capitalize; }
+.figma3-exception-mobile-scroll { min-height: 0; flex: 1; overflow-y: auto; padding: 16px 16px 26px; }
+.figma3-exception-mobile-heading { margin-bottom: 13px; }
+.figma3-exception-mobile-heading .figma3-exception-meta { margin-bottom: 6px; }
+.figma3-exception-mobile-heading .figma3-exception-scope { font-size: 11px; }
+.figma3-exception-mobile-journey { margin: 14px 0; }
+.figma3-exception-mobile-actions { display: grid; gap: 12px; margin-bottom: 15px; }
+
+@media (max-width: 1120px) and (min-width: 769px) {
+  .figma3-exception-desktop { grid-template-columns: minmax(0, 1fr) 280px; }
+  .figma3-exception-dock { width: 280px; }
+  .figma3-exception-body { padding-inline: 22px; }
+  .figma3-exception-receipt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figma3-exception-journey-card .figma3-journey { justify-content: flex-start; }
+}
+
+@media (max-width: 768px) {
+  .figma3-exception-mobile-scroll .figma3-exception-receipt { padding: 13px; }
+  .figma3-exception-receipt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figma3-exception-current-action { align-items: stretch; flex-direction: column; gap: 12px; }
+  .figma3-exception-inline-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .figma3-exception-inline-actions > * { width: 100%; }
+  .figma3-exception-disclosures { padding-inline: 13px; }
+  .figma3-exception-events li { grid-template-columns: 9px minmax(0, 1fr); }
+  .figma3-exception-events time { grid-column: 2; text-align: left; }
+}
+
+@media (max-width: 420px) {
+  .figma3-exception-mobile-scroll { padding-inline: 12px; }
+  .figma3-exception-receipt-grid { gap: 6px; }
+  .figma3-exception-receipt-grid > div { padding: 7px 8px; }
+  .figma3-exception-receipt-grid strong { font-size: 10px; }
+  .figma3-exception-inline-actions { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .figma3-exception-page * { scroll-behavior: auto !important; }
+}

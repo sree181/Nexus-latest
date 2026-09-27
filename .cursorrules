@@ -1,8 +1,14 @@
-# MeshAgent — Cursor project rules
+# meshAgent — Cursor project rules
 
-You are working in the MeshAgent monorepo: governed agent memory over a HyperMesh
+You are working in the meshAgent monorepo: governed agent memory over a HyperMesh
 hypergraph. Frontend is React + TypeScript (Vite). Backend is FastAPI (Python)
-wrapping the MeshAgent engine through a single gateway.
+wrapping the meshAgent engine through a single gateway. Before substantial work,
+read `docs/CURSOR_ENGINEERING_GUIDE.md` for the current branch, architecture,
+directory map, runtime modes, role boundaries, change recipes, and validation gates.
+
+meshAgent has four non-composable roles: Developer, Analyst, CISO, and Platform
+Administrator. Platform Administrator is a content-free recorder trust role; it
+does not inherit Developer, Analyst, or CISO access.
 
 ## Architecture you must respect
 - The UI never talks to the engine directly. It calls the FastAPI service.
