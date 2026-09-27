@@ -1,22 +1,22 @@
-# MeshAgent Production v1
+# meshAgent Production v1
 
-MeshAgent is a **single-tenant, customer-operated control plane for governed agent memory**. It records governed-memory relationships, provenance, security and package observations, and deletion certificates; a React web application exposes Developer, Analyst, and CISO journeys through a FastAPI API. This README is the authoritative description of the shipped v1 architecture and supported modes. Operational procedures are in [Production Operations](docs/PRODUCTION_OPERATIONS.md), security reporting is in [SECURITY.md](SECURITY.md), and support boundaries are in [SUPPORT.md](SUPPORT.md).
+meshAgent is a **single-tenant, customer-operated control plane for governed agent memory**. It records governed-memory relationships, provenance, security and package observations, and deletion certificates; a React web application exposes Developer, Analyst, CISO, and Platform Administrator journeys through a FastAPI API. This README is the authoritative description of the shipped v1 architecture and supported modes. Operational procedures are in [Production Operations](docs/PRODUCTION_OPERATIONS.md), security reporting is in [SECURITY.md](SECURITY.md), and support boundaries are in [SUPPORT.md](SUPPORT.md).
 
-> MeshAgent v1 is software, not an attestation. It does not by itself establish regulatory compliance, immutable audit evidence, availability guarantees, complete vulnerability coverage, or deletion of every copy of data. Deployments must validate controls in their own environment.
+> meshAgent v1 is software, not an attestation. It does not by itself establish regulatory compliance, immutable audit evidence, availability guarantees, complete vulnerability coverage, or deletion of every copy of data. Deployments must validate controls in their own environment.
 
 ## Authoritative architecture
 
 ```mermaid
 flowchart LR
-    U[Developer / Analyst / CISO browser] -->|TLS: HttpOnly session, REST + WebSocket| I[Customer-managed ingress]
+    U[Developer / Analyst / CISO / Platform Administrator browser] -->|TLS: HttpOnly session, REST + WebSocket| I[Customer-managed ingress]
     A[Cursor / Claude Code adapters] -->|recording-only device token| I
     M[MCP client] -->|delegated API access| I
-    I --> API[MeshAgent FastAPI control plane]
+    I --> API[meshAgent FastAPI control plane]
     API --> AUTH[OIDC issuer and JWKS]
     API --> G{Gateway selected at startup}
     G -->|production| EG[EngineGateway]
     G -->|development only| SG[SampleGateway]
-    EG --> HM[MeshAgent Python layer\nHyperMesh C core]
+    EG --> HM[meshAgent Python layer\nHyperMesh C core]
     EG --> STATE[(MESHAGENT_DB_DIR\nHyperMesh stores, index.json, devices.json, audit.jsonl)]
     API --> FEEDS[Optional OSV / PyPI feeds]
     API --> MODEL[Optional OpenAI-compatible model endpoint]
@@ -30,7 +30,7 @@ The authoritative runtime components are listed below. The tree may include hist
 | Web application              | `apps/web`                           | Browser UI, role landing, unified Analyst operations and collaboration, and CISO governance                                                                        | Served behind a customer-managed TLS ingress. It never stores OIDC tokens and is not an authorization authority. |
 | API control plane            | `services/api/app`                   | BFF OIDC/PKCE, opaque sessions, REST/WebSocket authorization, workflow state, device pairing, audit logging, gateway selection                                    | Enforce exact origins, identity configuration, and one writer per state directory.                               |
 | Engine gateway               | `services/api/app/engine_gateway.py` | Production-facing gateway over governed HyperMesh memory                                                                                                          | Required for production. Serializes engine access in the current process.                                        |
-| MeshAgent / HyperMesh engine | `services/engine`                    | Governed-memory records, provenance, forget, and graph export primitives                                                                                          | State remains in `MESHAGENT_DB_DIR`; test concurrency and storage behavior for the chosen platform.              |
+| meshAgent / HyperMesh engine | `services/engine`                    | Governed-memory records, provenance, forget, and graph export primitives                                                                                          | State remains in `MESHAGENT_DB_DIR`; test concurrency and storage behavior for the chosen platform.              |
 | Durable state                | `MESHAGENT_DB_DIR`                   | HyperMesh directories, run registry, operation journal, `control-plane.sqlite3`, `developer-sessions.sqlite3`, `browser_sessions.sqlite3`, devices, and audit log | Must be persistent, access-controlled, single-writer, and backed up as one unit.                                 |
 | Operations package           | `scripts/ops`                        | Quiesced backup, manifest verification, pluggable encryption, clean restore, retention, drill, upgrade preflight, and rollback handoff                            | Deployment hooks supply service-manager, KMS, and isolated health-check behavior.                                |
 
@@ -165,6 +165,7 @@ Before a release or an operational change, additionally follow the [release chec
 The following documents control production v1 operations and policy:
 
 - [README.md](README.md): architecture and supported modes.
+- [docs/CURSOR_ENGINEERING_GUIDE.md](docs/CURSOR_ENGINEERING_GUIDE.md): canonical Cursor checkout, repository architecture, frontend/backend wiring, UI-refinement rules, runtime configuration, validation, and development guardrails.
 - [docs/PRODUCTION_OPERATIONS.md](docs/PRODUCTION_OPERATIONS.md): operations, recovery, observability, retention, and deployment matrix.
 - [docs/ANALYST_OPERATIONS.md](docs/ANALYST_OPERATIONS.md): Priority 4 queue, assignment, escalation, collaboration, notification, and scaling contract.
 - [docs/PRIORITY5A_GOVERNANCE_CONTRACTS.md](docs/PRIORITY5A_GOVERNANCE_CONTRACTS.md): durable policy versions, exception evidence binding, events, migrations, and APIs.
