@@ -3,7 +3,6 @@ import type { GraphNode } from "@meshagent/graph";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { PageHeader } from "../components/PageHeader";
 import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
 import { AdvisoryCard, ReviewStateBadge } from "../components/ReviewUI";
 import { WorkCollaboration } from "../components/WorkCollaboration";
@@ -64,7 +63,6 @@ export function AnalystReviewDetail() {
 
   return (
     <main className="workflow-page analyst-review-page">
-      <PageHeader section="Analyst / Operations" title="Developer review" meta={<Link to="/analyst/queue" className="text-accent hover:underline">Back to work</Link>} />
       {review.isPending ? <div className="workflow-scroll"><StateFrame kind="loading" title="Loading developer review" detail="Reading the submitted snapshot and workflow state." /></div> : review.isError || !item ? <div className="workflow-scroll"><StateFrame kind="error" title="This review could not be opened" detail={review.error instanceof Error ? review.error.message : "The record is unavailable."} action={<Link to="/analyst/queue" className="workflow-secondary-action">Back to work</Link>} /></div> : (
         <div className="analyst-review-shell">
           <section className="analyst-review-scroll">
@@ -108,7 +106,7 @@ export function AnalystReviewDetail() {
             <ResponsibilityDock responsibility={terminal ? "The review is complete." : !item.assignee ? "Assign an owner before deciding." : "Resolve the Developer’s request or open a case."} why={terminal ? "The recorded result is visible to the Developer and remains in the audit trail." : "Use the submitted evidence. Durable policy exceptions follow the separate CISO approval workflow."} deadline={item.sla_due_at ? timestamp(item.sla_due_at) : undefined} overdue={item.overdue}>
               <ConflictRecovery error={mutationError} onReload={reload} />
               {!terminal && canWriteReview ? (
-                <details className="workflow-action-disclosure" open={!item.assignee}>
+                <details className="workflow-action-disclosure analyst-review-owner-action" open={!item.assignee}>
                   <summary>Owner and due time</summary>
                   <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); const due = String(form.get("sla_due_at") ?? ""); assign.mutate({ expected_version: item.version_counter, assignee: String(form.get("assignee") ?? "").trim(), assignee_name: String(form.get("assignee_name") ?? "").trim(), sla_due_at: due ? dateInputToEpoch(due) : null }); }}>
                     <Field label="Owner email"><TextInput name="assignee" type="email" required defaultValue={item.assignee ?? ""} /></Field><Field label="Owner name"><TextInput name="assignee_name" required defaultValue={item.assignee_name ?? ""} /></Field><Field label="Due date"><TextInput name="sla_due_at" type="date" defaultValue={item.sla_due_at ? epochToDateInput(item.sla_due_at) : ""} /></Field><button className="workflow-primary-action" type="submit" disabled={assign.isPending}>{assign.isPending ? "Saving…" : "Save owner"}</button>
@@ -116,7 +114,7 @@ export function AnalystReviewDetail() {
                 </details>
               ) : null}
               {!terminal && canWriteReview ? (
-                <details className="workflow-action-disclosure" open={Boolean(item.assignee)}>
+                <details className="workflow-action-disclosure analyst-review-decision-action" open={Boolean(item.assignee)}>
                   <summary>Return a decision</summary>
                   <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); decide.mutate({ expected_version: item.version_counter, decision, rationale: String(form.get("rationale") ?? "").trim(), recommended_version: decision === "request_changes" ? String(form.get("recommended_version") ?? "").trim() : null, expires_at: null }); }}>
                     <Field label="Decision"><Select value={decision} onChange={(event) => setDecision(event.target.value as typeof decision)}>{decisions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>{decision === "request_changes" ? <Field label="Recommended version"><TextInput name="recommended_version" defaultValue={item.advisories.flatMap((advisory) => advisory.fixed_versions)[0] ?? ""} required placeholder="Safe version" /></Field> : null}<Field label="Message to Developer" hint="Use plain language. Explain the next action and why."><TextArea name="rationale" required maxLength={4096} /></Field><button className="workflow-primary-action" type="submit" disabled={decide.isPending}>{decide.isPending ? "Recording…" : "Record decision"}</button>
@@ -124,7 +122,7 @@ export function AnalystReviewDetail() {
                 </details>
               ) : null}
               {!terminal && canWriteCase ? (
-                <details className="workflow-action-disclosure"><summary>{item.escalated_case_id || caseId ? "Linked investigation" : "Create a tracked case"}</summary>{item.escalated_case_id || caseId ? <Link to="/analyst/cases/$caseId" params={{ caseId: item.escalated_case_id ?? caseId! }} className="workflow-primary-action">Open linked case</Link> : <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); escalate.mutate({ expected_version: item.version_counter, title: String(form.get("title") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), assignee: item.assignee, assignee_name: item.assignee_name, sla_due_at: item.sla_due_at }); }}><Field label="Case title"><TextInput name="title" required defaultValue={`${item.package} security investigation`} /></Field><Field label="Why a case is needed"><TextArea name="rationale" required maxLength={4096} defaultValue={selectedNode ? `Investigate ${selectedNode.label} (${selectedNode.id}) and its relationship to ${item.package}.` : "The submitted evidence needs a tracked investigation."} /></Field><button className="workflow-primary-action" type="submit" disabled={escalate.isPending}>{escalate.isPending ? "Creating…" : "Create case"}</button></form>}</details>
+                <details className="workflow-action-disclosure analyst-review-case-action"><summary>{item.escalated_case_id || caseId ? "Linked investigation" : "Create a tracked case"}</summary>{item.escalated_case_id || caseId ? <Link to="/analyst/cases/$caseId" params={{ caseId: item.escalated_case_id ?? caseId! }} className="workflow-primary-action">Open linked case</Link> : <form onSubmit={(event) => { event.preventDefault(); setSuccess(null); const form = new FormData(event.currentTarget); escalate.mutate({ expected_version: item.version_counter, title: String(form.get("title") ?? "").trim(), rationale: String(form.get("rationale") ?? "").trim(), assignee: item.assignee, assignee_name: item.assignee_name, sla_due_at: item.sla_due_at }); }}><Field label="Case title"><TextInput name="title" required defaultValue={`${item.package} security investigation`} /></Field><Field label="Why a case is needed"><TextArea name="rationale" required maxLength={4096} defaultValue={selectedNode ? `Investigate ${selectedNode.label} (${selectedNode.id}) and its relationship to ${item.package}.` : "The submitted evidence needs a tracked investigation."} /></Field><button className="workflow-primary-action" type="submit" disabled={escalate.isPending}>{escalate.isPending ? "Creating…" : "Create case"}</button></form>}</details>
               ) : null}
               {!canWriteReview && !canWriteCase ? <p className="text-xs leading-relaxed text-slate">Your current capabilities allow evidence review but no workflow changes.</p> : null}
               {!isVersionConflict(mutationError) ? <MutationMessage error={mutationError} success={success} /> : success ? <MutationMessage error={null} success={success} /> : null}

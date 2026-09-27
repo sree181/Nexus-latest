@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { PageHeader } from "../components/PageHeader";
-import { ConflictRecovery, ResponsibilityDock, StateFrame } from "../components/WorkflowVisual";
+import { ConflictRecovery, ResponsibilityDock, StateFrame, WorkflowJourney, type JourneyItem } from "../components/WorkflowVisual";
 import { Select, SeverityBadge, StatusBadge, TextInput, dateInputToEpoch } from "../components/WorkflowUI";
 import { api, type BulkWorkReceipt, type WorkItem, type WorkKind, type WorkflowSeverity } from "../lib/api";
 import { timestamp } from "../lib/format";
@@ -28,12 +27,23 @@ function dueLabel(item: WorkItem): string {
   return `${item.overdue ? "Overdue" : "Due"} ${timestamp(item.sla_due_at)}`;
 }
 
+function workJourney(item: WorkItem): JourneyItem[] {
+  const terminal = ["resolved", "closed", "verified", "false_positive", "not_approved"].includes(item.state);
+  return [
+    { id: "received", label: "Received", detail: item.kind, state: "complete" },
+    { id: "owner", label: "Owner", detail: item.assignee_name ?? "Unassigned", state: item.assignee ? "complete" : "current" },
+    { id: "work", label: item.kind === "review" ? "Evidence review" : "Investigation", detail: item.state.replaceAll("_", " "), state: terminal ? "complete" : item.assignee ? "current" : "pending" },
+    { id: "outcome", label: "Outcome", detail: terminal ? "Recorded" : "Pending", state: terminal ? "complete" : "pending" },
+  ];
+}
+
 export function AnalystOperations() {
   const { me, hasCapability } = useIdentity();
   const mySubject = me?.subject ?? "";
   const canAssign = hasCapability("review.write") || hasCapability("case.write");
   const client = useQueryClient();
   const [filters, setFilters] = useState<Filters>(EMPTY);
+  const [ownerInitialized, setOwnerInitialized] = useState(false);
   const [viewName, setViewName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
@@ -67,6 +77,13 @@ export function AnalystOperations() {
   const items = queue.data?.items ?? [];
 
   useEffect(() => {
+    if (!ownerInitialized && mySubject) {
+      setFilters((current) => ({ ...current, assignee: current.assignee ?? mySubject }));
+      setOwnerInitialized(true);
+    }
+  }, [mySubject, ownerInitialized]);
+
+  useEffect(() => {
     if (!items.length) { setFocusedKey(null); return; }
     if (!focusedKey || !items.some((item) => selectedKey(item.kind, item.id) === focusedKey)) setFocusedKey(selectedKey(items[0].kind, items[0].id));
   }, [focusedKey, items]);
@@ -78,8 +95,7 @@ export function AnalystOperations() {
 
   return (
     <main className="workflow-page operations-page">
-      <PageHeader section="Analyst" title="Security operations" meta={<a href="/analyst/activity" className="text-accent hover:underline">Work history</a>} />
-      <div className="operations-workbench">
+      <div className={`operations-workbench ${selected.size ? "has-assignment-dock" : ""}`}>
         <aside className="operations-queue-pane" aria-label="Security work queue">
           <header className="operations-queue-header">
             <div><p className="workflow-eyebrow">Security operations</p><h1>{counts.all ?? 0} open</h1></div>
@@ -136,6 +152,7 @@ export function AnalystOperations() {
                 <h1>{focused.title}</h1>
                 {focused.subtitle ? <p>{focused.subtitle}</p> : null}
               </header>
+              <section className="focus-journey-card operations-focus-journey"><p className="workflow-eyebrow">Workflow</p><WorkflowJourney items={workJourney(focused)} label={`${focused.kind} workflow`} /></section>
               <section className="operations-focus-facts">
                 <div><small>Priority</small><strong>{focused.priority}</strong></div>
                 <div><small>Assignee</small><strong>{focused.assignee_name ?? "Unassigned"}</strong></div>
@@ -155,7 +172,7 @@ export function AnalystOperations() {
           ) : queue.isPending ? <StateFrame kind="loading" title="Loading work" /> : <StateFrame kind="empty" title="No focused record" detail="Select a queue item to see its responsibility and route." />}
         </section>
 
-        <ResponsibilityDock
+        {selected.size ? <ResponsibilityDock
           responsibility={selected.size ? `Assign ${selected.size} selected item${selected.size === 1 ? "" : "s"}.` : focused ? `Open this ${focused.kind} and review its evidence.` : "Monitor the queue."}
           why={selected.size ? "The server checks each selected record version independently. Partial failures remain selected." : focused ? "The record detail contains the native evidence and actions allowed by its state and your capabilities." : "New work will be ranked here as it arrives."}
           deadline={focused?.sla_due_at ? timestamp(focused.sla_due_at) : undefined}
@@ -169,11 +186,11 @@ export function AnalystOperations() {
               <button type="submit" className="workflow-primary-action" disabled={!bulkOwner.trim() || !bulkOwnerName.trim() || bulkAssign.isPending}>{bulkAssign.isPending ? "Assigning…" : "Assign selected"}</button>
               {bulkAssign.error ? <p role="alert" className="text-xs text-risk">{bulkAssign.error instanceof Error ? bulkAssign.error.message : "Assignment failed."}</p> : null}
             </form>
-          ) : focused ? <a href={focused.route} className="workflow-primary-action">Open {focused.kind}</a> : null}
+          ) : null}
           {bulkResult ? <div className={bulkResult.failed ? "workflow-receipt is-warning" : "workflow-receipt is-success"} role="status"><strong>{bulkResult.succeeded} updated</strong><span>{bulkResult.failed ? `${bulkResult.failed} need to be refreshed and tried again.` : "All selected records were assigned."}</span></div> : null}
           <ConflictRecovery error={bulkAssign.error} onReload={() => { bulkAssign.reset(); void queue.refetch(); }} />
           {!canAssign ? <p className="text-xs leading-relaxed text-slate">Your current capabilities allow queue review but not assignment.</p> : null}
-        </ResponsibilityDock>
+        </ResponsibilityDock> : null}
       </div>
     </main>
   );

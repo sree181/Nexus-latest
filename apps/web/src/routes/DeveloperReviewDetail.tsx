@@ -1,7 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { DeveloperTopbar } from "../components/DeveloperProject";
 import { DevIcon } from "../components/DeveloperIcons";
 import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
 import { AdvisoryCard, ReviewStateBadge, reviewVisual } from "../components/ReviewUI";
@@ -37,7 +36,6 @@ export function DeveloperReviewDetail() {
 
   return (
     <main className="dev-page workflow-page result-page">
-      <DeveloperTopbar title="Review result" showProject={false} actions={<Link to="/developer/attention" className="dev-icon-button" aria-label="Back to Attention"><DevIcon name="x" /></Link>} />
       {review.isPending ? <div className="workflow-scroll"><StateFrame kind="loading" title="Loading review" detail="Reading the governed result and evidence." /></div> : review.isError || !review.data ? <div className="workflow-scroll"><StateFrame kind="error" title="This review could not be opened" detail={review.error instanceof Error ? review.error.message : "The record is not available."} action={<Link to="/developer/attention" className="dev-action">Back to Attention</Link>} /></div> : (() => {
         const item = review.data;
         const action = reviewNextStep(item);
@@ -57,7 +55,7 @@ export function DeveloperReviewDetail() {
                 </header>
 
                 <section className="result-next-step">
-                  <div><small>Next step</small><strong>{action.title}</strong></div>
+                  <div><small>Next step</small><strong>{action.title}</strong><p>{action.detail}</p></div>
                   {item.state === "changes_requested" ? <Link to="/developer/sessions" className="dev-action dev-action-primary">Open sessions <DevIcon name="arrow" size={16} /></Link> : <Link to="/developer/attention" className="dev-action">Back to Attention</Link>}
                 </section>
 
@@ -91,15 +89,17 @@ export function DeveloperReviewDetail() {
                 </section>
 
                 <div className="focus-disclosures result-disclosures">
-                  <details open={Boolean(item.advisories.length)}><summary>Published advisories <span>{item.advisories.length}</span></summary><div>{item.advisories.length ? item.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />) : <p>No published advisories were returned.</p>}</div></details>
+                  <details><summary>Published advisories <span>{item.advisories.length}</span></summary><div>{item.advisories.length ? item.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />) : <p>No published advisories were returned.</p>}</div></details>
                   <details><summary>Review history <span>{item.events.length}</span></summary><div>{item.events.length ? <ol className="workflow-list">{[...item.events].reverse().map((event) => <li className="workflow-list-row" key={event.id}><span className="dev-tone-accent"><DevIcon name={event.action === "review.verified" ? "check" : "activity"} /></span><span className="workflow-list-row-main"><strong>{event.action.replace("review.", "").replaceAll("_", " ")}</strong><small>{event.actor_name} · {event.rationale}</small></span><span className="dev-relative-time">{timestamp(event.at)}</span></li>)}</ol> : <p>No review events have been recorded.</p>}</div></details>
                 </div>
               </article>
             </section>
 
-            <ResponsibilityDock label="Your next step" responsibility={action.title} why={action.detail} deadline={item.exception_expires_at ? timestamp(item.exception_expires_at) : undefined} overdue={expired}>
-              {item.state === "changes_requested" ? <Link to="/developer/sessions" className="dev-action dev-action-primary w-full">Open sessions<DevIcon name="arrow" size={16} /></Link> : null}
-              <Link to="/developer/attention" className="dev-action w-full">Back to Attention</Link>
+            <ResponsibilityDock label="Review context" responsibility={`${item.package}@${item.version || "unpinned"}`} why={`Decision recorded by ${item.analyst_name ?? "Security"}. The evidence below is read-only for the requesting Developer.`}>
+              <div className="result-dock-mobile-actions">
+                {item.state === "changes_requested" ? <Link to="/developer/sessions" className="dev-action dev-action-primary w-full">Open sessions<DevIcon name="arrow" size={16} /></Link> : null}
+                <Link to="/developer/attention" className="dev-action w-full">Back to Attention</Link>
+              </div>
               <dl className="responsibility-facts"><div><dt>Package</dt><dd>{item.package}@{item.version || "unpinned"}</dd></div><div><dt>Review</dt><dd>{item.id}</dd></div><div><dt>Reviewed by</dt><dd>{item.analyst_name ?? "Awaiting owner"}</dd></div><div><dt>Outcome</dt><dd>{item.state.replaceAll("_", " ")}</dd></div></dl>
               <div className="grid gap-2"><IntegrityRef label="Review" value={item.id} /><IntegrityRef label="Evidence root" value={item.evidence_root_ulid} /><IntegrityRef label="Evidence digest" value={item.evidence_digest} /><IntegrityRef label="Verification" value={item.verification_evidence_id} /></div>
               <p className="text-xs leading-relaxed text-slate">Decisions and evidence are recorded by authorized security roles.</p>

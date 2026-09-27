@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@meshagent/ui";
 
 import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
-import { PageHeader } from "../components/PageHeader";
 import { WorkCollaboration } from "../components/WorkCollaboration";
 import { SidePanel } from "../components/DeveloperVisual";
 import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowJourney, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
@@ -167,7 +166,6 @@ export function AnalystCaseDetail() {
 
   return (
     <main className="workflow-page analyst-case-page">
-      <PageHeader section="Analyst / Cases" title={caseId} meta={<Link to="/analyst/queue" className="text-accent hover:underline">Back to work</Link>} />
       {detail.isPending ? <div className="workflow-scroll"><StateFrame kind="loading" title="Reading case" detail="Loading state, evidence links, and history." /></div> : detail.isError || !detail.data ? <div className="workflow-scroll"><StateFrame kind="error" title="This case could not be opened" detail={detail.error instanceof Error ? detail.error.message : "The record is unavailable."} action={<Link to="/analyst/queue" className="workflow-secondary-action">Back to work</Link>} /></div> : (() => {
         const item = detail.data;
         const sourceReviewId = reviewRequestIdFromCaseFinding(item.finding_id);
@@ -185,6 +183,8 @@ export function AnalystCaseDetail() {
                   <div className="analyst-case-meta"><span>{item.assignee_name ?? "Unassigned"}</span><span>Updated {timestamp(item.updated_at)}</span><span>Record v{item.version}</span></div>
                 </header>
 
+                {item.priority_reasons.length ? <section className="analyst-case-risk"><p className="workflow-eyebrow">Risk</p><ul>{item.priority_reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></section> : null}
+
                 <section className="focus-journey-card"><p className="workflow-eyebrow">Case lifecycle</p><WorkflowJourney items={caseJourney(item)} label="Case lifecycle" /></section>
 
                 <section className="case-evidence-entry">
@@ -193,7 +193,7 @@ export function AnalystCaseDetail() {
                 </section>
 
                 <div className="focus-disclosures analyst-case-disclosures">
-                  <details open><summary>Source record</summary><div><div className="case-source-grid"><div><span>Source</span>{sourceReviewId ? <Link to="/analyst/reviews/$requestId" params={{ requestId: sourceReviewId }}>Open source review</Link> : <Link to="/analyst/investigate/$runId/$findingId" params={{ runId: item.run_id, findingId: item.finding_id }}>{item.finding_id}</Link>}</div><div><span>Run</span><Link to="/runs/$runId/security" params={{ runId: item.run_id }}>{item.run_id}</Link></div><div><span>Assignee</span><strong>{item.assignee_name ?? "Unassigned"}</strong></div><div><span>Disposition</span><strong>{item.disposition ?? "Not recorded"}</strong></div></div></div></details>
+                  <details><summary>Source record</summary><div><div className="case-source-grid"><div><span>Source</span>{sourceReviewId ? <Link to="/analyst/reviews/$requestId" params={{ requestId: sourceReviewId }}>Open source review</Link> : <Link to="/analyst/investigate/$runId/$findingId" params={{ runId: item.run_id, findingId: item.finding_id }}>{item.finding_id}</Link>}</div><div><span>Run</span><Link to="/runs/$runId/security" params={{ runId: item.run_id }}>{item.run_id}</Link></div><div><span>Assignee</span><strong>{item.assignee_name ?? "Unassigned"}</strong></div><div><span>Disposition</span><strong>{item.disposition ?? "Not recorded"}</strong></div></div></div></details>
                   <details><summary>Team notes</summary><div><WorkCollaboration kind="case" id={item.id} /></div></details>
                   <details><summary>Case history <span>{item.events.length}</span></summary><div>{item.events.length ? <ol className="workflow-list">{[...item.events].reverse().map((event) => <li key={event.id} className="workflow-list-row"><span className="workflow-update-dot" aria-hidden="true" /><span className="workflow-list-row-main"><strong>{event.action.replace(/\./g, " ")}</strong><small>{event.actor_name} · {event.rationale}</small>{event.evidence_ids.length ? <span className="case-evidence-ids">{event.evidence_ids.map((id) => <code key={id}>{id}</code>)}</span> : null}</span><span className="font-mono text-[10px] text-slate">{timestamp(event.at)}</span></li>)}</ol> : <p>No case events were returned.</p>}</div></details>
                   <details><summary>Record references</summary><div className="grid gap-2"><IntegrityRef label="Case" value={item.id} /><IntegrityRef label="Finding" value={item.finding_id} /><IntegrityRef label="Run" value={item.run_id} /></div></details>

@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button } from "@meshagent/ui";
 
 import { GovernanceEvidencePanel } from "../components/GovernanceEvidencePanel";
-import { PageHeader } from "../components/PageHeader";
 import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowJourney, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
 import { Field, MutationMessage, StatusBadge, TextArea, TextInput, epochToDateInput, dateInputToEpoch } from "../components/WorkflowUI";
 import { api, type PolicyException, type RenewExceptionInput, type RevokeExceptionInput } from "../lib/api";
@@ -57,10 +56,13 @@ export function CisoExceptionDetail() {
   const canRevoke = Boolean(item?.status === "approved" && !item.expired && hasCapability("exception.revoke"));
   const mutationError = renew.error ?? revoke.error;
   const reload = () => { renew.reset(); revoke.reset(); setMessage(null); setMode(null); void query.refetch(); };
+  const openAction = (next: "renew" | "revoke") => {
+    setMode(next);
+    window.requestAnimationFrame(() => document.getElementById("exception-actions")?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  };
 
   return (
     <main className="workflow-page ciso-exception-page">
-      <PageHeader section="CISO / Exceptions" title={item?.scope ?? "Exception"} meta={<Link to="/ciso/approvals" className="text-accent hover:underline">Back to decision desk</Link>} />
       {query.isPending ? <div className="workflow-scroll"><StateFrame kind="loading" title="Loading exception" detail="Reading the decision record and native evidence." /></div> : query.isError || !item ? <div className="workflow-scroll"><StateFrame kind="error" title="This exception could not be opened" detail={query.error instanceof Error ? query.error.message : "The record is unavailable."} action={<button type="button" className="workflow-secondary-action" onClick={() => void query.refetch()}>Try again</button>} /></div> : (
         <div className="exception-detail-shell">
           <section className="exception-detail-scroll">
@@ -75,11 +77,18 @@ export function CisoExceptionDetail() {
 
               <section className="focus-journey-card"><p className="workflow-eyebrow">Exception lifecycle</p><WorkflowJourney items={exceptionJourney(item)} label="Exception lifecycle" /></section>
 
+              {item.status === "approved" && !item.expired ? <section className="exception-approval-banner"><StatusBadge status={item.status} /><div><strong>Time-bounded approval is active</strong><span>{remainingLabel(item.expires_at, item.expired)} · scope and controls remain fixed to this record.</span></div></section> : null}
+
               <section className={`exception-receipt ${item.status === "approved" && !item.expired ? "is-active" : "is-terminal"}`}>
                 <header><span><StatusBadge status={item.status} /><strong>{item.status === "approved" && !item.expired ? "Time-bounded approval is active" : `Exception is ${item.status.replaceAll("_", " ")}`}</strong></span><small>{remainingLabel(item.expires_at, item.expired)}</small></header>
                 <div className="exception-receipt-grid"><div><small>Scope</small><strong>{item.scope}</strong></div><div><small>Policy</small><strong>{item.policy_id} · v{item.policy_version}</strong></div><div><small>Requested</small><strong>{timestamp(item.created_at)}</strong></div><div><small>Expires</small><strong>{timestamp(item.expires_at)}</strong></div></div>
                 {item.decision_rationale ? <blockquote><p className="workflow-eyebrow">Decision rationale</p><span>{item.decision_rationale}</span><small>{item.approved_by_name ?? "Recorded approver"}{item.decided_at ? ` · ${timestamp(item.decided_at)}` : ""}</small></blockquote> : null}
                 {item.revocation_rationale ? <blockquote className="is-risk"><p className="workflow-eyebrow">Revocation rationale</p><span>{item.revocation_rationale}</span></blockquote> : null}
+              </section>
+
+              <section className="exception-current-action">
+                <div><p className="workflow-eyebrow">Current action</p><strong>{ownRequest && (canRenew || canRevoke) ? "Requester separation applies" : canRenew || canRevoke ? "Keep this exception bounded" : "This record is read-only"}</strong><span>{ownRequest ? "Another authorized person must renew or revoke this exception." : canRenew || canRevoke ? "Renewal creates a new request. Revocation ends this record." : "Lifecycle and evidence remain available below."}</span></div>
+                {!ownRequest && (canRenew || canRevoke) ? <div>{canRenew ? <button type="button" className="workflow-primary-action" onClick={() => openAction("renew")}>Request renewal</button> : null}{canRevoke ? <button type="button" className="workflow-danger-action" onClick={() => openAction("revoke")}>Revoke</button> : null}</div> : null}
               </section>
 
               {message ? <div className="workflow-receipt is-success" role="status"><strong>Recorded</strong><span>{message}</span></div> : null}
@@ -101,7 +110,7 @@ export function CisoExceptionDetail() {
             {ownRequest && (canRenew || canRevoke) ? <p className="rounded-lg border border-warn bg-warn-soft px-3 py-2 text-xs leading-relaxed text-ink">You requested this exception. Another authorized person must renew or revoke it.</p> : null}
             {!ownRequest && mode === "renew" && canRenew ? <form onSubmit={(event) => { event.preventDefault(); setMessage(null); const form = new FormData(event.currentTarget); renew.mutate({ expected_version: item.version, rationale: String(form.get("rationale") ?? "").trim(), compensating_controls: String(form.get("controls") ?? "").trim(), owner: String(form.get("owner") ?? "").trim(), owner_name: String(form.get("owner_name") ?? "").trim(), evidence_ids: String(form.get("evidence_ids") ?? "").split(",").map((value) => value.trim()).filter(Boolean), expires_at: dateInputToEpoch(form.get("expires_at")) }); }}><Field label="Owner"><TextInput name="owner" defaultValue={item.owner} required /></Field><Field label="Owner name"><TextInput name="owner_name" defaultValue={item.owner_name} /></Field><Field label="New expiry"><TextInput name="expires_at" type="date" min={epochToDateInput(Math.floor(Date.now() / 1000) + 86400)} defaultValue={epochToDateInput(item.expires_at + 7 * 86400)} required /></Field><Field label="Reason"><TextArea name="rationale" required /></Field><Field label="Controls"><TextArea name="controls" defaultValue={item.compensating_controls} required /></Field><Field label="Evidence IDs" hint="Comma separated"><TextInput name="evidence_ids" defaultValue={item.evidence_ids.join(", ")} /></Field><div className="grid gap-2"><Button type="submit" disabled={renew.isPending}>{renew.isPending ? "Submitting…" : "Request renewal"}</Button><Button type="button" variant="ghost" onClick={() => setMode(null)}>Cancel</Button></div></form> : null}
             {!ownRequest && mode === "revoke" && canRevoke ? <form onSubmit={(event) => { event.preventDefault(); setMessage(null); const form = new FormData(event.currentTarget); revoke.mutate({ expected_version: item.version, rationale: String(form.get("rationale") ?? "").trim(), evidence_ids: String(form.get("evidence_ids") ?? "").split(",").map((value) => value.trim()).filter(Boolean) }); }}><Field label="Reason"><TextArea name="rationale" required /></Field><Field label="Evidence IDs" hint="Comma separated"><TextInput name="evidence_ids" /></Field><div className="grid gap-2"><Button type="submit" variant="danger" disabled={revoke.isPending}>{revoke.isPending ? "Revoking…" : "Confirm revocation"}</Button><Button type="button" variant="ghost" onClick={() => setMode(null)}>Cancel</Button></div></form> : null}
-            {!ownRequest && !mode && (canRenew || canRevoke) ? <div className="grid gap-2">{canRenew ? <Button type="button" onClick={() => setMode("renew")}>Request renewal</Button> : null}{canRevoke ? <Button type="button" variant="danger" onClick={() => setMode("revoke")}>Revoke</Button> : null}</div> : null}
+            {!ownRequest && !mode && (canRenew || canRevoke) ? <div className="grid gap-2">{canRenew ? <Button type="button" onClick={() => openAction("renew")}>Request renewal</Button> : null}{canRevoke ? <Button type="button" variant="danger" onClick={() => openAction("revoke")}>Revoke</Button> : null}</div> : null}
             {!isVersionConflict(mutationError) ? <MutationMessage error={mutationError} success={null} /> : null}
             <div className="grid gap-2"><IntegrityRef label="Exception" value={item.id} /><IntegrityRef label="Policy digest" value={item.policy_digest} /><IntegrityRef label="Request digest" value={item.request_digest} /></div>
           </ResponsibilityDock></div>

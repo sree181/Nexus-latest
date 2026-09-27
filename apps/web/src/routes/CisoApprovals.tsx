@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button } from "@meshagent/ui";
 
 import { GovernanceEvidencePanel } from "../components/GovernanceEvidencePanel";
-import { PageHeader } from "../components/PageHeader";
 import { ConflictRecovery, IntegrityRef, ResponsibilityDock, StateFrame, WorkflowJourney, isVersionConflict, type JourneyItem } from "../components/WorkflowVisual";
 import { MutationMessage, StatusBadge, TextArea } from "../components/WorkflowUI";
 import { api, type Approval, type ApprovalDecisionInput, type Policy, type PolicyException } from "../lib/api";
@@ -69,8 +68,8 @@ function DecisionNarrative({ approval, exception, policy, reviewOpen, setReviewO
     <article className="decision-narrative">
       <header className="decision-focus-heading">
         <div className="decision-focus-meta"><span>Decision request · {approval.id}</span><StatusBadge status={approval.status} /><Badge tone="neutral">{approval.kind.replace(/_/g, " ")}</Badge>{approval.expired ? <Badge tone="risk">window closed</Badge> : null}</div>
-        <h1>{exception?.scope ?? approval.resource_id}</h1>
-        <p>{approval.rationale}</p>
+        <h1>{approval.status === "pending" ? "Pending decision" : "Recorded decision"} — {approval.id}</h1>
+        <p className="decision-scope-context">{exception?.scope ?? approval.resource_id}</p>
         <div className="decision-focus-submeta"><span>Requested by {approval.requester_name}</span><span>Expires {timestamp(approval.expires_at)}</span><span>Record v{approval.version}</span></div>
       </header>
 
@@ -90,18 +89,21 @@ function DecisionNarrative({ approval, exception, policy, reviewOpen, setReviewO
       </section>
 
       {exception ? (
-        <section className="decision-structured-brief">
-          <div><small>Exact scope</small><strong>{exception.scope}</strong></div><div><small>Owner</small><strong>{exception.owner_name || exception.owner}</strong></div><div><small>Decision window</small><strong>{timestamp(approval.expires_at)}</strong></div><div><small>Request digest</small><code>{approval.request_digest}</code></div>
-          <div className="is-wide"><small>Submitted rationale</small><p>{approval.rationale}</p></div><div className="is-wide"><small>Compensating controls</small><p>{exception.compensating_controls}</p></div><div className="is-wide"><small>Linked evidence</small><p className="decision-evidence-ids">{approval.evidence_ids.length ? approval.evidence_ids.map((value) => <code key={value}>{value}</code>) : "No linked review or case."}</p></div>
+        <section className="decision-brief-section">
+          <p className="workflow-eyebrow">Structured decision brief</p>
+          <div className="decision-structured-brief">
+            <div><small>Exact scope</small><strong>{exception.scope}</strong></div><div><small>Owner</small><strong>{exception.owner_name || exception.owner}</strong></div><div><small>Decision window</small><strong>{timestamp(approval.expires_at)}</strong></div><div><small>Request digest</small><code>{approval.request_digest}</code></div>
+            <div className="is-wide"><small>Submitted rationale</small><p>{approval.rationale}</p></div><div className="is-wide"><small>Compensating controls</small><p>{exception.compensating_controls}</p></div><div className="is-wide"><small>Linked evidence</small><p className="decision-evidence-ids">{approval.evidence_ids.length ? approval.evidence_ids.map((value) => <code key={value}>{value}</code>) : "No linked review or case."}</p></div>
+          </div>
         </section>
       ) : null}
-
-      {exception ? <section className="decision-native-evidence"><GovernanceEvidencePanel kind="exception" id={exception.id} /></section> : null}
 
       <section id="decision-panel" className={`decision-review-panel ${reviewOpen ? "is-open" : ""}`}>
         <button type="button" className="decision-review-summary" aria-expanded={reviewOpen} onClick={() => setReviewOpen(!reviewOpen)}><span><small>Approval {approval.id}</small><strong>{approval.status === "pending" ? "Review and decide" : "Recorded decision"}</strong></span><span>{reviewOpen ? "−" : "+"}</span></button>
         {reviewOpen || approval.status !== "pending" ? <div className="decision-review-body"><ApprovalDecisionPanel key={`${approval.id}:${approval.version}`} approval={approval} /></div> : null}
       </section>
+
+      {exception ? <details className="decision-native-evidence"><summary>Native HyperMesh evidence</summary><div><GovernanceEvidencePanel kind="exception" id={exception.id} /></div></details> : null}
     </article>
   );
 }
@@ -127,13 +129,12 @@ export function CisoApprovals() {
 
   return (
     <main className="workflow-page ciso-desk-page">
-      <PageHeader section="CISO" title="Decision desk" meta={<span>server-enforced independence</span>} />
       {loading ? <div className="workflow-scroll"><StateFrame kind="loading" title="Loading decision context" detail="Joining approvals with their policy and exception records." /></div> : loadError ? <div className="workflow-scroll"><StateFrame kind="error" title="Decision context could not be loaded" detail={loadError instanceof Error ? loadError.message : "One or more records are unavailable."} action={<button type="button" className="workflow-secondary-action" onClick={() => { void approvals.refetch(); void exceptions.refetch(); void policies.refetch(); }}>Try again</button>} /></div> : items.length === 0 ? <div className="workflow-scroll"><StateFrame kind="empty" title="Nothing is waiting" detail="New exception requests will appear here with their complete decision context." /></div> : (
         <div className="ciso-decision-shell">
           <aside className="decision-queue-pane" aria-label="Decision queue">
             <header><div><p className="workflow-eyebrow">Decision queue</p><h1>{pendingCount} waiting</h1></div><span>{items.length}</span></header>
             <div className="decision-view-tabs">{(["pending", "all"] as const).map((value) => <button key={value} type="button" onClick={() => { setView(value); setSelectedId(null); setReviewOpen(false); }} aria-pressed={view === value}>{value === "pending" ? "Waiting" : "All"}</button>)}</div>
-            <ol className="decision-queue-list">{items.map((approval) => { const exception = exceptionById.get(approval.resource_id); return <li key={approval.id}><button type="button" className={selected?.id === approval.id ? "is-selected" : ""} aria-pressed={selected?.id === approval.id} onClick={() => { setSelectedId(approval.id); setReviewOpen(false); }}><span className="decision-queue-top"><StatusBadge status={approval.status} /><small>{timestamp(approval.expires_at)}</small></span><strong>{exception?.scope ?? approval.resource_id}</strong><span>{approval.requester_name} · {approval.kind.replaceAll("_", " ")}</span></button></li>; })}</ol>
+            <ol className="decision-queue-list">{items.map((approval) => { const exception = exceptionById.get(approval.resource_id); return <li key={approval.id}><button type="button" className={selected?.id === approval.id ? "is-selected" : ""} aria-pressed={selected?.id === approval.id} onClick={() => { setSelectedId(approval.id); setReviewOpen(false); }}><span className="decision-queue-top"><code>{approval.id}</code><StatusBadge status={approval.status} /><small>{timestamp(approval.expires_at)}</small></span><strong>{exception?.scope ?? approval.resource_id}</strong><span>{approval.requester_name} · {approval.kind.replaceAll("_", " ")}</span></button></li>; })}</ol>
           </aside>
           <section className="decision-focus-scroll"><DecisionNarrative approval={selected} exception={selectedException} policy={selectedException ? policyById.get(selectedException.policy_id) : undefined} reviewOpen={reviewOpen} setReviewOpen={setReviewOpen} /></section>
           <ResponsibilityDock responsibility={selected.status === "pending" ? "Decide only within the submitted scope." : "Review the recorded outcome."} why={ownRequest ? "You submitted this request. Another CISO must decide it." : selected.status === "pending" ? "Confirm the controls and native evidence, then record a rationale. The API validates requester separation and version freshness." : "The decision remains linked to the request digest and evidence."} deadline={timestamp(selected.expires_at)} overdue={selected.expired}>

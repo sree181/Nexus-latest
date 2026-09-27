@@ -3,7 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { DevIcon } from "../components/DeveloperIcons";
-import { DeveloperTopbar, useDeveloperProject } from "../components/DeveloperProject";
+import { useDeveloperProject } from "../components/DeveloperProject";
 import { AdvisoryCard, ReviewStateBadge } from "../components/ReviewUI";
 import { ReviewEvidenceGraph } from "../components/ReviewEvidenceGraph";
 import { SidePanel, Status } from "../components/DeveloperVisual";
@@ -87,9 +87,9 @@ function RequestDrawer({ item, close }: { item: AttentionItem; close: () => void
         <div className="attention-drawer-footer">
           {step > 1 ? <button type="button" className="dev-action" disabled={create.isPending} onClick={() => setStep((step - 1) as RequestStep)}>Back</button> : null}
           {step < 3 ? (
-            <button type="button" className="dev-action dev-action-primary" disabled={step === 2 && !rationale.trim()} onClick={() => setStep((step + 1) as RequestStep)}>Continue <DevIcon name="arrow" size={16} /></button>
+            <button type="button" className="dev-action dev-action-primary" disabled={step === 2 && rationale.trim().length < 20} onClick={() => setStep((step + 1) as RequestStep)}>Continue <DevIcon name="arrow" size={16} /></button>
           ) : (
-            <button type="button" className="dev-action dev-action-primary" disabled={!rationale.trim() || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Sending…" : "Submit request"}<DevIcon name="arrow" size={16} /></button>
+            <button type="button" className="dev-action dev-action-primary" disabled={rationale.trim().length < 20 || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Sending…" : "Submit request"}<DevIcon name="arrow" size={16} /></button>
           )}
         </div>
       )}
@@ -115,7 +115,7 @@ function RequestDrawer({ item, close }: { item: AttentionItem; close: () => void
         {step === 2 ? (
           <label className="attention-rationale">Context
             <textarea value={rationale} onChange={(event) => setRationale(event.target.value)} maxLength={4096} rows={7} placeholder="What are you trying to ship, and what constraint matters?" />
-            <small>This context becomes part of the review request.</small>
+            <small>Minimum 20 characters. This context becomes part of the governed review request.</small>
           </label>
         ) : null}
         {step === 3 ? (
@@ -197,7 +197,6 @@ export function DeveloperAttention() {
 
   return (
     <main className="dev-page workflow-page attention-page">
-      <DeveloperTopbar title="Attention" />
       <div className="attention-mobile-summary">
         <button type="button" aria-expanded={queueOpen} onClick={() => setQueueOpen((value) => !value)}>
           <span><small>Attention queue</small><strong>{items.length} shown · {blocked} blocked</strong></span>
@@ -249,14 +248,16 @@ export function DeveloperAttention() {
                 <p className="workflow-eyebrow">Evidence path</p>
                 <div>
                   <span><small>Session</small><code>{selected.session_id}</code></span>
-                  <i aria-hidden="true">→</i>
+                  <i aria-hidden="true"><small>recorded</small>→</i>
                   <span><small>Package</small><strong>{selected.package}{selected.version ? `@${selected.version}` : " · version not recorded"}</strong></span>
-                  <i aria-hidden="true">→</i>
+                  <i aria-hidden="true"><small>has published</small>→</i>
                   <span><small>Advisories</small><strong>{selected.advisories.length}</strong></span>
-                  <i aria-hidden="true">→</i>
+                  <i aria-hidden="true"><small>linked to</small>→</i>
                   <span><small>Linked code</small><strong>{selected.code_entities.length}</strong></span>
-                  <i aria-hidden="true">→</i>
+                  <i aria-hidden="true"><small>evaluated by</small>→</i>
                   <span><small>Policy evaluation</small><code>{selected.policy_evaluation_id}</code></span>
+                  <i aria-hidden="true"><small>requires</small>→</i>
+                  <span className="is-action"><small>{selected.review_request_id ? "Security review" : "Developer action"}</small><strong>{selected.review_request_id ? selected.review_status?.replaceAll("_", " ") ?? "Request sent" : "Choose next step"}</strong></span>
                 </div>
               </section>
 
@@ -273,7 +274,7 @@ export function DeveloperAttention() {
               ) : null}
 
               <div className="focus-disclosures">
-                <details open={Boolean(selected.advisories.length)}><summary>Advisories <span>{selected.advisories.length}</span></summary><div>{selected.advisories.length ? selected.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />) : <p>No published advisories were returned for this check.</p>}</div></details>
+                <details><summary>Advisories <span>{selected.advisories.length}</span></summary><div>{selected.advisories.length ? selected.advisories.map((advisory) => <AdvisoryCard key={advisory.id} advisory={advisory} />) : <p>No published advisories were returned for this check.</p>}</div></details>
                 <details><summary>Linked code <span>{selected.code_entities.length}</span></summary><div>{selected.code_entities.length ? <ul className="dev-compact-list">{selected.code_entities.map((entity) => <li key={entity} className="dev-compact-row"><DevIcon name="code" size={16} /><span className="dev-compact-row-main"><strong>{entity}</strong></span></li>)}</ul> : <p>No linked code entities were returned.</p>}</div></details>
                 <details><summary>Why this needs attention <span>{selected.reasons.length}</span></summary><div>{selected.reasons.length ? <ul className="focus-reason-list">{selected.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>No additional reason was returned.</p>}{selected.unavailable ? <p className="text-risk"><strong>Check incomplete.</strong> {selected.unavailable}</p> : null}</div></details>
               </div>
@@ -286,6 +287,7 @@ export function DeveloperAttention() {
           why={selected ? (selected.unavailable || selected.reasons[0] || "The server returned this package check for your attention.") : "New package checks that require your decision will appear in the queue."}
         >
           {selected?.review_request_id ? <Link to="/developer/reviews/$requestId" params={{ requestId: selected.review_request_id }} className="dev-action dev-action-primary w-full">Open review <DevIcon name="arrow" size={16} /></Link> : selected ? <button type="button" className="dev-action dev-action-primary w-full" onClick={() => setRequestOpen(true)}>Ask Security <DevIcon name="arrow" size={16} /></button> : null}
+          {selected ? <div className={`attention-dock-verdict is-${verdictTone(selected)}`}><small>Recorded result</small><strong>{selected.verdict === "block" ? "Session action required" : selected.unavailable ? "Check incomplete" : selected.verdict}</strong>{selected.suggested_version ? <span>Published candidate {selected.suggested_version} · unverified</span> : null}</div> : null}
           {selected ? <dl className="responsibility-facts"><div><dt>Package</dt><dd>{selected.package}{selected.version ? `@${selected.version}` : ""}</dd></div><div><dt>Priority</dt><dd>{selected.priority}</dd></div><div><dt>Checked</dt><dd>{relativeTimeMs(selected.checked_at_ms)}</dd></div></dl> : null}
           <p className="text-xs leading-relaxed text-slate">Only your own sessions and review requests are returned by the server.</p>
         </ResponsibilityDock>
