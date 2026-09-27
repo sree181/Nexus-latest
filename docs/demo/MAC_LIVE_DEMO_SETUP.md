@@ -19,7 +19,7 @@ docker version
 docker compose version
 ```
 
-## 3. Clone and start MeshAgent
+## 3. Clone and start meshAgent
 
 Use the Figma-fidelity branch from `sree181/Nexus-latest`. Existing clones may
 have an `origin` that points to `sree181/meshagent`, where this branch does not
@@ -37,21 +37,23 @@ cd meshagent
 
 ```bash
 git remote get-url nexus-latest >/dev/null 2>&1 && git remote set-url nexus-latest https://github.com/sree181/Nexus-latest.git || git remote add nexus-latest https://github.com/sree181/Nexus-latest.git
-git fetch nexus-latest refs/heads/manus/figma-fidelity-correction-v2:refs/remotes/nexus-latest/manus/figma-fidelity-correction-v2
-git show-ref --verify refs/remotes/nexus-latest/manus/figma-fidelity-correction-v2
-git switch manus/figma-fidelity-correction-v2 2>/dev/null || git switch --track -c manus/figma-fidelity-correction-v2 nexus-latest/manus/figma-fidelity-correction-v2
-git branch --set-upstream-to=nexus-latest/manus/figma-fidelity-correction-v2 manus/figma-fidelity-correction-v2
+git fetch nexus-latest refs/heads/manus/figma-exact-v3:refs/remotes/nexus-latest/manus/figma-exact-v3
+git show-ref --verify refs/remotes/nexus-latest/manus/figma-exact-v3
+git switch manus/figma-exact-v3 2>/dev/null || git switch --track -c manus/figma-exact-v3 nexus-latest/manus/figma-exact-v3
+git branch --set-upstream-to=nexus-latest/manus/figma-exact-v3 manus/figma-exact-v3
 git pull --ff-only
 git rev-parse --short HEAD
-git rev-parse --short nexus-latest/manus/figma-fidelity-correction-v2
+git rev-parse --short nexus-latest/manus/figma-exact-v3
 
 docker compose down
 docker compose build --no-cache web api
 docker compose up -d --force-recreate
 ```
 
-The two `git rev-parse` commands must both print `624b802` or a newer commit on
-this branch. `docker compose down`
+The two `git rev-parse` commands must print the same commit. This v3 branch is a
+direct descendant of the completed Stage 1B release, so it contains the native
+recorder, corporate enrollment, device trust, DPoP control plane, and the exact
+workflow reconstruction. `docker compose down`
 preserves the named data volume; do **not** add `-v` unless you intend to erase
 the demonstration state. The uncached build is deliberate: the web image copies
 the Vite bundle at image-build time, so restarting an older image cannot reveal

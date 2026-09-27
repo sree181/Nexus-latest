@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 
 import { oidcEnabled, setLocalIdentity, signOut, type LocalRole } from "../lib/auth";
 import { useIdentity } from "../lib/useIdentity";
@@ -12,6 +12,15 @@ const personas: Record<LocalRole, string> = {
   ciso: "alex@company.com",
   platform_admin: "avery@company.com",
 };
+
+function MeshMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true">
+      <path fill="currentColor" d="M2 26V10L10 3L14 8L18 3L26 10V26H22V14H18V26H10V14H6V26H2Z" />
+      <rect x="10" y="11" width="8" height="4" fill="currentColor" opacity=".45" />
+    </svg>
+  );
+}
 
 function initials(name: string): string {
   return name.replace(/@.*$/, "").split(/[.\s_-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "M";
@@ -62,6 +71,7 @@ function AccountPanel({ close }: { close: () => void }) {
             <option value="developer">Developer · Maya</option>
             <option value="analyst">Analyst · Priya</option>
             <option value="ciso">CISO · Alex</option>
+            <option value="platform_admin">Platform administrator · Avery</option>
           </select>
           <button type="submit">Switch</button>
         </form>
@@ -73,17 +83,25 @@ function AccountPanel({ close }: { close: () => void }) {
 
 export function DeveloperRail() {
   const { me } = useIdentity();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
   const [tools, setTools] = useState(false);
   const close = () => setOpen(false);
+  const mobileTitle = pathname === "/developer/attention"
+    ? "Attention"
+    : pathname.startsWith("/developer/reviews/")
+      ? "Security review"
+      : pathname.startsWith("/developer/connections")
+        ? "Connections"
+        : "Sessions";
 
   return (
     <>
       <header className="dev-mobile-shell">
         <Link to="/developer/sessions" className="dev-mobile-brand" aria-label="meshAgent Sessions">
-          <span className="dev-brand-mark"><DevIcon name="evidence" size={18} /></span>
-          <strong>meshAgent</strong>
+          <span className="dev-brand-mark"><MeshMark size={19} /></span>
+          <span className="dev-mobile-context"><strong>{mobileTitle}</strong><small>{me?.name ?? "meshAgent"}</small></span>
         </Link>
         <button type="button" className="dev-mobile-menu" aria-label="Open navigation" aria-expanded={open} onClick={() => setOpen(true)}>
           <DevIcon name="dots" />
@@ -92,7 +110,7 @@ export function DeveloperRail() {
       {open ? <button type="button" aria-label="Close navigation" className="dev-rail-overlay" onClick={close} /> : null}
       <aside className={`dev-rail ${open ? "dev-rail-open" : ""}`} aria-label="Developer navigation">
         <Link to="/developer/sessions" aria-label="meshAgent" className="dev-rail-brand" onClick={close}>
-          <DevIcon name="evidence" size={20} />
+          <MeshMark size={25} />
         </Link>
         <nav className="dev-rail-nav">
           <RailLink to="/developer/sessions" label="Sessions" icon="session" exact onClick={close} />
