@@ -47,6 +47,7 @@ def oidc(monkeypatch, keys):
     monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
     monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office,appsec-leads")
     monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "ciso-office,security-leadership")
+    monkeypatch.setenv("MESHAGENT_PLATFORM_ADMIN_GROUPS", "platform-admins")
 
     class _Key:
         key = public
@@ -223,6 +224,9 @@ def test_production_startup_rejects_every_missing_security_prerequisite(monkeypa
     for key in ("MESHAGENT_OIDC_ISSUER", "MESHAGENT_OIDC_AUDIENCE",
                 "MESHAGENT_OIDC_CLIENT_ID",
                 "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_CISO_GROUPS",
+                "MESHAGENT_PLATFORM_ADMIN_GROUPS",
+                "MESHAGENT_DEPLOYMENT_ID",
+                "MESHAGENT_RECORDER_SIGNING_KEY_FILE",
                 "MESHAGENT_DB_DIR",
                 "MESHAGENT_STRICT_AUDIT", "MESHAGENT_WEB_URL",
                 "MESHAGENT_ENGINE", "MESHAGENT_CORS_ORIGINS"):
@@ -235,6 +239,9 @@ def test_production_startup_rejects_every_missing_security_prerequisite(monkeypa
     for required in ("MESHAGENT_OIDC_ISSUER", "MESHAGENT_OIDC_AUDIENCE",
                      "MESHAGENT_OIDC_CLIENT_ID",
                      "MESHAGENT_ANALYST_GROUPS", "MESHAGENT_CISO_GROUPS",
+                     "MESHAGENT_PLATFORM_ADMIN_GROUPS",
+                     "MESHAGENT_DEPLOYMENT_ID",
+                     "MESHAGENT_RECORDER_SIGNING_KEY_FILE",
                      "MESHAGENT_DB_DIR",
                      "MESHAGENT_STRICT_AUDIT", "MESHAGENT_WEB_URL",
                      "MESHAGENT_ENGINE", "MESHAGENT_CORS_ORIGINS"):
@@ -249,6 +256,11 @@ def test_complete_production_security_configuration_passes_startup_validation(
     monkeypatch.setenv("MESHAGENT_OIDC_CLIENT_ID", "meshagent-web")
     monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office")
     monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "ciso-office")
+    monkeypatch.setenv("MESHAGENT_PLATFORM_ADMIN_GROUPS", "platform-admins")
+    monkeypatch.setenv("MESHAGENT_DEPLOYMENT_ID", "acme-prod")
+    signing_key = tmp_path / "recorder-signing-key.pem"
+    signing_key.write_text("configured for startup validation")
+    monkeypatch.setenv("MESHAGENT_RECORDER_SIGNING_KEY_FILE", str(signing_key))
     monkeypatch.setenv("MESHAGENT_DB_DIR", "/var/lib/meshagent-test")
     monkeypatch.setenv("MESHAGENT_ENGINE", "1")
     monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
@@ -256,15 +268,34 @@ def test_complete_production_security_configuration_passes_startup_validation(
     monkeypatch.setenv("MESHAGENT_CORS_ORIGINS", "https://meshagent.example.com")
 
     main.validate_startup()
+    monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", "http://identity.example.com")
+    with pytest.raises(RuntimeError, match="HTTPS URL"):
+        main.validate_startup()
 
 
-def test_production_rejects_overlapping_analyst_and_ciso_groups(monkeypatch):
+def test_production_refuses_an_insecure_explicit_jwks_url(monkeypatch):
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    cfg = auth.Config(
+        issuer="https://identity.example.com",
+        audience="meshagent-api",
+        jwks_url="http://identity.example.com/keys",
+    )
+    with pytest.raises(AuthError, match="HTTPS JWKS"):
+        auth.discover_jwks(cfg)
+
+
+def test_production_rejects_overlapping_analyst_and_ciso_groups(monkeypatch, tmp_path):
     monkeypatch.setenv("MESHAGENT_ENV", "production")
     monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("MESHAGENT_OIDC_AUDIENCE", AUDIENCE)
     monkeypatch.setenv("MESHAGENT_OIDC_CLIENT_ID", "meshagent-web")
     monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "security-office")
     monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "security-office")
+    monkeypatch.setenv("MESHAGENT_PLATFORM_ADMIN_GROUPS", "platform-admins")
+    monkeypatch.setenv("MESHAGENT_DEPLOYMENT_ID", "acme-prod")
+    signing_key = tmp_path / "recorder-signing-key.pem"
+    signing_key.write_text("configured for startup validation")
+    monkeypatch.setenv("MESHAGENT_RECORDER_SIGNING_KEY_FILE", str(signing_key))
     monkeypatch.setenv("MESHAGENT_DB_DIR", "/var/lib/meshagent-test")
     monkeypatch.setenv("MESHAGENT_ENGINE", "1")
     monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
@@ -282,6 +313,11 @@ def test_production_rejects_temporary_storage_and_wildcard_cors(monkeypatch, tmp
     monkeypatch.setenv("MESHAGENT_OIDC_CLIENT_ID", "meshagent-web")
     monkeypatch.setenv("MESHAGENT_ANALYST_GROUPS", "sec-office")
     monkeypatch.setenv("MESHAGENT_CISO_GROUPS", "ciso-office")
+    monkeypatch.setenv("MESHAGENT_PLATFORM_ADMIN_GROUPS", "platform-admins")
+    monkeypatch.setenv("MESHAGENT_DEPLOYMENT_ID", "acme-prod")
+    signing_key = tmp_path / "recorder-signing-key.pem"
+    signing_key.write_text("configured for startup validation")
+    monkeypatch.setenv("MESHAGENT_RECORDER_SIGNING_KEY_FILE", str(signing_key))
     monkeypatch.setenv("MESHAGENT_ENGINE", "1")
     monkeypatch.setenv("MESHAGENT_STRICT_AUDIT", "true")
     monkeypatch.setenv("MESHAGENT_WEB_URL", "https://meshagent.example.com")

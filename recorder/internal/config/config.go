@@ -24,19 +24,24 @@ const (
 )
 
 type Runtime struct {
-	Home            string
-	API             string
-	EndpointSource  string
-	DeviceToken     string
-	LocalUser       string
-	DatabasePath    string
-	QueueKeyPath    string
-	SocketPath      string
-	MaxQueueBatches int
-	MaxQueueBytes   int64
-	HTTPTimeoutMS   int
-	GateTimeoutMS   int
-	MaxFileBytes    int64
+	Environment              string
+	Home                     string
+	API                      string
+	EndpointSource           string
+	DeviceToken              string
+	LocalUser                string
+	DatabasePath             string
+	QueueKeyPath             string
+	SocketPath               string
+	MaxQueueBatches          int
+	MaxQueueBytes            int64
+	HTTPTimeoutMS            int
+	GateTimeoutMS            int
+	HeartbeatIntervalSeconds int
+	MaxFileBytes             int64
+	EnterpriseStatePath      string
+	EnterpriseKeyPath        string
+	EnterpriseMode           bool
 }
 
 type diskConfig struct {
@@ -49,6 +54,10 @@ type credentials struct {
 }
 
 func Load() (Runtime, error) {
+	environment, err := Environment()
+	if err != nil {
+		return Runtime{}, err
+	}
 	home, err := homePath()
 	if err != nil {
 		return Runtime{}, err
@@ -63,20 +72,43 @@ func Load() (Runtime, error) {
 	token, localUser := RecordingIdentity(home)
 
 	return Runtime{
-		Home:            home,
-		API:             api,
-		EndpointSource:  source,
-		DeviceToken:     token,
-		LocalUser:       localUser,
-		DatabasePath:    filepath.Join(home, "recorder.db"),
-		QueueKeyPath:    filepath.Join(home, "recorder.queue-key"),
-		SocketPath:      socketPath(home),
-		MaxQueueBatches: envInt("MESHAGENT_QUEUE_MAX_BATCHES", DefaultMaxQueueBatches, MaxQueueBatchesCeiling),
-		MaxQueueBytes:   envInt64("MESHAGENT_QUEUE_MAX_BYTES", DefaultMaxQueueBytes, MaxQueueBytesCeiling),
-		HTTPTimeoutMS:   envInt("MESHAGENT_HOOK_TIMEOUT_MS", 2000, 30000),
-		GateTimeoutMS:   envInt("MESHAGENT_GATE_TIMEOUT_MS", 4500, 5500),
-		MaxFileBytes:    envInt64("MESHAGENT_HOOK_MAX_BYTES", 200000, 200000),
+		Environment:              environment,
+		Home:                     home,
+		API:                      api,
+		EndpointSource:           source,
+		DeviceToken:              token,
+		LocalUser:                localUser,
+		DatabasePath:             filepath.Join(home, "recorder.db"),
+		QueueKeyPath:             filepath.Join(home, "recorder.queue-key"),
+		SocketPath:               socketPath(home),
+		MaxQueueBatches:          envInt("MESHAGENT_QUEUE_MAX_BATCHES", DefaultMaxQueueBatches, MaxQueueBatchesCeiling),
+		MaxQueueBytes:            envInt64("MESHAGENT_QUEUE_MAX_BYTES", DefaultMaxQueueBytes, MaxQueueBytesCeiling),
+		HTTPTimeoutMS:            envInt("MESHAGENT_HOOK_TIMEOUT_MS", 2000, 30000),
+		GateTimeoutMS:            envInt("MESHAGENT_GATE_TIMEOUT_MS", 4500, 5500),
+		HeartbeatIntervalSeconds: 300,
+		MaxFileBytes:             envInt64("MESHAGENT_HOOK_MAX_BYTES", 200000, 200000),
+		EnterpriseStatePath:      filepath.Join(home, "enterprise-credentials.json"),
+		EnterpriseKeyPath:        filepath.Join(home, "enterprise-device-key.pem"),
+		EnterpriseMode:           strings.TrimSpace(os.Getenv("MESHAGENT_ENTERPRISE_MODE")) == "1" || fileExists(filepath.Join(home, "enterprise-credentials.json")),
 	}, nil
+}
+
+func Environment() (string, error) {
+	value := strings.TrimSpace(os.Getenv("MESHAGENT_ENV"))
+	if value == "" {
+		value = "development"
+	}
+	switch value {
+	case "development", "test", "production":
+		return value, nil
+	default:
+		return "", errors.New("MESHAGENT_ENV must be one of development, test, or production")
+	}
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 func RecordingIdentity(home string) (string, string) {

@@ -370,7 +370,7 @@ export interface AuditOut {
   durable: boolean;
 }
 
-export type Role = "developer" | "analyst" | "ciso";
+export type Role = "developer" | "analyst" | "ciso" | "platform_admin";
 
 export type Capability =
   | "run.own"
@@ -397,7 +397,9 @@ export type Capability =
   | "recommendation.apply"
   | "remediation.write"
   | "report.generate"
-  | "device.fleet";
+  | "device.fleet"
+  | "recorder.admin.read"
+  | "recorder.trust.write";
 
 export interface Me {
   subject: string;
@@ -407,6 +409,106 @@ export interface Me {
   primary_role: Role;
   capabilities: Capability[];
   verified: boolean;
+}
+
+// -- Enterprise recorder trust ------------------------------------------------
+
+export type RecorderTrustState = "pending" | "active" | "quarantined" | "revoked";
+export type RecorderCredentialKind = "dpop" | "legacy_bearer";
+
+export interface RecorderSummary {
+  id: string;
+  label: string;
+  credential_kind: RecorderCredentialKind;
+  subject: string;
+  name: string;
+  verified: boolean;
+  deployment: string;
+  platform: string;
+  recorder_version: string;
+  key_thumbprint: string | null;
+  attestation_format: string | null;
+  trust_state: RecorderTrustState;
+  version: number;
+  config_version: number;
+  reported_config_version: number;
+  config_status: "unknown" | "current" | "stale";
+  config_digest: string | null;
+  enrolled_at: number;
+  last_seen_at: number;
+  queue_batches: number;
+  queue_bytes: number;
+  oldest_queued_age_seconds: number;
+  adapter_state: string;
+  delivery_state: "unknown" | "healthy" | "delayed" | "blocked" | "offline";
+  legacy_retire_at: number | null;
+}
+
+export interface RecorderHistoryEntry {
+  receipt_id: string;
+  action: string;
+  actor: string;
+  actor_name: string;
+  prior_state: RecorderTrustState;
+  next_state: RecorderTrustState;
+  resulting_version: number;
+  reason: string;
+  created_at: number;
+  correlation_id: string;
+}
+
+export interface RecorderDetail extends RecorderSummary {
+  email: string;
+  platform_version: string;
+  architecture: string;
+  approved_at: number;
+  history: RecorderHistoryEntry[];
+}
+
+export interface RecorderList {
+  recorders: RecorderSummary[];
+  total: number;
+  action_required: number;
+}
+
+export interface RecorderOnboardingStatus {
+  identity_provider: boolean;
+  signing_ready: boolean;
+  enrolled: number;
+  active: number;
+  attention: number;
+  legacy: number;
+  legacy_retire_at: number | null;
+}
+
+export interface RecorderEnrollmentPending {
+  enrollment_id: string;
+  user_code: string;
+  label: string;
+  deployment: string;
+  platform: "darwin" | "windows" | "linux";
+  platform_version: string;
+  architecture: string;
+  recorder_version: string;
+  key_thumbprint: string;
+  attestation_format: string;
+  approved: boolean;
+  started_at: number;
+}
+
+export interface RecorderTrustReceipt {
+  receipt_id: string;
+  device_id: string;
+  action: "quarantine" | "revoke";
+  actor: string;
+  actor_name: string;
+  prior_state: RecorderTrustState;
+  next_state: RecorderTrustState;
+  resulting_version: number;
+  reason: string;
+  created_at: number;
+  correlation_id: string;
+  idempotency_key: string;
 }
 
 // -- Analyst and CISO control-plane workflows --------------------------------
@@ -1454,6 +1556,38 @@ export const api = {
     get<PairPending>(`/devices/pending/${encodeURIComponent(userCode)}`),
   approvePair: (userCode: string) =>
     post<PairPending>("/devices/approve", { user_code: userCode }),
+
+  recorderOnboarding: () =>
+    get<RecorderOnboardingStatus>("/v2/recorders/onboarding"),
+  recorders: () => get<RecorderList>("/v2/recorders"),
+  recorder: (deviceId: string) =>
+    get<RecorderDetail>(`/v2/recorders/${encodeURIComponent(deviceId)}`),
+  pendingRecorderEnrollment: (userCode: string) =>
+    get<RecorderEnrollmentPending>(
+      `/v2/recorders/enrollments/${encodeURIComponent(userCode)}`,
+    ),
+  approveRecorderEnrollment: (userCode: string) =>
+    post<RecorderEnrollmentPending>("/v2/recorders/enrollments/approve", {
+      user_code: userCode,
+    }),
+  quarantineRecorder: (
+    deviceId: string,
+    input: { expected_version: number; reason: string },
+    idempotencyKey = crypto.randomUUID(),
+  ) => post<RecorderTrustReceipt>(
+    `/v2/recorders/${encodeURIComponent(deviceId)}/quarantine`,
+    input,
+    { "idempotency-key": idempotencyKey },
+  ),
+  revokeRecorder: (
+    deviceId: string,
+    input: { expected_version: number; reason: string },
+    idempotencyKey = crypto.randomUUID(),
+  ) => post<RecorderTrustReceipt>(
+    `/v2/recorders/${encodeURIComponent(deviceId)}/revoke`,
+    input,
+    { "idempotency-key": idempotencyKey },
+  ),
 
   fleetOverview: () => get<FleetOverview>("/fleet/overview"),
   fleetCoverage: () => get<CoverageOut>("/fleet/coverage"),

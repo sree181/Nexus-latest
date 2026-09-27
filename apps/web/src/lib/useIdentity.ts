@@ -26,6 +26,7 @@ export function useIdentity() {
     analyst: me.data?.role === "analyst" || me.data?.role === "ciso",
     developer: me.data?.role === "developer",
     ciso: me.data?.role === "ciso",
+    platformAdmin: me.data?.role === "platform_admin",
     hasCapability: (capability: Capability) =>
       me.data?.capabilities.includes(capability) ?? false,
   };

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import sqlite3
+import time
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -47,6 +50,80 @@ def test_browser_session_is_opaque_resolvable_and_revocable(tmp_path):
     assert store.resolve(cookie) is None
 
 
+def test_platform_admin_browser_session_survives_fresh_and_upgraded_stores(tmp_path):
+    fresh = browser_sessions.Store(tmp_path / "fresh")
+    admin = auth.Principal(
+        subject="avery-1", name="Avery", email="avery@example.com",
+        role="platform_admin", verified=True,
+    )
+    cookie, _ = fresh.create(admin, expires_in=600)
+    assert fresh.resolve(cookie).principal == admin
+
+    upgraded_base = tmp_path / "upgraded"
+    upgraded_base.mkdir()
+    path = upgraded_base / "browser_sessions.sqlite3"
+    old_cookie = "old-session"
+    with sqlite3.connect(path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE browser_sessions (
+              session_hash TEXT PRIMARY KEY,
+              subject TEXT NOT NULL,
+              name TEXT NOT NULL,
+              email TEXT NOT NULL,
+              role TEXT NOT NULL CHECK(role IN ('developer','analyst','ciso')),
+              verified INTEGER NOT NULL CHECK(verified IN (0,1)),
+              created_at INTEGER NOT NULL,
+              expires_at INTEGER NOT NULL
+            );
+            CREATE INDEX browser_sessions_expiry ON browser_sessions(expires_at);
+            """
+        )
+        connection.execute(
+            "INSERT INTO browser_sessions VALUES(?,?,?,?,?,?,?,?)",
+            (
+                hashlib.sha256(old_cookie.encode()).hexdigest(), "analyst-1",
+                "Priya", "priya@example.com", "analyst", 1,
+                int(time.time()), int(time.time()) + 600,
+            ),
+        )
+    upgraded = browser_sessions.Store(upgraded_base)
+    assert upgraded.resolve(old_cookie).principal.role == "analyst"
+    admin_cookie, _ = upgraded.create(admin, expires_in=600)
+    assert upgraded.resolve(admin_cookie).principal.role == "platform_admin"
+
+
+def test_oidc_callback_establishes_platform_admin_session(monkeypatch, tmp_path):
+    monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", "https://identity.example")
+    monkeypatch.setenv("MESHAGENT_WEB_URL", "http://testserver")
+    store = browser_sessions.Store(tmp_path)
+    monkeypatch.setattr(main, "browser_session_store", store)
+    monkeypatch.setattr(main, "_verifier", object())
+    transaction, state, _ = store.begin("/admin/onboarding/recorder")
+
+    def exchange(active_store, *, transaction, state, code, verifier):
+        pending = active_store.consume(transaction, state)
+        session, expires_at = active_store.create(
+            auth.Principal(
+                subject="avery-oidc", name="Avery", email="avery@example.com",
+                role="platform_admin", verified=True,
+            ),
+            expires_in=600,
+        )
+        return session, expires_at, pending.return_to
+
+    monkeypatch.setattr(browser_sessions, "exchange_code", exchange)
+    client = TestClient(main.app)
+    client.cookies.set(browser_sessions.transaction_cookie_name(), transaction)
+    response = client.get(
+        f"/auth/callback?code=code&state={state}", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/onboarding/recorder"
+    identity = client.get("/api/me")
+    assert identity.status_code == 200
+    assert identity.json()["primary_role"] == "platform_admin"
+
+
 def test_login_redirect_uses_server_pkce_and_httponly_transaction(
         monkeypatch, tmp_path):
     monkeypatch.setenv("MESHAGENT_OIDC_ISSUER", "https://identity.example")
@@ -75,6 +152,37 @@ def test_login_redirect_uses_server_pkce_and_httponly_transaction(
     assert "HttpOnly" in set_cookie
     assert "meshagent_oidc_tx=" in set_cookie
     assert "access_token" not in response.text
+
+
+def test_production_discovery_rejects_insecure_or_credentialed_endpoints(monkeypatch):
+    class Response:
+        def __init__(self, authorization: str, token: str) -> None:
+            self.authorization = authorization
+            self.token = token
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "authorization_endpoint": self.authorization,
+                "token_endpoint": self.token,
+            }
+
+    monkeypatch.setenv("MESHAGENT_ENV", "production")
+    cfg = auth.Config(issuer="https://identity.example")
+    for authorization, token in (
+        ("http://identity.example/authorize", "https://identity.example/token"),
+        ("https://identity.example/authorize", "http://identity.example/token"),
+        ("https://user@identity.example/authorize", "https://identity.example/token"),
+    ):
+        monkeypatch.setattr(
+            browser_sessions.httpx, "get",
+            lambda *_args, authorization=authorization, token=token, **_kwargs:
+                Response(authorization, token),
+        )
+        with pytest.raises(auth.AuthError):
+            browser_sessions.discover(cfg)
 
 
 def test_cookie_session_authenticates_api_without_bearer(

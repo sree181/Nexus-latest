@@ -15,7 +15,7 @@ from typing import Any, Literal, cast
 
 import httpx
 
-Role = Literal["developer", "analyst", "ciso"]
+Role = Literal["developer", "analyst", "ciso", "platform_admin"]
 Environment = Literal["development", "test", "production"]
 Capability = Literal[
     "run.own",
@@ -43,6 +43,8 @@ Capability = Literal[
     "remediation.write",
     "report.generate",
     "device.fleet",
+    "recorder.admin.read",
+    "recorder.trust.write",
 ]
 
 ENVIRONMENTS = frozenset({"development", "test", "production"})
@@ -63,6 +65,9 @@ CAPABILITIES: dict[Role, frozenset[str]] = {
         "exception.revoke", "recommendation.apply", "remediation.write",
         "report.generate", "device.fleet", "device.own",
         "review.read", "review.write",
+    }),
+    "platform_admin": frozenset({
+        "recorder.admin.read", "recorder.trust.write",
     }),
 }
 
@@ -120,6 +125,10 @@ class Principal:
     def ciso(self) -> bool:
         return self.role == "ciso"
 
+    @property
+    def platform_admin(self) -> bool:
+        return self.role == "platform_admin"
+
 
 @dataclass(frozen=True)
 class Config:
@@ -129,6 +138,7 @@ class Config:
     role_claim: str = "roles"
     analyst_groups: tuple[str, ...] = ()
     ciso_groups: tuple[str, ...] = ()
+    platform_admin_groups: tuple[str, ...] = ()
 
     @property
     def enabled(self) -> bool:
@@ -147,12 +157,18 @@ def config() -> Config:
         role_claim=os.environ.get("MESHAGENT_OIDC_ROLE_CLAIM", "roles").strip(),
         analyst_groups=_split(os.environ.get("MESHAGENT_ANALYST_GROUPS", "")),
         ciso_groups=_split(os.environ.get("MESHAGENT_CISO_GROUPS", "")),
+        platform_admin_groups=_split(
+            os.environ.get("MESHAGENT_PLATFORM_ADMIN_GROUPS", "")
+        ),
     )
 
 
 def discover_jwks(cfg: Config, *, timeout: float = 5.0) -> str:
     if cfg.jwks_url:
-        return cfg.jwks_url
+        url = cfg.jwks_url
+        if is_production() and not url.lower().startswith("https://"):
+            raise AuthError("production identity provider requires an HTTPS JWKS URL")
+        return url
     try:
         doc = httpx.get(cfg.issuer + DISCOVERY, timeout=timeout).json()
     except Exception as exc:
@@ -160,6 +176,8 @@ def discover_jwks(cfg: Config, *, timeout: float = 5.0) -> str:
     url = doc.get("jwks_uri")
     if not url:
         raise AuthError("identity provider published no jwks_uri")
+    if is_production() and not str(url).lower().startswith("https://"):
+        raise AuthError("production identity provider requires an HTTPS JWKS URL")
     return str(url)
 
 
@@ -187,8 +205,11 @@ def role_of(claims: dict[str, Any], cfg: Config) -> Role:
     held = _held_roles(claims, cfg)
     analyst = bool(held & set(cfg.analyst_groups))
     ciso = bool(held & set(cfg.ciso_groups))
-    if analyst and ciso:
-        raise AuthError("identity maps to conflicting Analyst and CISO groups")
+    platform_admin = bool(held & set(cfg.platform_admin_groups))
+    if sum((analyst, ciso, platform_admin)) > 1:
+        raise AuthError("identity maps to conflicting privileged groups")
+    if platform_admin:
+        return "platform_admin"
     if ciso:
         return "ciso"
     if analyst:
@@ -253,7 +274,9 @@ DEV_ROLE = "X-MeshAgent-Role"
 def local_principal(user: str | None, role: str | None) -> Principal:
     who = (user or "dev@localhost").strip() or "dev@localhost"
     raw = (role or "developer").strip().lower()
-    wanted: Role = raw if raw in ("developer", "analyst", "ciso") else "developer"  # type: ignore[assignment]
+    wanted: Role = raw if raw in (
+        "developer", "analyst", "ciso", "platform_admin"
+    ) else "developer"  # type: ignore[assignment]
     return Principal(
         subject=who, name=who, email=who, role=wanted, verified=False
     )

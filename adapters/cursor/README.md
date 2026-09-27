@@ -30,8 +30,8 @@ The safe configurator writes a `.cmd` wrapper and Windows-native hook commands; 
 The native service uses the same endpoint and paired device credential as the
 CLI. It persists ordered batches in an AES-256-GCM encrypted SQLite queue and
 removes a batch only after the existing v1 API explicitly acknowledges its
-final sequence. The installer is for Stage 1A development: signed/notarized
-packages and OS-keystore queue keys belong to Stage 1B.
+final sequence. The installer is for development: OS-keystore queue-key binding
+is the remaining Stage 1B gate, while signed/notarized packages belong to Stage 1C.
 
 ### Python compatibility mode
 

@@ -268,6 +268,21 @@ function CisoNav() {
   );
 }
 
+function PlatformAdminNav() {
+  return (
+    <>
+      <Group label="ENTERPRISE ROLLOUT">
+        <NavLink to="/admin/onboarding/recorder" exact icon={<Icon d={icons.setup} />}>
+          Onboarding
+        </NavLink>
+        <NavLink to="/admin/recorders" icon={<Icon d={icons.devices} />}>
+          Recorder fleet
+        </NavLink>
+      </Group>
+    </>
+  );
+}
+
 export function Sidebar() {
   const { me, developer } = useIdentity();
   const [open, setOpen] = useState(false);
@@ -337,7 +352,7 @@ export function Sidebar() {
     };
   }, [compact, open]);
 
-  const roleLabel = me?.primary_role === "ciso" ? "CISO" : me?.primary_role === "analyst" ? "Security analyst" : "Developer";
+  const roleLabel = me?.primary_role === "platform_admin" ? "Platform administrator" : me?.primary_role === "ciso" ? "CISO" : me?.primary_role === "analyst" ? "Security analyst" : "Developer";
 
   return (
     <>
@@ -400,6 +415,7 @@ export function Sidebar() {
         ) : null}
         {me?.role === "analyst" ? <AnalystNav /> : null}
         {me?.role === "ciso" ? <CisoNav /> : null}
+        {me?.role === "platform_admin" ? <PlatformAdminNav /> : null}
       </nav>
       <Identity me={me} />
       </aside>
@@ -426,11 +442,13 @@ function Identity({ me }: { me: Me | undefined }) {
     developer: "Developer",
     analyst: "Security analyst",
     ciso: "CISO",
+    platform_admin: "Platform administrator",
   } as const;
   const personas: Record<LocalRole, string> = {
     developer: "maya@company.com",
     analyst: "priya@company.com",
     ciso: "alex@company.com",
+    platform_admin: "avery@company.com",
   };
   return (
     <details className="control-identity mt-auto border-t border-rail-line p-2.5">
@@ -479,6 +497,7 @@ function Identity({ me }: { me: Me | undefined }) {
               <option value="developer">Developer · Maya</option>
               <option value="analyst">Analyst · Priya</option>
               <option value="ciso">CISO · Alex</option>
+              <option value="platform_admin">Platform admin · Avery</option>
             </select>
             <button
               type="submit"

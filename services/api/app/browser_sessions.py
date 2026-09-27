@@ -82,10 +82,28 @@ def discover(cfg: auth.Config, *, timeout: float = 5.0) -> dict[str, str]:
     token_endpoint = str(document.get("token_endpoint") or "")
     if not authorization_endpoint or not token_endpoint:
         raise AuthError("identity provider discovery is incomplete")
+    authorization_endpoint = _provider_endpoint(authorization_endpoint, "authorization")
+    token_endpoint = _provider_endpoint(token_endpoint, "token")
     return {
         "authorization_endpoint": authorization_endpoint,
         "token_endpoint": token_endpoint,
     }
+
+
+def _provider_endpoint(value: str, label: str) -> str:
+    parsed = urlparse(value)
+    if (
+        parsed.scheme not in ("http", "https")
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
+        raise AuthError(f"identity provider {label} endpoint is invalid")
+    if auth.is_production() and parsed.scheme != "https":
+        raise AuthError(
+            f"production identity provider requires an HTTPS {label} endpoint")
+    return value
 
 
 @dataclass(frozen=True)
@@ -132,7 +150,7 @@ class Store:
                   subject TEXT NOT NULL,
                   name TEXT NOT NULL,
                   email TEXT NOT NULL,
-                  role TEXT NOT NULL CHECK(role IN ('developer','analyst','ciso')),
+                  role TEXT NOT NULL CHECK(role IN ('developer','analyst','ciso','platform_admin')),
                   verified INTEGER NOT NULL CHECK(verified IN (0,1)),
                   created_at INTEGER NOT NULL,
                   expires_at INTEGER NOT NULL
@@ -141,6 +159,37 @@ class Store:
                   ON browser_sessions(expires_at);
                 """
             )
+            self._migrate_platform_admin_role(connection)
+
+    @staticmethod
+    def _migrate_platform_admin_role(connection: sqlite3.Connection) -> None:
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='browser_sessions'"
+        ).fetchone()
+        if row is None or "platform_admin" in str(row[0]):
+            return
+        connection.executescript(
+            """
+            DROP INDEX IF EXISTS browser_sessions_expiry;
+            ALTER TABLE browser_sessions RENAME TO browser_sessions_v1;
+            CREATE TABLE browser_sessions (
+              session_hash TEXT PRIMARY KEY,
+              subject TEXT NOT NULL,
+              name TEXT NOT NULL,
+              email TEXT NOT NULL,
+              role TEXT NOT NULL CHECK(role IN ('developer','analyst','ciso','platform_admin')),
+              verified INTEGER NOT NULL CHECK(verified IN (0,1)),
+              created_at INTEGER NOT NULL,
+              expires_at INTEGER NOT NULL
+            );
+            INSERT INTO browser_sessions(
+              session_hash,subject,name,email,role,verified,created_at,expires_at
+            ) SELECT session_hash,subject,name,email,role,verified,created_at,expires_at
+              FROM browser_sessions_v1;
+            DROP TABLE browser_sessions_v1;
+            CREATE INDEX browser_sessions_expiry ON browser_sessions(expires_at);
+            """
+        )
 
     def _purge(self, connection: sqlite3.Connection, now: int) -> None:
         connection.execute("DELETE FROM oidc_transactions WHERE expires_at <= ?", (now,))
@@ -203,7 +252,7 @@ class Store:
         if row is None:
             return None
         role = str(row[3])
-        if role not in ("developer", "analyst", "ciso"):
+        if role not in ("developer", "analyst", "ciso", "platform_admin"):
             return None
         principal = Principal(
             subject=str(row[0]), name=str(row[1]), email=str(row[2]),

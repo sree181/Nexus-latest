@@ -51,6 +51,18 @@ func TestLoadUsesOnlyRecordingDeviceToken(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsUnknownEnvironmentBeforeCreatingState(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "recorder-home")
+	t.Setenv("MESHAGENT_HOOK_HOME", home)
+	t.Setenv("MESHAGENT_ENV", "prod")
+	if _, err := Load(); err == nil {
+		t.Fatal("unknown environment was accepted")
+	}
+	if _, err := os.Stat(home); !os.IsNotExist(err) {
+		t.Fatalf("state directory exists after rejected environment: %v", err)
+	}
+}
+
 func TestQueueKeyFileIsPrivateAndStable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "queue.key")
 	first, protection, err := LoadOrCreateQueueKey(path)

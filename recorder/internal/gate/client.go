@@ -48,6 +48,9 @@ type Client struct {
 	LocalUser   string
 	Identity    func() (deviceToken, localUser string)
 	HTTP        *http.Client
+	Authorizer  interface {
+		Authorize(context.Context, string, string) (scheme, token, proof string, err error)
+	}
 }
 
 func (c Client) Ask(ctx context.Context, requestBody Request) (*Decision, error) {
@@ -55,19 +58,29 @@ func (c Client) Ask(ctx context.Context, requestBody Request) (*Decision, error)
 	if err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(c.Origin, "/")+"/api/gate/package", bytes.NewReader(encoded))
+	target := strings.TrimSuffix(c.Origin, "/") + "/api/gate/package"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(encoded))
 	if err != nil {
 		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	token, user := c.DeviceToken, c.LocalUser
-	if c.Identity != nil {
-		token, user = c.Identity()
-	}
-	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
-	} else if user != "" {
-		request.Header.Set("X-MeshAgent-User", user)
+	if c.Authorizer != nil {
+		scheme, token, proof, err := c.Authorizer.Authorize(ctx, http.MethodPost, target)
+		if err != nil {
+			return nil, err
+		}
+		request.Header.Set("Authorization", scheme+" "+token)
+		request.Header.Set("DPoP", proof)
+	} else {
+		token, user := c.DeviceToken, c.LocalUser
+		if c.Identity != nil {
+			token, user = c.Identity()
+		}
+		if token != "" {
+			request.Header.Set("Authorization", "Bearer "+token)
+		} else if user != "" {
+			request.Header.Set("X-MeshAgent-User", user)
+		}
 	}
 	client := c.HTTP
 	if client == nil {

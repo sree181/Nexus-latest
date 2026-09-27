@@ -26,6 +26,12 @@ def client():
                                     auth.DEV_USER: "alex@example.com"})
 
 
+@pytest.fixture(scope="module")
+def developer():
+    return TestClient(app, headers={auth.DEV_ROLE: "developer",
+                                    auth.DEV_USER: "maya@example.com"})
+
+
 def test_health_names_the_gateway(client):
     body = client.get("/api/health").json()
     assert body["status"] == "ok"
@@ -54,12 +60,12 @@ def test_health_answers_without_an_identity():
     assert TestClient(app).get("/api/health").status_code == 200
 
 
-def test_runs_round_trip(client):
+def test_runs_round_trip(client, developer):
     listed = client.get("/api/runs")
     assert listed.status_code == 200
     assert any(r["id"] == RUN for r in listed.json())
 
-    created = client.post("/api/runs", json={"task": "Add a caching layer"})
+    created = developer.post("/api/runs", json={"task": "Add a caching layer"})
     assert created.status_code == 201
     assert created.json()["status"] == "recording"
     # no model is wired up, so the run says on the wire that the memory it
@@ -67,23 +73,23 @@ def test_runs_round_trip(client):
     assert created.json()["reference_build"] is True
 
 
-def test_empty_task_is_rejected(client):
-    assert client.post("/api/runs", json={"task": "   "}).status_code == 422
+def test_empty_task_is_rejected(developer):
+    assert developer.post("/api/runs", json={"task": "   "}).status_code == 422
 
 
-def test_task_length_is_bounded_at_the_api_boundary(client):
-    response = client.post("/api/runs", json={"task": "x" * 4_097})
+def test_task_length_is_bounded_at_the_api_boundary(developer):
+    response = developer.post("/api/runs", json={"task": "x" * 4_097})
     assert response.status_code == 422
 
 
-def test_recorder_batch_and_code_fields_are_bounded(client):
-    too_many = client.post("/api/recorder", json={
+def test_recorder_batch_and_code_fields_are_bounded(developer):
+    too_many = developer.post("/api/recorder", json={
         "agent": "claude-code", "session": "too-many",
         "events": [{"type": "tool", "name": "test"}] * 101,
     })
     assert too_many.status_code == 422
 
-    too_large_code = client.post("/api/recorder", json={
+    too_large_code = developer.post("/api/recorder", json={
         "agent": "claude-code", "session": "too-large-code",
         "events": [{"type": "code", "module": "module.py",
                     "code": "x" * 200_001}],
@@ -91,8 +97,8 @@ def test_recorder_batch_and_code_fields_are_bounded(client):
     assert too_large_code.status_code == 422
 
 
-def test_package_gate_and_sarif_top_level_containers_are_bounded(client):
-    package = client.post("/api/gate/package", json={
+def test_package_gate_and_sarif_top_level_containers_are_bounded(client, developer):
+    package = developer.post("/api/gate/package", json={
         "package": "p" * 257, "version": "1.0",
     })
     assert package.status_code == 422
@@ -208,10 +214,10 @@ def test_a_forget_quoting_a_version_that_moved_on_is_412(client):
 
 # -- the recorder --------------------------------------------------------------
 
-def test_recorder_accepts_a_batch_and_answers_with_a_receipt(client):
+def test_recorder_accepts_a_batch_and_answers_with_a_receipt(developer):
     """Not a bare 200: an adapter that cannot tell whether its events landed
     will report silence as compliance."""
-    res = client.post("/api/recorder", json={
+    res = developer.post("/api/recorder", json={
         "agent": "claude-code",
         "session": "routes-1",
         "events": [
@@ -230,10 +236,10 @@ def test_recorder_accepts_a_batch_and_answers_with_a_receipt(client):
     assert body["run_id"]
 
 
-def test_recorder_rejects_an_event_type_it_does_not_know(client):
+def test_recorder_rejects_an_event_type_it_does_not_know(developer):
     """The vocabulary is closed on purpose. An adapter inventing event types
     should find out at the boundary, not have them silently dropped."""
-    res = client.post("/api/recorder", json={
+    res = developer.post("/api/recorder", json={
         "agent": "claude-code", "session": "routes-2",
         "events": [{"type": "telepathy", "thought": "maybe"}],
     })

@@ -270,6 +270,8 @@ class Store:
         raise AuthError("unknown login")
 
     def _mint(self, pairing: Pairing) -> tuple[Device, str]:
+        if pairing.role == "platform_admin":
+            raise AuthError("a Platform Administrator cannot own a recorder")
         device_id = secrets.token_hex(8)
         secret = secrets.token_urlsafe(32)
         device = Device(

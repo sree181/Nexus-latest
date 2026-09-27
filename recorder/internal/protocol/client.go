@@ -22,6 +22,9 @@ type Client struct {
 	LocalUser   string
 	Identity    func() (deviceToken, localUser string)
 	HTTP        *http.Client
+	Authorizer  interface {
+		Authorize(context.Context, string, string) (scheme, token, proof string, err error)
+	}
 }
 
 type HTTPError struct{ StatusCode int }
@@ -41,14 +44,21 @@ func IsPermanentValidationError(err error) bool {
 	}
 }
 
+func IsTrustError(err error) bool {
+	var httpError *HTTPError
+	return errors.As(err, &httpError) && (httpError.StatusCode == http.StatusUnauthorized ||
+		httpError.StatusCode == http.StatusForbidden)
+}
+
 func (c Client) Post(ctx context.Context, envelope Envelope) (map[string]any, error) {
 	if c.HTTP == nil {
 		c.HTTP = &http.Client{Timeout: 2 * time.Second}
 	}
 	httpClient := *c.HTTP
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	target := strings.TrimSuffix(c.Origin, "/") + envelope.Path
 	request, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, strings.TrimSuffix(c.Origin, "/")+envelope.Path,
+		ctx, http.MethodPost, target,
 		bytes.NewReader(envelope.Body),
 	)
 	if err != nil {
@@ -60,14 +70,23 @@ func (c Client) Post(ctx context.Context, envelope Envelope) (map[string]any, er
 		return nil, err
 	}
 	request.Header.Set("Idempotency-Key", key)
-	token, user := c.DeviceToken, c.LocalUser
-	if c.Identity != nil {
-		token, user = c.Identity()
-	}
-	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
-	} else if user != "" {
-		request.Header.Set("X-MeshAgent-User", user)
+	if c.Authorizer != nil {
+		scheme, token, proof, err := c.Authorizer.Authorize(ctx, http.MethodPost, target)
+		if err != nil {
+			return nil, err
+		}
+		request.Header.Set("Authorization", scheme+" "+token)
+		request.Header.Set("DPoP", proof)
+	} else {
+		token, user := c.DeviceToken, c.LocalUser
+		if c.Identity != nil {
+			token, user = c.Identity()
+		}
+		if token != "" {
+			request.Header.Set("Authorization", "Bearer "+token)
+		} else if user != "" {
+			request.Header.Set("X-MeshAgent-User", user)
+		}
 	}
 
 	response, err := httpClient.Do(request)

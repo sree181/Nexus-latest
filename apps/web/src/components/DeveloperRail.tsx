@@ -10,6 +10,7 @@ const personas: Record<LocalRole, string> = {
   developer: "maya@company.com",
   analyst: "priya@company.com",
   ciso: "alex@company.com",
+  platform_admin: "avery@company.com",
 };
 
 function initials(name: string): string {

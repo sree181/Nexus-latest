@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+type fakeAuthorizer struct{}
+
+func (fakeAuthorizer) Authorize(context.Context, string, string) (string, string, string, error) {
+	return "DPoP", "short-token", "signed-proof", nil
+}
+
 func startFixture(t *testing.T) Envelope {
 	t.Helper()
 	envelope, err := NewEnvelope("start", "conv-1", "ses_0123456789abcdef", "/api/v1/developer/sessions", SessionStart{
@@ -108,5 +114,20 @@ func TestClientRefusesRedirects(t *testing.T) {
 	}
 	if reached {
 		t.Fatal("redirect target received the recording request")
+	}
+}
+
+func TestClientUsesDPoPAuthorizerWithoutBearerDowngrade(t *testing.T) {
+	envelope := startFixture(t)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "DPoP short-token" || request.Header.Get("DPoP") != "signed-proof" {
+			t.Fatalf("enterprise headers = %#v", request.Header)
+		}
+		_ = json.NewEncoder(writer).Encode(map[string]any{"id": envelope.SessionID, "last_acked_sequence": 1})
+	}))
+	defer server.Close()
+	client := Client{Origin: server.URL, DeviceToken: "mesh_should-not-be-used.secret", Authorizer: fakeAuthorizer{}, HTTP: server.Client()}
+	if _, err := client.Post(context.Background(), envelope); err != nil {
+		t.Fatal(err)
 	}
 }

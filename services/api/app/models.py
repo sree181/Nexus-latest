@@ -231,8 +231,8 @@ class Me(BaseModel):
     subject: str
     name: str
     email: str
-    role: Literal["developer", "analyst", "ciso"]
-    primary_role: Literal["developer", "analyst", "ciso"]
+    role: Literal["developer", "analyst", "ciso", "platform_admin"]
+    primary_role: Literal["developer", "analyst", "ciso", "platform_admin"]
     capabilities: list[str] = []
     verified: bool
 

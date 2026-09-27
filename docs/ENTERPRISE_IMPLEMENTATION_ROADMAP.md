@@ -6,7 +6,8 @@ This roadmap evolves the current customer-operated meshAgent control plane into 
 
 Status labels are literal:
 
-- **Implemented** means code and tests exist in the current Stage 1A branch.
+- **Implemented** means code and tests exist in the current release branch.
+- **In progress** means an integrated milestone is demonstrable, but a named production acceptance gate remains open.
 - **Next** means the architecture is specified but production code is not yet shipped.
 - **Later** means dependent scope that must not appear as a working product feature until its acceptance gate passes.
 
@@ -15,7 +16,7 @@ Status labels are literal:
 | Stage | Status | Outcome | Client-demonstration value |
 |---|---|---|---|
 | 1A — Native recorder foundation | **Implemented** | Go hook shim, per-user daemon, protected IPC, encrypted queue, ordered replay, real package gate and session API | Demonstrates the real technical path without a Python hook process per event |
-| 1B — Device trust and enrollment | **Next** | One corporate sign-in, non-exportable device key, DPoP-bound short-lived token, signed configuration | Demonstrates enterprise identity and immediate revoke/quarantine |
+| 1B — Device trust and enrollment | **In progress** | Corporate sign-in, DPoP-bound short-lived token, signed configuration, isolated administration, and immediate trust enforcement are implemented; verified OS-backed key adapters remain open | Demonstrates the real enrollment and trust-control journey without misrepresenting development software keys as hardware trust |
 | 1C — Signed platform packages | **Next** | Notarized macOS package, Authenticode MSI, signed DEB/RPM, SBOM and provenance | Demonstrates an IT-installable product rather than a developer script |
 | 1D — Administrator pilot | **Next** | Platform Administrator onboarding, fleet health, cohorts, rollout receipts and rollback rehearsal | Demonstrates controlled deployment to a pilot group |
 | 1E — Stable recorder release | **Next** | Operations runbook, support bundle, migration, real-OS acceptance matrix and stable channel | Makes Stage 1 supportable for customer production use |
@@ -85,6 +86,8 @@ Introduce a fourth non-composable server role, `platform_admin`, with no automat
 ### Acceptance gate
 
 Enrollment replay, key mismatch, token theft, DPoP replay, expired configuration, quarantine, revoke and rotation tests must pass. A revoked device must fail its next write.
+
+**Current milestone:** the backend, browser enrollment, DPoP token flow, signed configuration, wrapped queue-key migration, content-free heartbeat, fourth role, administrator UI, optimistic trust actions, and immediate quarantine/revocation enforcement are implemented and tested. Desired, verified, and runtime-applied configuration state are distinct; background refresh does not overstate application. Development enrollment uses an explicitly labelled software P-256 key. Production enterprise mode rejects that adapter unconditionally. Stage 1B is not complete until verified macOS, Windows, and Linux OS-backed key adapters and their native acceptance tests pass.
 
 ---
 
